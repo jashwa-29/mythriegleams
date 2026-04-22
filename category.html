@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="metaTitle">Miniature Collections – Mythris Gleams</title>
+  <meta name="description" id="metaDesc" content="Shop handmade miniature food clocks, keychains, magnets and more from Mythris Gleams. Premium clay handcrafted products in India." />
+  <meta name="keywords" content="miniature food clock, clay handmade products India, handmade miniature gifts, return gifts India" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FBF7F2;
+      --gold: #D4AF37;
+      --gold-light: #e8cc6a;
+      --blush: #E8CFCF;
+      --brown: #5C3A2E;
+      --brown-light: #8B5E50;
+      --text: #2A2A2A;
+      --text-muted: #7A6B63;
+      --white: #fff;
+      --card-bg: #FEFAF5;
+      --border: rgba(212,175,55,0.2);
+      --shadow: 0 8px 40px rgba(92,58,46,0.10);
+      --shadow-lg: 0 20px 60px rgba(92,58,46,0.16);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-weight: 300; overflow-x: hidden; }
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0.35;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    }
+    h1,h2,h3 { font-family: 'Cormorant Garamond', serif; font-weight: 600; line-height: 1.15; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
+
+    /* ANNOUNCEMENT */
+    .announcement { background: var(--brown); color: var(--gold-light); text-align: center; font-size: 0.78rem; letter-spacing: 0.12em; padding: 9px 1rem; text-transform: uppercase; }
+
+    /* HEADER */
+    header { position: sticky; top: 0; z-index: 100; background: rgba(251,247,242,0.93); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); transition: box-shadow 0.3s; }
+    header.scrolled { box-shadow: 0 4px 30px rgba(92,58,46,0.10); }
+    .header-inner { max-width: 1320px; margin: 0 auto; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 72px; gap: 1rem; }
+    .logo { display: flex; flex-direction: column; align-items: flex-start; text-decoration: none; flex-shrink: 0; }
+    .logo-main { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.55rem; color: var(--brown); letter-spacing: 0.04em; line-height: 1; }
+    .logo-sub { font-size: 0.58rem; letter-spacing: 0.22em; color: var(--gold); text-transform: uppercase; margin-top: 2px; }
+    nav { display: flex; align-items: center; }
+    .nav-item { position: relative; }
+    .nav-link { display: block; padding: 0.5rem 1.1rem; font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); text-decoration: none; transition: color 0.2s; white-space: nowrap; }
+    .nav-link:hover { color: var(--gold); }
+    .nav-item:hover .dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
+    .dropdown { position: absolute; top: calc(100% + 8px); left: 0; background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0; min-width: 220px; box-shadow: var(--shadow-lg); opacity: 0; visibility: hidden; transform: translateY(-8px); transition: all 0.25s ease; z-index: 200; }
+    .dropdown a { display: block; padding: 0.55rem 1.25rem; font-size: 0.82rem; color: var(--text-muted); text-decoration: none; transition: all 0.18s; }
+    .dropdown a:hover { color: var(--brown); padding-left: 1.5rem; background: var(--bg); }
+    .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-icon { background: none; border: none; cursor: pointer; padding: 0.5rem; color: var(--brown); transition: color 0.2s; position: relative; font-size: 1.2rem; }
+    .btn-icon:hover { color: var(--gold); }
+    .cart-count { position: absolute; top: 0; right: 0; background: var(--gold); color: var(--white); font-size: 0.6rem; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 500; }
+    .btn-whatsapp-header { display: flex; align-items: center; gap: 0.45rem; background: #25D366; color: #fff; border: none; border-radius: 50px; padding: 0.48rem 1rem; font-size: 0.78rem; font-family: 'DM Sans', sans-serif; cursor: pointer; text-decoration: none; letter-spacing: 0.04em; transition: transform 0.2s, box-shadow 0.2s; }
+    .btn-whatsapp-header:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,211,102,0.3); }
+    .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 0.5rem; flex-direction: column; gap: 5px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: var(--brown); border-radius: 2px; }
+
+    /* MOBILE NAV */
+    .mobile-nav { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 500; overflow-y: auto; padding: 2rem; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.77,0,0.18,1); }
+    .mobile-nav.open { transform: translateX(0); }
+    .mobile-nav-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--brown); position: absolute; top: 1.5rem; right: 1.5rem; }
+    .mobile-nav .logo-main { font-size: 1.4rem; margin-bottom: 2rem; display: block; color: var(--brown); }
+    .mobile-nav-section { margin-bottom: 1.5rem; }
+    .mobile-nav-section h4 { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.75rem; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+    .mobile-nav-section a { display: block; padding: 0.6rem 0; font-size: 1.05rem; font-family: 'Cormorant Garamond', serif; color: var(--brown); text-decoration: none; border-bottom: 1px solid var(--border); }
+
+    /* BREADCRUMB */
+    .breadcrumb-bar { background: var(--white); border-bottom: 1px solid var(--border); padding: 0.75rem 2rem; }
+    .breadcrumb { max-width: 1320px; margin: 0 auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--text-muted); flex-wrap: wrap; }
+    .breadcrumb a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .breadcrumb a:hover { color: var(--gold); }
+    .breadcrumb .sep { color: var(--border); }
+    .breadcrumb .current { color: var(--brown); font-weight: 500; }
+
+    /* CATEGORY HERO */
+    .cat-hero {
+      position: relative;
+      overflow: hidden;
+      padding: 4rem 2rem 3rem;
+      background: var(--white);
+    }
+    .cat-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--blush) 0%, rgba(251,247,242,0) 60%);
+    }
+    .cat-hero-inner { max-width: 1320px; margin: 0 auto; position: relative; z-index: 1; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 2rem; }
+    .cat-hero-emoji-bg {
+      position: absolute;
+      right: 2rem; top: 50%;
+      transform: translateY(-50%);
+      font-size: 10rem;
+      opacity: 0.07;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .cat-eyebrow { font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .cat-eyebrow::before { content: '✦'; font-size: 0.5rem; }
+    .cat-hero h1 { font-size: clamp(2rem, 4vw, 3.2rem); color: var(--brown); margin-bottom: 0.75rem; }
+    .cat-hero-desc { font-size: 0.92rem; color: var(--text-muted); line-height: 1.8; max-width: 560px; }
+    .cat-hero-stats { display: flex; gap: 2rem; margin-top: 1.5rem; }
+    .cat-stat { text-align: center; }
+    .cat-stat-num { font-family: 'Cormorant Garamond', serif; font-size: 1.6rem; font-weight: 600; color: var(--brown); display: block; }
+    .cat-stat-label { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+
+    /* SUBCATEGORY TABS */
+    .subcats-wrap { background: var(--bg); border-bottom: 1px solid var(--border); padding: 0 2rem; position: sticky; top: 72px; z-index: 90; }
+    .subcats { max-width: 1320px; margin: 0 auto; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; }
+    .subcats::-webkit-scrollbar { display: none; }
+    .subcat-btn {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 1rem 1.25rem;
+      font-size: 0.82rem;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .subcat-btn:hover { color: var(--brown); }
+    .subcat-btn.active { color: var(--brown); border-bottom-color: var(--gold); font-weight: 500; }
+
+    /* MAIN LAYOUT */
+    .shop-layout { max-width: 1320px; margin: 0 auto; padding: 2.5rem 2rem; display: grid; grid-template-columns: 260px 1fr; gap: 2.5rem; align-items: start; }
+
+    /* FILTERS SIDEBAR */
+    .filters-sidebar { position: sticky; top: 130px; }
+    .filter-card { background: var(--white); border-radius: 16px; border: 1px solid var(--border); padding: 1.5rem; margin-bottom: 1rem; }
+    .filter-title { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; color: var(--brown); margin-bottom: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+    .filter-reset { font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); cursor: pointer; font-family: 'DM Sans', sans-serif; }
+    .filter-reset:hover { text-decoration: underline; }
+    .price-range-wrap { padding: 0.5rem 0; }
+    .price-range { width: 100%; accent-color: var(--gold); cursor: pointer; }
+    .price-labels { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); margin-top: 0.5rem; }
+    .filter-check-group { display: flex; flex-direction: column; gap: 0.65rem; }
+    .filter-check { display: flex; align-items: center; gap: 0.65rem; cursor: pointer; font-size: 0.85rem; color: var(--text-muted); transition: color 0.2s; }
+    .filter-check:hover { color: var(--brown); }
+    .filter-check input { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
+    .filter-sort select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 0.65rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; color: var(--brown); outline: none; cursor: pointer; }
+
+    /* PRODUCTS AREA */
+    .products-area {}
+    .products-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem; }
+    .products-count { font-size: 0.82rem; color: var(--text-muted); }
+    .products-count strong { color: var(--brown); }
+    .view-toggle { display: flex; gap: 0.3rem; }
+    .view-btn { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.65rem; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+    .view-btn.active { background: var(--brown); color: var(--white); border-color: var(--brown); }
+
+    .products-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    .products-grid.list-view { grid-template-columns: 1fr; }
+
+    /* PRODUCT CARD */
+    .product-card { background: var(--card-bg); border-radius: 20px; overflow: hidden; border: 1px solid var(--border); transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1); position: relative; text-decoration: none; display: block; color: inherit; }
+    .product-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); border-color: var(--gold); }
+    .product-img-wrap { position: relative; aspect-ratio: 1; overflow: hidden; }
+    .product-img { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 4rem; transition: transform 0.5s ease; }
+    .product-card:hover .product-img { transform: scale(1.08); }
+    .prod-bg-1 { background: linear-gradient(135deg,#fce4ec,#f5deb3); }
+    .prod-bg-2 { background: linear-gradient(135deg,#e8f5e9,#c8e6c9); }
+    .prod-bg-3 { background: linear-gradient(135deg,#fff3e0,#E8CFCF); }
+    .prod-bg-4 { background: linear-gradient(135deg,#e3f2fd,#bbdefb); }
+    .prod-bg-5 { background: linear-gradient(135deg,#E8CFCF,#e8c99f); }
+    .prod-bg-6 { background: linear-gradient(135deg,#f3e5f5,#e1bee7); }
+    .prod-bg-7 { background: linear-gradient(135deg,#fbe9e7,#ffccbc); }
+    .prod-bg-8 { background: linear-gradient(135deg,#e0f7fa,#b2ebf2); }
+    .prod-bg-9 { background: linear-gradient(135deg,#f9fbe7,#f0f4c3); }
+    .prod-bg-10 { background: linear-gradient(135deg,#fce4ec,#f8bbd9); }
+    .product-badge { position: absolute; top: 0.75rem; left: 0.75rem; background: var(--brown); color: var(--gold-light); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.3rem 0.7rem; border-radius: 50px; }
+    .badge-new { background: var(--gold); color: var(--white); }
+    .badge-hot { background: #e53935; color: var(--white); }
+    .badge-sale { background: #2e7d32; color: var(--white); }
+    .product-wish { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--white); border: none; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1rem; transition: all 0.2s; opacity: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .product-card:hover .product-wish { opacity: 1; }
+    .product-wish.wished { opacity: 1; }
+    .product-info { padding: 1.1rem; }
+    .product-cat { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.3rem; }
+    .product-name { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; font-weight: 600; color: var(--brown); line-height: 1.3; margin-bottom: 0.4rem; }
+    .product-rating { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; }
+    .stars { color: var(--gold); font-size: 0.7rem; }
+    .rating-count { font-size: 0.7rem; color: var(--text-muted); }
+    .product-price-row { display: flex; align-items: center; justify-content: space-between; }
+    .product-price { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; color: var(--brown); font-weight: 600; }
+    .product-price-old { font-size: 0.82rem; color: var(--text-muted); text-decoration: line-through; margin-left: 0.4rem; }
+    .btn-add-cart { background: var(--brown); color: var(--white); border: none; border-radius: 50px; padding: 0.45rem 1rem; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; letter-spacing: 0.06em; white-space: nowrap; }
+    .btn-add-cart:hover { background: var(--gold); }
+    .btn-add-cart.added { background: #2e7d32; }
+
+    /* LIST VIEW CARD */
+    .products-grid.list-view .product-card { display: flex; }
+    .products-grid.list-view .product-img-wrap { width: 160px; flex-shrink: 0; aspect-ratio: auto; }
+    .products-grid.list-view .product-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding: 1.25rem 1.5rem; }
+    .products-grid.list-view .product-name { font-size: 1.2rem; }
+    .products-grid.list-view .product-desc-short { font-size: 0.82rem; color: var(--text-muted); line-height: 1.7; margin: 0.5rem 0; display: none; }
+    .products-grid.list-view .product-desc-short { display: block; }
+
+    /* EMPTY STATE */
+    .empty-state { text-align: center; padding: 5rem 2rem; }
+    .empty-state-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .empty-state h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--brown); }
+    .empty-state p { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+    /* PAGINATION */
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 3rem; }
+    .page-btn { background: var(--white); border: 1px solid var(--border); border-radius: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; color: var(--brown); }
+    .page-btn.active { background: var(--brown); color: var(--white); border-color: var(--brown); }
+    .page-btn:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
+
+    /* CART SIDEBAR */
+    .cart-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 998; opacity: 0; visibility: hidden; transition: all 0.3s; }
+    .cart-overlay.open { opacity: 1; visibility: visible; }
+    .cart-sidebar { position: fixed; top: 0; right: 0; bottom: 0; width: 400px; max-width: 100vw; background: var(--white); z-index: 999; transform: translateX(100%); transition: transform 0.4s cubic-bezier(0.77,0,0.18,1); display: flex; flex-direction: column; }
+    .cart-sidebar.open { transform: translateX(0); }
+    .cart-header { padding: 1.5rem 1.5rem 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .cart-header h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; color: var(--brown); }
+    .cart-close { background: none; border: none; cursor: pointer; font-size: 1.4rem; color: var(--text-muted); }
+    .cart-items { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
+    .cart-item { display: flex; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    .cart-item-img { width: 60px; height: 60px; border-radius: 10px; background: linear-gradient(135deg,var(--blush),#f5deb3); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+    .cart-item-info { flex: 1; }
+    .cart-item-name { font-family: 'Cormorant Garamond', serif; font-size: 0.95rem; color: var(--brown); }
+    .cart-item-price { font-size: 0.88rem; color: var(--gold); font-weight: 500; margin-top: 0.25rem; }
+    .cart-item-qty { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+    .qty-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.9rem; color: var(--brown); transition: all 0.2s; }
+    .qty-btn:hover { background: var(--brown); color: var(--white); }
+    .qty-num { font-size: 0.88rem; min-width: 20px; text-align: center; }
+    .cart-remove { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.8rem; margin-left: auto; align-self: flex-start; }
+    .cart-footer { padding: 1.5rem; border-top: 1px solid var(--border); }
+    .cart-total { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .cart-total-label { font-size: 0.88rem; color: var(--text-muted); }
+    .cart-total-amount { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; color: var(--brown); font-weight: 600; }
+    .btn-checkout { width: 100%; background: var(--brown); color: var(--white); border: none; border-radius: 50px; padding: 1rem; font-size: 0.88rem; font-family: 'DM Sans', sans-serif; font-weight: 500; letter-spacing: 0.06em; cursor: pointer; transition: all 0.3s; margin-bottom: 0.75rem; }
+    .btn-checkout:hover { background: var(--gold); }
+    .btn-wa-order { width: 100%; background: #25D366; color: var(--white); border: none; border-radius: 50px; padding: 1rem; font-size: 0.88rem; font-family: 'DM Sans', sans-serif; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-decoration: none; }
+    .cart-empty { text-align: center; padding: 3rem 1rem; }
+    .cart-empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .cart-empty h4 { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--brown); }
+
+    /* TOAST */
+    .toast { position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--brown); color: var(--white); padding: 0.75rem 1.5rem; border-radius: 50px; font-size: 0.85rem; opacity: 0; transition: all 0.3s; z-index: 1000; white-space: nowrap; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* WA FLOAT */
+    .wa-float { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 900; width: 58px; height: 58px; background: #25D366; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; box-shadow: 0 4px 20px rgba(37,211,102,0.4); text-decoration: none; transition: all 0.3s; animation: pulse-wa 2s infinite; }
+    .wa-float:hover { transform: scale(1.1); }
+    @keyframes pulse-wa { 0%,100% { box-shadow: 0 4px 20px rgba(37,211,102,0.4); } 50% { box-shadow: 0 4px 35px rgba(37,211,102,0.6); } }
+
+    /* FOOTER */
+    footer { background: var(--brown); color: rgba(255,255,255,0.7); margin-top: 4rem; }
+    .footer-bottom { padding: 1.5rem 2rem; text-align: center; font-size: 0.78rem; }
+    .footer-bottom span { color: var(--gold-light); }
+
+    /* REVEAL */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* RESPONSIVE */
+    @media (max-width: 1024px) {
+      .shop-layout { grid-template-columns: 200px 1fr; gap: 1.5rem; }
+      .products-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      nav { display: none; }
+      .hamburger { display: flex; }
+      .mobile-nav { display: block; }
+      .btn-whatsapp-header span { display: none; }
+      .shop-layout { grid-template-columns: 1fr; }
+      .filters-sidebar { position: static; display: none; }
+      .filters-sidebar.mobile-open { display: block; }
+      .products-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      .filter-toggle-btn { display: flex; }
+      .cat-hero-inner { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .products-grid { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    }
+
+    .filter-toggle-btn { display: none; align-items: center; gap: 0.5rem; background: var(--white); border: 1px solid var(--border); border-radius: 50px; padding: 0.55rem 1.25rem; font-size: 0.82rem; cursor: pointer; color: var(--brown); margin-bottom: 1rem; font-family: 'DM Sans', sans-serif; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--brown); color: var(--white); text-decoration: none; padding: 0.8rem 1.75rem; border-radius: 50px; font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; font-family: 'DM Sans', sans-serif; font-weight: 500; border: none; cursor: pointer; transition: all 0.3s; }
+    .btn-primary:hover { background: var(--gold); }
+  </style>
+</head>
+<body>
+
+<div class="announcement">✨ Free shipping on orders above ₹999 &nbsp;·&nbsp; 🎁 Custom & Bulk Orders Available &nbsp;·&nbsp; 📦 Pan India Delivery</div>
+
+<header id="mainHeader">
+  <div class="header-inner">
+    <a href="index.html" class="logo">
+      <span class="logo-main">Mythris Gleams</span>
+      <span class="logo-sub">Handcrafted with Soul</span>
+    </a>
+    <nav>
+      <div class="nav-item">
+        <a href="#" class="nav-link">Collections</a>
+        <div class="dropdown">
+          <a href="category.html?cat=miniature">Miniature Collections</a>
+          <a href="category.html?cat=kawaii">Kawaii Collections</a>
+          <a href="category.html?cat=gifts">Gift Collections</a>
+          <a href="category.html?cat=utility">Utility & Decor</a>
+          <a href="category.html?cat=jewellery">Jewellery</a>
+          <a href="category.html?cat=corporate">Corporate Orders</a>
+        </div>
+      </div>
+      <a href="index.html#products" class="nav-link nav-item">Best Sellers</a>
+      <a href="index.html#custom" class="nav-link nav-item">Custom Order</a>
+      <a href="index.html#bulk" class="nav-link nav-item">Bulk Orders</a>
+      <a href="index.html#contact" class="nav-link nav-item">Contact</a>
+    </nav>
+    <div class="header-actions">
+      <button class="btn-icon" id="cartBtn" aria-label="Cart">🛒<span class="cart-count" id="cartCount">0</span></button>
+      <a href="https://wa.me/918300034451" class="btn-whatsapp-header" target="_blank">💬 <span>WhatsApp</span></a>
+      <button class="hamburger" id="hamburgerBtn"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="mobile-nav" id="mobileNav">
+  <button class="mobile-nav-close" id="mobileNavClose">✕</button>
+  <span class="logo-main">Mythris Gleams</span>
+  <div class="mobile-nav-section">
+    <h4>Collections</h4>
+    <a href="category.html?cat=miniature">Miniature Collections</a>
+    <a href="category.html?cat=kawaii">Kawaii Collections</a>
+    <a href="category.html?cat=gifts">Gift Collections</a>
+    <a href="category.html?cat=jewellery">Jewellery</a>
+    <a href="category.html?cat=utility">Utility & Decor</a>
+    <a href="category.html?cat=corporate">Corporate & Bulk</a>
+  </div>
+</div>
+
+<!-- BREADCRUMB -->
+<div class="breadcrumb-bar">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="index.html">Home</a>
+    <span class="sep">/</span>
+    <span class="current" id="breadcrumbCurrent">Collections</span>
+  </nav>
+</div>
+
+<!-- CATEGORY HERO -->
+<div class="cat-hero">
+  <div class="cat-hero-inner">
+    <div>
+      <div class="cat-eyebrow" id="catEyebrow">Handcrafted Collections</div>
+      <h1 id="catTitle">Miniature Collections</h1>
+      <p class="cat-hero-desc" id="catDesc">Explore our full range of handmade miniature food clocks, magnets, keychains and wall spatulas — each piece sculpted by hand with intricate detail by Uma Gayathri.</p>
+      <div class="cat-hero-stats">
+        <div class="cat-stat"><span class="cat-stat-num" id="catProductCount">10</span><span class="cat-stat-label">Products</span></div>
+        <div class="cat-stat"><span class="cat-stat-num">100%</span><span class="cat-stat-label">Handmade</span></div>
+        <div class="cat-stat"><span class="cat-stat-num">5★</span><span class="cat-stat-label">Rated</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="cat-hero-emoji-bg" id="catHeroEmoji">🍱</div>
+</div>
+
+<!-- SUBCATEGORY TABS -->
+<div class="subcats-wrap">
+  <div class="subcats" id="subcatTabs"></div>
+</div>
+
+<!-- MAIN SHOP LAYOUT -->
+<div class="shop-layout">
+
+  <!-- FILTERS -->
+  <aside class="filters-sidebar" id="filtersSidebar">
+    <div class="filter-card">
+      <div class="filter-title">Price Range <span class="filter-reset" onclick="resetFilters()">Reset</span></div>
+      <div class="price-range-wrap">
+        <input type="range" class="price-range" id="priceRange" min="0" max="2000" value="2000" step="50" oninput="filterProducts()" />
+        <div class="price-labels"><span>₹0</span><span id="priceLabel">₹2000</span></div>
+      </div>
+    </div>
+    <div class="filter-card">
+      <div class="filter-title">Sort By</div>
+      <div class="filter-sort">
+        <select id="sortSelect" onchange="filterProducts()">
+          <option value="default">Featured</option>
+          <option value="price-asc">Price: Low to High</option>
+          <option value="price-desc">Price: High to Low</option>
+          <option value="rating">Top Rated</option>
+          <option value="newest">Newest First</option>
+        </select>
+      </div>
+    </div>
+    <div class="filter-card">
+      <div class="filter-title">Tags</div>
+      <div class="filter-check-group">
+        <label class="filter-check"><input type="checkbox" value="new" onchange="filterProducts()" /> New Arrivals</label>
+        <label class="filter-check"><input type="checkbox" value="hot" onchange="filterProducts()" /> Best Sellers</label>
+        <label class="filter-check"><input type="checkbox" value="sale" onchange="filterProducts()" /> On Sale</label>
+        <label class="filter-check"><input type="checkbox" value="custom" onchange="filterProducts()" /> Custom Available</label>
+      </div>
+    </div>
+  </aside>
+
+  <!-- PRODUCTS -->
+  <div class="products-area">
+    <div class="products-toolbar">
+      <div>
+        <button class="filter-toggle-btn" id="filterToggle" onclick="toggleFilters()">⚙️ Filters</button>
+        <span class="products-count"><strong id="visibleCount">0</strong> products found</span>
+      </div>
+      <div class="view-toggle">
+        <button class="view-btn active" id="gridViewBtn" onclick="setView('grid')" title="Grid view">⊞</button>
+        <button class="view-btn" id="listViewBtn" onclick="setView('list')" title="List view">☰</button>
+      </div>
+    </div>
+    <div class="products-grid" id="productsGrid"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<!-- CART -->
+<div class="cart-overlay" id="cartOverlay"></div>
+<div class="cart-sidebar" id="cartSidebar">
+  <div class="cart-header"><h3>Your Cart 🛒</h3><button class="cart-close" id="cartClose">✕</button></div>
+  <div class="cart-items" id="cartItems"></div>
+  <div class="cart-footer" id="cartFooter"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<a href="https://wa.me/918300034451" class="wa-float" target="_blank" aria-label="WhatsApp">💬</a>
+
+<footer>
+  <div class="footer-bottom">
+    <p>© 2025 <span>Mythris Gleams</span>. All rights reserved. Handcrafted with ❤️ by Uma Gayathri · Chennai, India.</p>
+  </div>
+</footer>
+
+<script>
+// ─── ALL PRODUCTS DATA ───
+const ALL_PRODUCTS = [
+  { id:1, name:'Handmade Miniature Food Clock – Pizza', category:'miniature', subcategory:'food-clock', price:499, oldPrice:699, emoji:'🍕', bg:'prod-bg-1', badge:'hot', rating:4.9, reviews:48, custom:true },
+  { id:2, name:'Miniature Burger Clock', category:'miniature', subcategory:'food-clock', price:479, oldPrice:649, emoji:'🍔', bg:'prod-bg-2', badge:'hot', rating:4.8, reviews:35, custom:true },
+  { id:3, name:'Miniature Sushi Clock', category:'miniature', subcategory:'food-clock', price:529, oldPrice:749, emoji:'🍱', bg:'prod-bg-3', badge:'new', rating:4.9, reviews:19, custom:true },
+  { id:4, name:'Miniature Donut Clock', category:'miniature', subcategory:'food-clock', price:459, oldPrice:null, emoji:'🍩', bg:'prod-bg-4', badge:null, rating:4.7, reviews:12, custom:true },
+  { id:5, name:'Food Wall Spatula – Set of 3', category:'miniature', subcategory:'wall-spatula', price:329, oldPrice:449, emoji:'🍳', bg:'prod-bg-7', badge:'new', rating:4.7, reviews:11, custom:false },
+  { id:6, name:'Food Wall Spatula – Set of 5', category:'miniature', subcategory:'wall-spatula', price:549, oldPrice:699, emoji:'🥄', bg:'prod-bg-8', badge:null, rating:4.8, reviews:8, custom:false },
+  { id:7, name:'Miniature Food Magnet Set', category:'miniature', subcategory:'magnets', price:249, oldPrice:349, emoji:'🧲', bg:'prod-bg-5', badge:'sale', rating:4.6, reviews:22, custom:false },
+  { id:8, name:'Miniature Food Keychain – Donut', category:'miniature', subcategory:'keychains', price:179, oldPrice:null, emoji:'🍩', bg:'prod-bg-9', badge:null, rating:4.7, reviews:61, custom:false },
+  { id:9, name:'Miniature Food Keychain – Strawberry', category:'miniature', subcategory:'keychains', price:189, oldPrice:null, emoji:'🍓', bg:'prod-bg-10', badge:'new', rating:4.8, reviews:17, custom:false },
+  { id:10, name:'Navaratri Thamboolam Return Gift', category:'miniature', subcategory:'navaratri', price:799, oldPrice:999, emoji:'🪔', bg:'prod-bg-1', badge:'hot', rating:5.0, reviews:19, custom:true },
+  { id:11, name:'Navaratri Golu Display Miniature', category:'miniature', subcategory:'navaratri', price:599, oldPrice:799, emoji:'🌺', bg:'prod-bg-2', badge:'new', rating:4.9, reviews:14, custom:true },
+  // Kawaii
+  { id:12, name:'Kawaii Fridge Magnet Set', category:'kawaii', subcategory:'magnets', price:249, oldPrice:349, emoji:'🐣', bg:'prod-bg-3', badge:'new', rating:4.8, reviews:32, custom:false },
+  { id:13, name:'Kawaii Keychain – Bunny', category:'kawaii', subcategory:'keychains', price:199, oldPrice:null, emoji:'🐰', bg:'prod-bg-4', badge:null, rating:4.7, reviews:28, custom:false },
+  { id:14, name:'Kawaii Keychain – Panda', category:'kawaii', subcategory:'keychains', price:199, oldPrice:null, emoji:'🐼', bg:'prod-bg-5', badge:null, rating:4.8, reviews:21, custom:false },
+  { id:15, name:'Tic Tac Toe Clay Game – Kids', category:'kawaii', subcategory:'games', price:449, oldPrice:599, emoji:'🎮', bg:'prod-bg-6', badge:'hot', rating:4.9, reviews:40, custom:false },
+  { id:16, name:'Kawaii Trinket Tray – Floral', category:'kawaii', subcategory:'trinket', price:399, oldPrice:null, emoji:'🌷', bg:'prod-bg-7', badge:null, rating:4.6, reviews:15, custom:true },
+  { id:17, name:'Cute Mini Decor – Cloud Set', category:'kawaii', subcategory:'decor', price:349, oldPrice:479, emoji:'☁️', bg:'prod-bg-8', badge:'new', rating:4.7, reviews:9, custom:false },
+  // Gifts
+  { id:18, name:"Valentine's Day Clay Gift Set", category:'gifts', subcategory:'valentine', price:699, oldPrice:899, emoji:'❤️', bg:'prod-bg-9', badge:'hot', rating:4.9, reviews:53, custom:true },
+  { id:19, name:"Mother's Day Flower Decor", category:'gifts', subcategory:'mothers', price:599, oldPrice:799, emoji:'💐', bg:'prod-bg-10', badge:'new', rating:4.8, reviews:27, custom:true },
+  { id:20, name:"Father's Day Miniature Gift", category:'gifts', subcategory:'fathers', price:499, oldPrice:649, emoji:'👨', bg:'prod-bg-1', badge:null, rating:4.7, reviews:18, custom:true },
+  { id:21, name:'Birthday Gift Clay Set', category:'gifts', subcategory:'birthday', price:649, oldPrice:849, emoji:'🎂', bg:'prod-bg-2', badge:'hot', rating:4.9, reviews:63, custom:true },
+  { id:22, name:'Naming Ceremony Return Gifts', category:'gifts', subcategory:'naming', price:399, oldPrice:499, emoji:'👶', bg:'prod-bg-3', badge:'new', rating:4.8, reviews:22, custom:true },
+  { id:23, name:'Housewarming Clay Gift Set', category:'gifts', subcategory:'housewarming', price:749, oldPrice:999, emoji:'🏠', bg:'prod-bg-4', badge:null, rating:4.9, reviews:16, custom:true },
+  { id:24, name:'Return Gift Bulk Set (25 pcs)', category:'gifts', subcategory:'return', price:4999, oldPrice:6499, emoji:'🎁', bg:'prod-bg-5', badge:'sale', rating:5.0, reviews:11, custom:true },
+  // Utility
+  { id:25, name:'Clay Pen Holder – Floral', category:'utility', subcategory:'pen-holder', price:349, oldPrice:449, emoji:'✏️', bg:'prod-bg-6', badge:null, rating:4.7, reviews:19, custom:true },
+  { id:26, name:'Car Charm – Elephant', category:'utility', subcategory:'car-charm', price:279, oldPrice:null, emoji:'🐘', bg:'prod-bg-7', badge:'new', rating:4.8, reviews:31, custom:false },
+  { id:27, name:'Agarbathi Holder – Peacock', category:'utility', subcategory:'agarbathi', price:299, oldPrice:399, emoji:'🦚', bg:'prod-bg-8', badge:null, rating:4.8, reviews:22, custom:false },
+  { id:28, name:'Table Top Decor – Mushroom', category:'utility', subcategory:'tabletop', price:399, oldPrice:549, emoji:'🍄', bg:'prod-bg-9', badge:'hot', rating:4.9, reviews:14, custom:false },
+  // Jewellery
+  { id:29, name:'Polymer Clay Stud Earrings', category:'jewellery', subcategory:'polymer', price:299, oldPrice:399, emoji:'💫', bg:'prod-bg-10', badge:'new', rating:4.8, reviews:41, custom:true },
+  { id:30, name:'Terracotta Jhumka Earrings', category:'jewellery', subcategory:'terracotta', price:349, oldPrice:499, emoji:'💛', bg:'prod-bg-1', badge:'hot', rating:4.9, reviews:27, custom:true },
+  { id:31, name:'Air Dry Clay Necklace', category:'jewellery', subcategory:'airdry', price:449, oldPrice:599, emoji:'💎', bg:'prod-bg-2', badge:null, rating:4.7, reviews:13, custom:true },
+  { id:32, name:'Polymer Clay Bracelet', category:'jewellery', subcategory:'polymer', price:399, oldPrice:null, emoji:'🌸', bg:'prod-bg-3', badge:'new', rating:4.8, reviews:8, custom:true },
+  // Corporate
+  { id:33, name:'Corporate Gift Box – Premium', category:'corporate', subcategory:'corporate', price:1499, oldPrice:1999, emoji:'🏢', bg:'prod-bg-4', badge:'hot', rating:5.0, reviews:7, custom:true },
+  { id:34, name:'Bulk Return Gift Set (50 pcs)', category:'corporate', subcategory:'bulk', price:7999, oldPrice:9999, emoji:'📦', bg:'prod-bg-5', badge:'sale', rating:5.0, reviews:5, custom:true },
+  { id:35, name:'Custom Corporate Name Plaque', category:'corporate', subcategory:'custom', price:899, oldPrice:1199, emoji:'🎖️', bg:'prod-bg-6', badge:'new', rating:4.9, reviews:9, custom:true },
+];
+
+const CATEGORIES = {
+  miniature: {
+    title: 'Miniature Collections',
+    eyebrow: 'Hand-Sculpted Clay',
+    desc: 'Explore our full range of handmade miniature food clocks, magnets, keychains and wall spatulas — each piece sculpted by hand with intricate detail by Uma Gayathri.',
+    emoji: '🍱',
+    seoTitle: 'Miniature Collections – Handmade Miniature Food Clock & Clay Gifts | Mythris Gleams',
+    seoDesc: 'Shop handmade miniature food clocks, keychains, magnets and return gifts. Premium clay handcrafted products in India by Uma Gayathri.',
+    subcategories: [
+      { key:'all', label:'All Miniatures' },
+      { key:'food-clock', label:'Food Clocks' },
+      { key:'wall-spatula', label:'Wall Spatulas' },
+      { key:'magnets', label:'Food Magnets' },
+      { key:'keychains', label:'Keychains' },
+      { key:'navaratri', label:'Navaratri' },
+    ]
+  },
+  kawaii: {
+    title: 'Kawaii Collections',
+    eyebrow: 'Cute & Adorable',
+    desc: 'Adorable kawaii-themed clay creations — from fridge magnets and keychains to trinket trays and kids games. Each piece is irresistibly cute and handcrafted.',
+    emoji: '🌸',
+    seoTitle: 'Kawaii Collections – Cute Clay Keychains & Magnets | Mythris Gleams',
+    seoDesc: 'Shop kawaii clay fridge magnets, keychains, trinket trays and kids tic tac toe games handcrafted in India.',
+    subcategories: [
+      { key:'all', label:'All Kawaii' },
+      { key:'magnets', label:'Fridge Magnets' },
+      { key:'keychains', label:'Keychains' },
+      { key:'games', label:'Kids Games' },
+      { key:'trinket', label:'Trinket Trays' },
+      { key:'decor', label:'Cute Decor' },
+    ]
+  },
+  gifts: {
+    title: 'Gift Collections',
+    eyebrow: 'For Every Occasion',
+    desc: 'From Valentine\'s Day to housewarming — find the perfect handmade gift for every occasion. Custom and bulk return gift orders welcome.',
+    emoji: '🎁',
+    seoTitle: 'Gift Collections – Handmade Return Gifts & Custom Gifts India | Mythris Gleams',
+    seoDesc: 'Unique handmade clay gifts for Valentine\'s Day, Mother\'s Day, birthday, naming ceremony, and housewarming. Return gifts in bulk available.',
+    subcategories: [
+      { key:'all', label:'All Gifts' },
+      { key:'valentine', label:"Valentine's Day" },
+      { key:'mothers', label:"Mother's Day" },
+      { key:'fathers', label:"Father's Day" },
+      { key:'birthday', label:'Birthday' },
+      { key:'naming', label:'Naming Ceremony' },
+      { key:'housewarming', label:'Housewarming' },
+      { key:'return', label:'Return Gifts' },
+    ]
+  },
+  utility: {
+    title: 'Utility & Decor',
+    eyebrow: 'Functional Art',
+    desc: 'Beautiful clay utility items that add a handmade touch to your home — pen holders, car charms, agarbathi holders and tabletop decor.',
+    emoji: '🏺',
+    seoTitle: 'Utility & Decor – Handmade Clay Pen Holders, Agarbathi Holders | Mythris Gleams',
+    seoDesc: 'Shop handmade clay pen holders, car charms, agarbathi holders and table top decor. Premium clay crafts in India.',
+    subcategories: [
+      { key:'all', label:'All Utility' },
+      { key:'pen-holder', label:'Pen Holders' },
+      { key:'car-charm', label:'Car Charms' },
+      { key:'agarbathi', label:'Agarbathi Holders' },
+      { key:'tabletop', label:'Table Top Decor' },
+    ]
+  },
+  jewellery: {
+    title: 'Jewellery Collections',
+    eyebrow: 'Wearable Art',
+    desc: 'Handcrafted polymer clay, terracotta and air dry clay jewellery — lightweight, vibrant and uniquely artistic. Made to wear and be noticed.',
+    emoji: '💍',
+    seoTitle: 'Clay Jewellery – Polymer Clay, Terracotta & Air Dry Clay | Mythris Gleams',
+    seoDesc: 'Buy handmade polymer clay earrings, terracotta jewellery, and air dry clay necklaces. Unique wearable art from India.',
+    subcategories: [
+      { key:'all', label:'All Jewellery' },
+      { key:'polymer', label:'Polymer Clay' },
+      { key:'terracotta', label:'Terracotta' },
+      { key:'airdry', label:'Air Dry Clay' },
+    ]
+  },
+  corporate: {
+    title: 'Corporate & Bulk Orders',
+    eyebrow: 'For Businesses',
+    desc: 'Premium handcrafted corporate gifts, return gift sets, and custom bulk orders. Add your brand story to every piece. Pan-India delivery.',
+    emoji: '🏢',
+    seoTitle: 'Corporate & Bulk Orders – Handmade Return Gifts India | Mythris Gleams',
+    seoDesc: 'Bulk handmade return gifts and corporate gifting solutions. Custom clay products for events, offices and ceremonies across India.',
+    subcategories: [
+      { key:'all', label:'All' },
+      { key:'corporate', label:'Corporate Gifts' },
+      { key:'bulk', label:'Bulk Return Gifts' },
+      { key:'custom', label:'Custom Orders' },
+    ]
+  }
+};
+
+// ─── STATE ───
+let currentCat = 'miniature';
+let currentSubcat = 'all';
+let cart = JSON.parse(localStorage.getItem('mg_cart') || '[]');
+let wishlist = JSON.parse(localStorage.getItem('mg_wishlist') || '[]');
+let currentView = 'grid';
+let filteredProducts = [];
+
+// ─── INIT ───
+function init() {
+  const params = new URLSearchParams(window.location.search);
+  currentCat = params.get('cat') || 'miniature';
+  if (!CATEGORIES[currentCat]) currentCat = 'miniature';
+
+  const catData = CATEGORIES[currentCat];
+  document.title = catData.seoTitle;
+  document.getElementById('metaTitle').textContent = catData.seoTitle;
+  document.getElementById('metaDesc').setAttribute('content', catData.seoDesc);
+  document.getElementById('catTitle').textContent = catData.title;
+  document.getElementById('catEyebrow').textContent = catData.eyebrow;
+  document.getElementById('catDesc').textContent = catData.desc;
+  document.getElementById('catHeroEmoji').textContent = catData.emoji;
+  document.getElementById('breadcrumbCurrent').textContent = catData.title;
+
+  renderSubcats();
+  filterProducts();
+  updateCartUI();
+  observeReveal();
+}
+
+function renderSubcats() {
+  const tabs = document.getElementById('subcatTabs');
+  const subcats = CATEGORIES[currentCat].subcategories;
+  tabs.innerHTML = subcats.map(s => `
+    <button class="subcat-btn ${s.key === currentSubcat ? 'active' : ''}" onclick="setSubcat('${s.key}')">${s.label}</button>
+  `).join('');
+}
+
+function setSubcat(key) {
+  currentSubcat = key;
+  renderSubcats();
+  filterProducts();
+}
+
+function filterProducts() {
+  const maxPrice = parseInt(document.getElementById('priceRange').value);
+  document.getElementById('priceLabel').textContent = `₹${maxPrice}`;
+  const sort = document.getElementById('sortSelect').value;
+  const checkedBadges = [...document.querySelectorAll('.filter-check input:checked')].map(i => i.value);
+
+  let products = ALL_PRODUCTS.filter(p => p.category === currentCat);
+  if (currentSubcat !== 'all') products = products.filter(p => p.subcategory === currentSubcat);
+  products = products.filter(p => p.price <= maxPrice);
+  if (checkedBadges.includes('new')) products = products.filter(p => p.badge === 'new');
+  if (checkedBadges.includes('hot')) products = products.filter(p => p.badge === 'hot');
+  if (checkedBadges.includes('sale')) products = products.filter(p => p.badge === 'sale');
+  if (checkedBadges.includes('custom')) products = products.filter(p => p.custom);
+
+  if (sort === 'price-asc') products.sort((a,b) => a.price - b.price);
+  else if (sort === 'price-desc') products.sort((a,b) => b.price - a.price);
+  else if (sort === 'rating') products.sort((a,b) => b.rating - a.rating);
+  else if (sort === 'newest') products.sort((a,b) => b.id - a.id);
+
+  filteredProducts = products;
+  document.getElementById('catProductCount').textContent = products.length;
+  document.getElementById('visibleCount').textContent = products.length;
+  renderProducts(products);
+}
+
+function renderProducts(products) {
+  const grid = document.getElementById('productsGrid');
+  if (products.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-state-icon">🔍</div><h3>No products found</h3><p>Try adjusting your filters or browse another subcategory.</p></div>`;
+    return;
+  }
+  grid.innerHTML = products.map(p => `
+    <a href="product.html?id=${p.id}" class="product-card reveal" aria-label="${p.name}">
+      <div class="product-img-wrap">
+        <div class="product-img ${p.bg}" role="img" aria-label="${p.name}">${p.emoji}</div>
+        ${p.badge ? `<span class="product-badge badge-${p.badge}">${p.badge === 'new' ? 'New' : p.badge === 'hot' ? '🔥 Hot' : '% Sale'}</span>` : ''}
+        <button class="product-wish ${wishlist.includes(p.id) ? 'wished' : ''}" onclick="toggleWish(event,${p.id})" aria-label="Wishlist">
+          ${wishlist.includes(p.id) ? '❤️' : '🤍'}
+        </button>
+      </div>
+      <div class="product-info">
+        <div class="product-cat">${CATEGORIES[p.category]?.title || p.category}</div>
+        <h3 class="product-name">${p.name}</h3>
+        <div class="product-desc-short">${p.custom ? 'Custom orders available · Handcrafted in India' : 'Handcrafted by Uma Gayathri · Ships pan-India'}</div>
+        <div class="product-rating">
+          <span class="stars">${'★'.repeat(Math.floor(p.rating))}</span>
+          <span class="rating-count">(${p.reviews})</span>
+        </div>
+        <div class="product-price-row">
+          <div>
+            <span class="product-price">₹${p.price.toLocaleString()}</span>
+            ${p.oldPrice ? `<span class="product-price-old">₹${p.oldPrice.toLocaleString()}</span>` : ''}
+          </div>
+          <button class="btn-add-cart" onclick="addToCart(event,${p.id})" aria-label="Add to cart">Add +</button>
+        </div>
+      </div>
+    </a>
+  `).join('');
+  observeReveal();
+}
+
+function resetFilters() {
+  document.getElementById('priceRange').value = 2000;
+  document.getElementById('sortSelect').value = 'default';
+  document.querySelectorAll('.filter-check input').forEach(i => i.checked = false);
+  filterProducts();
+}
+
+function setView(v) {
+  currentView = v;
+  const grid = document.getElementById('productsGrid');
+  grid.className = `products-grid ${v === 'list' ? 'list-view' : ''}`;
+  document.getElementById('gridViewBtn').classList.toggle('active', v === 'grid');
+  document.getElementById('listViewBtn').classList.toggle('active', v === 'list');
+}
+
+function toggleFilters() {
+  document.getElementById('filtersSidebar').classList.toggle('mobile-open');
+}
+
+// ─── CART ───
+function addToCart(e, id) {
+  e && e.stopPropagation();
+  const product = ALL_PRODUCTS.find(p => p.id === id);
+  const existing = cart.find(c => c.id === id);
+  if (existing) existing.qty++;
+  else cart.push({ ...product, qty: 1 });
+  saveCart();
+  updateCartUI();
+  showToast(`${product.emoji} Added to cart!`);
+  const btn = e && e.target;
+  if (btn && btn.classList.contains('btn-add-cart')) {
+    btn.textContent = 'Added ✓';
+    btn.classList.add('added');
+    setTimeout(() => { btn.textContent = 'Add +'; btn.classList.remove('added'); }, 1500);
+  }
+}
+function removeFromCart(id) { cart = cart.filter(c => c.id !== id); saveCart(); updateCartUI(); }
+function changeQty(id, delta) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) removeFromCart(id); else { saveCart(); updateCartUI(); }
+}
+function saveCart() { localStorage.setItem('mg_cart', JSON.stringify(cart)); }
+function updateCartUI() {
+  const count = cart.reduce((s,c) => s+c.qty, 0);
+  document.getElementById('cartCount').textContent = count;
+  const total = cart.reduce((s,c) => s+c.price*c.qty, 0);
+  const itemsEl = document.getElementById('cartItems');
+  const footerEl = document.getElementById('cartFooter');
+  if (cart.length === 0) {
+    itemsEl.innerHTML = `<div class="cart-empty"><div class="cart-empty-icon">🛒</div><h4>Your cart is empty</h4></div>`;
+    footerEl.innerHTML = '';
+    return;
+  }
+  itemsEl.innerHTML = cart.map(item => `
+    <div class="cart-item">
+      <div class="cart-item-img">${item.emoji}</div>
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-price">₹${item.price}</div>
+        <div class="cart-item-qty">
+          <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
+          <span class="qty-num">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
+        </div>
+      </div>
+      <button class="cart-remove" onclick="removeFromCart(${item.id})">✕</button>
+    </div>
+  `).join('');
+  footerEl.innerHTML = `
+    <div class="cart-total"><span class="cart-total-label">Total</span><span class="cart-total-amount">₹${total.toLocaleString()}</span></div>
+    <button class="btn-checkout" onclick="showToast('Redirecting to checkout…')">Proceed to Checkout</button>
+    <a href="https://wa.me/918300034451?text=Hi!%20I%20want%20to%20order%3A%20${encodeURIComponent(cart.map(c=>c.name+' x'+c.qty).join(', '))}" class="btn-wa-order" target="_blank">💬 Order via WhatsApp</a>
+  `;
+}
+
+function toggleWish(e, id) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  if (wishlist.includes(id)) { wishlist = wishlist.filter(w => w !== id); btn.textContent = '🤍'; btn.classList.remove('wished'); }
+  else { wishlist.push(id); btn.textContent = '❤️'; btn.classList.add('wished'); showToast('Added to wishlist ❤️'); }
+  localStorage.setItem('mg_wishlist', JSON.stringify(wishlist));
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function observeReveal() {
+  const obs = new IntersectionObserver(entries => { entries.forEach(e => { if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target);}});},{threshold:0.1});
+  document.querySelectorAll('.reveal:not(.visible)').forEach(el => obs.observe(el));
+}
+
+window.addEventListener('scroll', () => {
+  document.getElementById('mainHeader').classList.toggle('scrolled', window.scrollY > 20);
+}, {passive:true});
+document.getElementById('cartBtn').addEventListener('click', () => { document.getElementById('cartSidebar').classList.add('open'); document.getElementById('cartOverlay').classList.add('open'); document.body.style.overflow='hidden'; });
+function closeCart() { document.getElementById('cartSidebar').classList.remove('open'); document.getElementById('cartOverlay').classList.remove('open'); document.body.style.overflow=''; }
+document.getElementById('cartClose').addEventListener('click', closeCart);
+document.getElementById('cartOverlay').addEventListener('click', closeCart);
+document.getElementById('hamburgerBtn').addEventListener('click', () => { document.getElementById('mobileNav').classList.add('open'); document.body.style.overflow='hidden'; });
+document.getElementById('mobileNavClose').addEventListener('click', () => { document.getElementById('mobileNav').classList.remove('open'); document.body.style.overflow=''; });
+document.addEventListener('keydown', e => { if(e.key==='Escape'){closeCart();document.getElementById('mobileNav').classList.remove('open');document.body.style.overflow='';} });
+
+init();
+</script>
+</body>
+</html>

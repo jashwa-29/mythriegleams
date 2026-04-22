@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="metaTitle">Handmade Miniature Food Clock – Mythris Gleams</title>
+  <meta name="description" id="metaDesc" content="Buy handmade miniature food clock by Uma Gayathri. Unique wall decor and gifting clay product. Custom orders available. Ships pan-India." />
+  <meta name="keywords" content="miniature food clock, handmade miniature gifts, clay handmade products India, return gifts India" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FBF7F2; --gold: #D4AF37; --gold-light: #e8cc6a; --blush: #E8CFCF;
+      --brown: #5C3A2E; --brown-light: #8B5E50; --text: #2A2A2A; --text-muted: #7A6B63;
+      --white: #fff; --card-bg: #FEFAF5; --border: rgba(212,175,55,0.2);
+      --shadow: 0 8px 40px rgba(92,58,46,0.10); --shadow-lg: 0 20px 60px rgba(92,58,46,0.16);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-weight: 300; overflow-x: hidden; }
+    body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:9999; opacity:0.35; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"); }
+    h1,h2,h3 { font-family:'Cormorant Garamond',serif; font-weight:600; line-height:1.15; }
+    ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:var(--bg); } ::-webkit-scrollbar-thumb { background:var(--gold); border-radius:2px; }
+
+    /* ANNOUNCEMENT */
+    .announcement { background:var(--brown); color:var(--gold-light); text-align:center; font-size:0.78rem; letter-spacing:0.12em; padding:9px 1rem; text-transform:uppercase; }
+
+    /* HEADER */
+    header { position:sticky; top:0; z-index:100; background:rgba(251,247,242,0.93); backdrop-filter:blur(14px); border-bottom:1px solid var(--border); transition:box-shadow 0.3s; }
+    header.scrolled { box-shadow:0 4px 30px rgba(92,58,46,0.10); }
+    .header-inner { max-width:1320px; margin:0 auto; padding:0 2rem; display:flex; align-items:center; justify-content:space-between; height:72px; gap:1rem; }
+    .logo { display:flex; flex-direction:column; align-items:flex-start; text-decoration:none; flex-shrink:0; }
+    .logo-main { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:1.55rem; color:var(--brown); letter-spacing:0.04em; line-height:1; }
+    .logo-sub { font-size:0.58rem; letter-spacing:0.22em; color:var(--gold); text-transform:uppercase; margin-top:2px; }
+    nav { display:flex; align-items:center; }
+    .nav-item { position:relative; }
+    .nav-link { display:block; padding:0.5rem 1.1rem; font-size:0.82rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text); text-decoration:none; transition:color 0.2s; white-space:nowrap; }
+    .nav-link:hover { color:var(--gold); }
+    .nav-item:hover .dropdown { opacity:1; visibility:visible; transform:translateY(0); }
+    .dropdown { position:absolute; top:calc(100% + 8px); left:0; background:var(--white); border:1px solid var(--border); border-radius:12px; padding:0.75rem 0; min-width:220px; box-shadow:var(--shadow-lg); opacity:0; visibility:hidden; transform:translateY(-8px); transition:all 0.25s ease; z-index:200; }
+    .dropdown a { display:block; padding:0.55rem 1.25rem; font-size:0.82rem; color:var(--text-muted); text-decoration:none; transition:all 0.18s; }
+    .dropdown a:hover { color:var(--brown); padding-left:1.5rem; background:var(--bg); }
+    .header-actions { display:flex; align-items:center; gap:0.75rem; }
+    .btn-icon { background:none; border:none; cursor:pointer; padding:0.5rem; color:var(--brown); transition:color 0.2s; position:relative; font-size:1.2rem; }
+    .btn-icon:hover { color:var(--gold); }
+    .cart-count { position:absolute; top:0; right:0; background:var(--gold); color:var(--white); font-size:0.6rem; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:500; }
+    .btn-whatsapp-header { display:flex; align-items:center; gap:0.45rem; background:#25D366; color:#fff; border:none; border-radius:50px; padding:0.48rem 1rem; font-size:0.78rem; font-family:'DM Sans',sans-serif; cursor:pointer; text-decoration:none; letter-spacing:0.04em; transition:transform 0.2s,box-shadow 0.2s; }
+    .hamburger { display:none; background:none; border:none; cursor:pointer; padding:0.5rem; flex-direction:column; gap:5px; }
+    .hamburger span { display:block; width:22px; height:2px; background:var(--brown); border-radius:2px; }
+    .mobile-nav { display:none; position:fixed; inset:0; background:var(--bg); z-index:500; overflow-y:auto; padding:2rem; transform:translateX(100%); transition:transform 0.35s cubic-bezier(0.77,0,0.18,1); }
+    .mobile-nav.open { transform:translateX(0); }
+    .mobile-nav-close { background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--brown); position:absolute; top:1.5rem; right:1.5rem; }
+    .mobile-nav .logo-main { font-size:1.4rem; margin-bottom:2rem; display:block; color:var(--brown); }
+    .mobile-nav-section { margin-bottom:1.5rem; }
+    .mobile-nav-section h4 { font-size:0.7rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--gold); margin-bottom:0.75rem; font-family:'DM Sans',sans-serif; font-weight:500; }
+    .mobile-nav-section a { display:block; padding:0.6rem 0; font-size:1.05rem; font-family:'Cormorant Garamond',serif; color:var(--brown); text-decoration:none; border-bottom:1px solid var(--border); }
+
+    /* BREADCRUMB */
+    .breadcrumb-bar { background:var(--white); border-bottom:1px solid var(--border); padding:0.75rem 2rem; }
+    .breadcrumb { max-width:1320px; margin:0 auto; display:flex; align-items:center; gap:0.5rem; font-size:0.78rem; color:var(--text-muted); flex-wrap:wrap; }
+    .breadcrumb a { color:var(--text-muted); text-decoration:none; transition:color 0.2s; }
+    .breadcrumb a:hover { color:var(--gold); }
+    .breadcrumb .sep { color:var(--border); }
+    .breadcrumb .current { color:var(--brown); font-weight:500; }
+
+    /* PRODUCT PAGE */
+    .product-page { max-width:1320px; margin:0 auto; padding:3rem 2rem; display:grid; grid-template-columns:1fr 1fr; gap:4rem; align-items:start; }
+
+    /* IMAGE GALLERY */
+    .product-gallery { position:sticky; top:100px; }
+    .main-image {
+      aspect-ratio:1;
+      border-radius:24px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:9rem;
+      position:relative;
+      overflow:hidden;
+      margin-bottom:1rem;
+      transition:transform 0.3s;
+      cursor:zoom-in;
+    }
+    .main-image:hover { transform:scale(1.01); }
+    .main-image::after { content:''; position:absolute; inset:0; background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25) 0%, transparent 60%); pointer-events:none; }
+    .thumb-row { display:flex; gap:0.75rem; }
+    .thumb {
+      width: 72px; height:72px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+      font-size:1.8rem; cursor:pointer; border:2px solid transparent; transition:all 0.2s; overflow:hidden;
+    }
+    .thumb.active { border-color:var(--gold); transform:scale(1.05); }
+    .thumb:hover { border-color:var(--brown); }
+    .prod-bg-1 { background:linear-gradient(135deg,#fce4ec,#f5deb3); }
+    .prod-bg-2 { background:linear-gradient(135deg,#e8f5e9,#c8e6c9); }
+    .prod-bg-3 { background:linear-gradient(135deg,#fff3e0,#E8CFCF); }
+    .prod-bg-4 { background:linear-gradient(135deg,#e3f2fd,#bbdefb); }
+    .prod-bg-5 { background:linear-gradient(135deg,#E8CFCF,#e8c99f); }
+    .prod-bg-6 { background:linear-gradient(135deg,#f3e5f5,#e1bee7); }
+    .prod-bg-7 { background:linear-gradient(135deg,#fbe9e7,#ffccbc); }
+    .prod-bg-8 { background:linear-gradient(135deg,#e0f7fa,#b2ebf2); }
+    .prod-bg-9 { background:linear-gradient(135deg,#f9fbe7,#f0f4c3); }
+    .prod-bg-10 { background:linear-gradient(135deg,#fce4ec,#f8bbd9); }
+
+    /* PRODUCT INFO */
+    .product-info-panel {}
+    .product-badge-row { display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; }
+    .badge-pill { font-size:0.68rem; letter-spacing:0.1em; text-transform:uppercase; padding:0.3rem 0.8rem; border-radius:50px; }
+    .badge-cat { background:var(--bg); border:1px solid var(--border); color:var(--brown); }
+    .badge-new { background:var(--gold); color:var(--white); }
+    .badge-hot { background:#e53935; color:var(--white); }
+    .badge-custom { background:var(--brown); color:var(--gold-light); }
+    .product-title { font-size:clamp(1.7rem,3vw,2.5rem); color:var(--brown); margin-bottom:0.75rem; }
+    .product-rating-row { display:flex; align-items:center; gap:0.75rem; margin-bottom:1.25rem; }
+    .stars { color:var(--gold); font-size:0.9rem; }
+    .rating-num { font-weight:500; font-size:0.88rem; color:var(--brown); }
+    .rating-count { font-size:0.82rem; color:var(--text-muted); }
+    .verified-badge { font-size:0.72rem; color:#2e7d32; background:#e8f5e9; padding:0.2rem 0.6rem; border-radius:50px; }
+    .price-block { margin-bottom:1.75rem; padding:1.25rem; background:var(--white); border-radius:16px; border:1px solid var(--border); }
+    .price-main { font-family:'Cormorant Garamond',serif; font-size:2.2rem; color:var(--brown); font-weight:600; }
+    .price-old { font-size:1.1rem; color:var(--text-muted); text-decoration:line-through; margin-left:0.5rem; }
+    .price-save { display:inline-block; background:#e8f5e9; color:#2e7d32; font-size:0.75rem; padding:0.2rem 0.6rem; border-radius:50px; margin-left:0.5rem; font-weight:500; }
+    .price-note { font-size:0.78rem; color:var(--text-muted); margin-top:0.4rem; }
+    .option-section { margin-bottom:1.5rem; }
+    .option-label { font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.6rem; display:block; }
+    .option-label strong { color:var(--brown); }
+    .size-btns { display:flex; gap:0.5rem; flex-wrap:wrap; }
+    .size-btn { border:1.5px solid var(--border); border-radius:10px; padding:0.5rem 1rem; font-size:0.82rem; color:var(--brown); cursor:pointer; transition:all 0.2s; background:var(--white); font-family:'DM Sans',sans-serif; }
+    .size-btn.active,.size-btn:hover { border-color:var(--brown); background:var(--brown); color:var(--white); }
+    .color-btns { display:flex; gap:0.6rem; flex-wrap:wrap; }
+    .color-btn { width:32px; height:32px; border-radius:50%; cursor:pointer; border:2px solid transparent; transition:all 0.2s; }
+    .color-btn.active,.color-btn:hover { border-color:var(--brown); transform:scale(1.1); }
+    .qty-section { margin-bottom:1.75rem; }
+    .qty-row { display:flex; align-items:center; gap:1.25rem; }
+    .qty-control { display:flex; align-items:center; gap:0; background:var(--white); border:1.5px solid var(--border); border-radius:50px; overflow:hidden; }
+    .qty-btn-c { background:none; border:none; width:42px; height:42px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1.1rem; color:var(--brown); transition:all 0.2s; font-family:'DM Sans',sans-serif; }
+    .qty-btn-c:hover { background:var(--brown); color:var(--white); }
+    .qty-display { min-width:36px; text-align:center; font-size:1rem; font-weight:500; color:var(--brown); }
+    .stock-label { font-size:0.78rem; color:#2e7d32; }
+    .actions { display:flex; flex-direction:column; gap:0.85rem; margin-bottom:2rem; }
+    .btn-primary { display:flex; align-items:center; justify-content:center; gap:0.6rem; background:var(--brown); color:var(--white); border:none; border-radius:50px; padding:1rem 2rem; font-size:0.9rem; letter-spacing:0.06em; text-transform:uppercase; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:all 0.3s; position:relative; overflow:hidden; }
+    .btn-primary::before { content:''; position:absolute; inset:0; background:var(--gold); transform:scaleX(0); transform-origin:left; transition:transform 0.4s cubic-bezier(0.77,0,0.18,1); }
+    .btn-primary:hover::before { transform:scaleX(1); }
+    .btn-primary span { position:relative; z-index:1; }
+    .btn-gold { background:var(--gold); }
+    .btn-gold:hover { background:var(--brown); }
+    .btn-wa { background:#25D366; color:var(--white); border:none; border-radius:50px; padding:1rem 2rem; font-size:0.9rem; letter-spacing:0.06em; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:all 0.3s; display:flex; align-items:center; justify-content:center; gap:0.6rem; text-decoration:none; }
+    .btn-wa:hover { opacity:0.9; transform:translateY(-1px); }
+    .btn-wish-row { display:flex; gap:0.75rem; }
+    .btn-wish { flex:1; background:var(--white); border:1.5px solid var(--border); border-radius:50px; padding:0.9rem; font-size:0.85rem; cursor:pointer; color:var(--brown); transition:all 0.2s; font-family:'DM Sans',sans-serif; }
+    .btn-wish:hover { border-color:var(--gold); color:var(--gold); }
+    .btn-share { flex:1; background:var(--white); border:1.5px solid var(--border); border-radius:50px; padding:0.9rem; font-size:0.85rem; cursor:pointer; color:var(--brown); transition:all 0.2s; font-family:'DM Sans',sans-serif; }
+    .btn-share:hover { border-color:var(--brown); background:var(--brown); color:var(--white); }
+
+    /* TRUST BADGES */
+    .trust-badges { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; margin-bottom:2rem; }
+    .trust-badge { display:flex; align-items:center; gap:0.6rem; padding:0.75rem; background:var(--white); border:1px solid var(--border); border-radius:12px; }
+    .trust-badge-icon { font-size:1.2rem; flex-shrink:0; }
+    .trust-badge-text { font-size:0.75rem; }
+    .trust-badge-text strong { display:block; color:var(--brown); font-size:0.78rem; }
+    .trust-badge-text span { color:var(--text-muted); }
+
+    /* TABS */
+    .product-tabs { border-top:1px solid var(--border); padding-top:2rem; }
+    .tab-nav { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:1.75rem; }
+    .tab-btn { background:none; border:none; border-bottom:2px solid transparent; padding:0.75rem 1.25rem; font-size:0.82rem; color:var(--text-muted); cursor:pointer; transition:all 0.2s; font-family:'DM Sans',sans-serif; letter-spacing:0.05em; }
+    .tab-btn.active { color:var(--brown); border-bottom-color:var(--gold); font-weight:500; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .tab-content p { font-size:0.9rem; color:var(--text-muted); line-height:1.9; margin-bottom:1rem; }
+    .tab-content ul { list-style:none; display:flex; flex-direction:column; gap:0.6rem; }
+    .tab-content ul li { font-size:0.88rem; color:var(--text-muted); display:flex; align-items:flex-start; gap:0.6rem; }
+    .tab-content ul li::before { content:'✦'; color:var(--gold); font-size:0.6rem; margin-top:0.3rem; flex-shrink:0; }
+    .spec-table { width:100%; border-collapse:collapse; }
+    .spec-table tr { border-bottom:1px solid var(--border); }
+    .spec-table td { padding:0.75rem 0.5rem; font-size:0.85rem; }
+    .spec-table td:first-child { color:var(--text-muted); width:40%; }
+    .spec-table td:last-child { color:var(--brown); font-weight:500; }
+
+    /* REVIEWS */
+    .reviews-summary { display:flex; gap:2rem; align-items:center; padding:1.5rem; background:var(--white); border-radius:16px; border:1px solid var(--border); margin-bottom:1.5rem; }
+    .review-big-num { font-family:'Cormorant Garamond',serif; font-size:3.5rem; color:var(--brown); font-weight:600; line-height:1; }
+    .review-stars-big { color:var(--gold); font-size:1.2rem; margin:0.25rem 0; }
+    .review-total { font-size:0.78rem; color:var(--text-muted); }
+    .review-bars { flex:1; display:flex; flex-direction:column; gap:0.5rem; }
+    .review-bar-row { display:flex; align-items:center; gap:0.75rem; }
+    .review-bar-label { font-size:0.72rem; color:var(--text-muted); width:30px; flex-shrink:0; }
+    .review-bar-track { flex:1; height:6px; background:var(--bg); border-radius:3px; overflow:hidden; }
+    .review-bar-fill { height:100%; background:var(--gold); border-radius:3px; }
+    .review-cards { display:flex; flex-direction:column; gap:1rem; }
+    .review-card { background:var(--white); border:1px solid var(--border); border-radius:16px; padding:1.25rem; }
+    .review-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; }
+    .reviewer { display:flex; align-items:center; gap:0.75rem; }
+    .reviewer-avatar { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,var(--blush),var(--gold)); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-weight:600; color:var(--white); }
+    .reviewer-name { font-size:0.88rem; font-weight:500; color:var(--brown); }
+    .reviewer-date { font-size:0.72rem; color:var(--text-muted); }
+    .review-stars { color:var(--gold); font-size:0.75rem; }
+    .review-text { font-size:0.85rem; color:var(--text-muted); line-height:1.75; font-family:'Cormorant Garamond',serif; font-style:italic; }
+
+    /* RELATED PRODUCTS */
+    .related-section { max-width:1320px; margin:0 auto; padding:0 2rem 4rem; }
+    .section-eyebrow { font-size:0.72rem; letter-spacing:0.22em; text-transform:uppercase; color:var(--gold); margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem; }
+    .section-eyebrow::before { content:'✦'; font-size:0.5rem; }
+    .section-title { font-family:'Cormorant Garamond',serif; font-size:clamp(1.6rem,3vw,2.2rem); color:var(--brown); margin-bottom:2rem; }
+    .related-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1.25rem; }
+    .product-card { background:var(--card-bg); border-radius:20px; overflow:hidden; border:1px solid var(--border); transition:all 0.35s cubic-bezier(0.34,1.56,0.64,1); text-decoration:none; display:block; color:inherit; }
+    .product-card:hover { transform:translateY(-6px); box-shadow:var(--shadow-lg); border-color:var(--gold); }
+    .product-card-img { aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:3.5rem; transition:transform 0.5s; }
+    .product-card:hover .product-card-img { transform:scale(1.08); }
+    .product-card-info { padding:1rem; }
+    .product-card-name { font-family:'Cormorant Garamond',serif; font-size:0.95rem; font-weight:600; color:var(--brown); margin-bottom:0.4rem; line-height:1.3; }
+    .product-card-price { font-family:'Cormorant Garamond',serif; font-size:1.05rem; color:var(--gold); font-weight:600; }
+
+    /* STICKY MOBILE BAR */
+    .sticky-buy-bar { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--white); border-top:1px solid var(--border); padding:0.85rem 1.25rem; z-index:200; gap:0.75rem; box-shadow:0 -4px 20px rgba(92,58,46,0.08); }
+    .sticky-product-info { flex:1; }
+    .sticky-product-name { font-family:'Cormorant Garamond',serif; font-size:0.95rem; color:var(--brown); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sticky-price { font-family:'Cormorant Garamond',serif; font-size:1.1rem; color:var(--gold); font-weight:600; }
+    .sticky-btn { background:var(--brown); color:var(--white); border:none; border-radius:50px; padding:0.75rem 1.5rem; font-size:0.85rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+    .sticky-btn:hover { background:var(--gold); }
+
+    /* CART */
+    .cart-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:998; opacity:0; visibility:hidden; transition:all 0.3s; }
+    .cart-overlay.open { opacity:1; visibility:visible; }
+    .cart-sidebar { position:fixed; top:0; right:0; bottom:0; width:400px; max-width:100vw; background:var(--white); z-index:999; transform:translateX(100%); transition:transform 0.4s cubic-bezier(0.77,0,0.18,1); display:flex; flex-direction:column; }
+    .cart-sidebar.open { transform:translateX(0); }
+    .cart-header { padding:1.5rem 1.5rem 1rem; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+    .cart-header h3 { font-family:'Cormorant Garamond',serif; font-size:1.4rem; color:var(--brown); }
+    .cart-close { background:none; border:none; cursor:pointer; font-size:1.4rem; color:var(--text-muted); }
+    .cart-items { flex:1; overflow-y:auto; padding:1rem 1.5rem; }
+    .cart-item { display:flex; gap:1rem; padding:1rem 0; border-bottom:1px solid var(--border); }
+    .cart-item-img { width:60px; height:60px; border-radius:10px; background:linear-gradient(135deg,var(--blush),#f5deb3); display:flex; align-items:center; justify-content:center; font-size:1.5rem; flex-shrink:0; }
+    .cart-item-info { flex:1; }
+    .cart-item-name { font-family:'Cormorant Garamond',serif; font-size:0.95rem; color:var(--brown); }
+    .cart-item-price { font-size:0.88rem; color:var(--gold); margin-top:0.25rem; }
+    .cart-item-qty { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; }
+    .qty-btn { background:var(--bg); border:1px solid var(--border); border-radius:6px; width:26px; height:26px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.9rem; color:var(--brown); transition:all 0.2s; }
+    .qty-btn:hover { background:var(--brown); color:var(--white); }
+    .qty-num { font-size:0.88rem; min-width:20px; text-align:center; }
+    .cart-remove { background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:0.8rem; margin-left:auto; align-self:flex-start; }
+    .cart-footer { padding:1.5rem; border-top:1px solid var(--border); }
+    .cart-total { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; }
+    .cart-total-label { font-size:0.88rem; color:var(--text-muted); }
+    .cart-total-amount { font-family:'Cormorant Garamond',serif; font-size:1.4rem; color:var(--brown); font-weight:600; }
+    .btn-checkout { width:100%; background:var(--brown); color:var(--white); border:none; border-radius:50px; padding:1rem; font-size:0.88rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:all 0.3s; margin-bottom:0.75rem; }
+    .btn-checkout:hover { background:var(--gold); }
+    .btn-wa-order { width:100%; background:#25D366; color:var(--white); border:none; border-radius:50px; padding:1rem; font-size:0.88rem; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.5rem; text-decoration:none; }
+    .cart-empty { text-align:center; padding:3rem 1rem; }
+    .cart-empty-icon { font-size:3rem; margin-bottom:1rem; }
+    .cart-empty h4 { font-family:'Cormorant Garamond',serif; font-size:1.3rem; color:var(--brown); }
+    .toast { position:fixed; bottom:5rem; left:50%; transform:translateX(-50%) translateY(20px); background:var(--brown); color:var(--white); padding:0.75rem 1.5rem; border-radius:50px; font-size:0.85rem; opacity:0; transition:all 0.3s; z-index:1000; white-space:nowrap; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .wa-float { position:fixed; bottom:1.5rem; right:1.5rem; z-index:900; width:58px; height:58px; background:#25D366; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.6rem; box-shadow:0 4px 20px rgba(37,211,102,0.4); text-decoration:none; transition:all 0.3s; animation:pulse-wa 2s infinite; }
+    .wa-float:hover { transform:scale(1.1); }
+    @keyframes pulse-wa { 0%,100%{box-shadow:0 4px 20px rgba(37,211,102,0.4);}50%{box-shadow:0 4px 35px rgba(37,211,102,0.6);} }
+    footer { background:var(--brown); color:rgba(255,255,255,0.7); margin-top:4rem; }
+    .footer-bottom { padding:1.5rem 2rem; text-align:center; font-size:0.78rem; }
+    .footer-bottom span { color:var(--gold-light); }
+    .reveal { opacity:0; transform:translateY(24px); transition:opacity 0.6s ease,transform 0.6s ease; }
+    .reveal.visible { opacity:1; transform:translateY(0); }
+
+    @media (max-width:900px) {
+      nav { display:none; }
+      .hamburger { display:flex; }
+      .mobile-nav { display:block; }
+      .btn-whatsapp-header span { display:none; }
+      .product-page { grid-template-columns:1fr; gap:2rem; }
+      .product-gallery { position:static; }
+      .related-grid { grid-template-columns:repeat(2,1fr); }
+      .sticky-buy-bar { display:flex; }
+      body { padding-bottom:80px; }
+    }
+    @media (max-width:480px) {
+      .related-grid { grid-template-columns:1fr 1fr; gap:0.75rem; }
+      .trust-badges { grid-template-columns:1fr 1fr; }
+      .reviews-summary { flex-direction:column; text-align:center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="announcement">✨ Free shipping on orders above ₹999 &nbsp;·&nbsp; 🎁 Custom & Bulk Orders Available &nbsp;·&nbsp; 📦 Pan India Delivery</div>
+
+<header id="mainHeader">
+  <div class="header-inner">
+    <a href="index.html" class="logo">
+      <span class="logo-main">Mythris Gleams</span>
+      <span class="logo-sub">Handcrafted with Soul</span>
+    </a>
+    <nav>
+      <div class="nav-item">
+        <a href="#" class="nav-link">Collections</a>
+        <div class="dropdown">
+          <a href="category.html?cat=miniature">Miniature Collections</a>
+          <a href="category.html?cat=kawaii">Kawaii Collections</a>
+          <a href="category.html?cat=gifts">Gift Collections</a>
+          <a href="category.html?cat=utility">Utility & Decor</a>
+          <a href="category.html?cat=jewellery">Jewellery</a>
+          <a href="category.html?cat=corporate">Corporate Orders</a>
+        </div>
+      </div>
+      <a href="index.html#products" class="nav-link nav-item">Best Sellers</a>
+      <a href="index.html#custom" class="nav-link nav-item">Custom Order</a>
+      <a href="index.html#bulk" class="nav-link nav-item">Bulk Orders</a>
+      <a href="index.html#contact" class="nav-link nav-item">Contact</a>
+    </nav>
+    <div class="header-actions">
+      <button class="btn-icon" id="cartBtn" aria-label="Cart">🛒<span class="cart-count" id="cartCount">0</span></button>
+      <a href="https://wa.me/918300034451" class="btn-whatsapp-header" target="_blank">💬 <span>WhatsApp</span></a>
+      <button class="hamburger" id="hamburgerBtn"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="mobile-nav" id="mobileNav">
+  <button class="mobile-nav-close" id="mobileNavClose">✕</button>
+  <span class="logo-main">Mythris Gleams</span>
+  <div class="mobile-nav-section">
+    <h4>Collections</h4>
+    <a href="category.html?cat=miniature">Miniature Collections</a>
+    <a href="category.html?cat=kawaii">Kawaii Collections</a>
+    <a href="category.html?cat=gifts">Gift Collections</a>
+    <a href="category.html?cat=jewellery">Jewellery</a>
+    <a href="category.html?cat=utility">Utility & Decor</a>
+    <a href="category.html?cat=corporate">Corporate & Bulk</a>
+  </div>
+</div>
+
+<div class="breadcrumb-bar">
+  <nav class="breadcrumb" id="breadcrumbNav">
+    <a href="index.html">Home</a>
+    <span class="sep">/</span>
+    <a href="#" id="breadcrumbCat">Collections</a>
+    <span class="sep">/</span>
+    <span class="current" id="breadcrumbProduct">Product</span>
+  </nav>
+</div>
+
+<div class="product-page" id="productPage"><!-- injected by JS --></div>
+
+<section class="related-section">
+  <div class="section-eyebrow">You May Also Love</div>
+  <h2 class="section-title">Related Products</h2>
+  <div class="related-grid" id="relatedGrid"></div>
+</section>
+
+<!-- STICKY MOBILE BAR -->
+<div class="sticky-buy-bar" id="stickyBar">
+  <div class="sticky-product-info">
+    <div class="sticky-product-name" id="stickyName">Loading…</div>
+    <div class="sticky-price" id="stickyPrice">₹0</div>
+  </div>
+  <button class="sticky-btn" onclick="addToCartMain()">Add to Cart 🛒</button>
+</div>
+
+<!-- CART -->
+<div class="cart-overlay" id="cartOverlay"></div>
+<div class="cart-sidebar" id="cartSidebar">
+  <div class="cart-header"><h3>Your Cart 🛒</h3><button class="cart-close" id="cartClose">✕</button></div>
+  <div class="cart-items" id="cartItems"></div>
+  <div class="cart-footer" id="cartFooter"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<a href="https://wa.me/918300034451" class="wa-float" target="_blank" aria-label="WhatsApp">💬</a>
+
+<footer>
+  <div class="footer-bottom">
+    <p>© 2025 <span>Mythris Gleams</span>. All rights reserved. Handcrafted with ❤️ by Uma Gayathri · Chennai, India.</p>
+  </div>
+</footer>
+
+<script>
+const ALL_PRODUCTS = [
+  { id:1, name:'Handmade Miniature Food Clock – Pizza', category:'miniature', catLabel:'Miniature Collections', price:499, oldPrice:699, emoji:'🍕', bg:'prod-bg-1', badge:'hot', rating:4.9, reviews:48, custom:true,
+    desc:'A breathtaking handcrafted miniature food clock made from premium air-dry clay, hand-sculpted and painted by Uma Gayathri. This pizza-themed wall clock combines functional timekeeping with whimsical art. Each piece is uniquely made — no two are identical. Perfect for kitchens, kids rooms, gifting, and home decor.\n\nAvailable in pizza, burger, sushi and more themes. Custom themes available on request. Ideal for gifting across India.',
+    sizes:['Small (6 inch)','Medium (8 inch)','Large (10 inch)'],
+    colors:['#e8c99f','#f5deb3','#ffccbc'],
+    specs:{ Material:'Air-dry clay & resin', Finish:'Hand-painted, matte', Size:'Available in 3 sizes', Weight:'~150g (Medium)', 'Clock Mechanism':'Battery-operated (AA)', 'Occasion':'Gifting, Home Decor', 'Delivery Time':'5–7 business days', 'Custom Available':'Yes, all themes' },
+    thumb_emojis:['🍕','🍕','🍕'],
+    thumb_bgs:['prod-bg-1','prod-bg-3','prod-bg-5'],
+  },
+  { id:2, name:'Miniature Burger Clock', category:'miniature', catLabel:'Miniature Collections', price:479, oldPrice:649, emoji:'🍔', bg:'prod-bg-2', badge:'hot', rating:4.8, reviews:35, custom:true,
+    desc:'Adorable burger-themed miniature food clock, hand-sculpted from clay by Uma Gayathri. Each layer — bun, patty, cheese, lettuce — is crafted individually for hyper-realistic detail. A show-stopper wall decor item and a one-of-a-kind gift.',
+    sizes:['Small (6 inch)','Medium (8 inch)'],
+    colors:['#c8e6c9','#e8f5e9','#f5deb3'],
+    specs:{ Material:'Air-dry clay', Finish:'Hand-painted', Size:'6 or 8 inch', Weight:'~130g', 'Clock Mechanism':'Battery-operated', 'Custom Available':'Yes' },
+    thumb_emojis:['🍔','🍔','🍔'],
+    thumb_bgs:['prod-bg-2','prod-bg-4','prod-bg-7'],
+  },
+  { id:3, name:'Miniature Sushi Clock', category:'miniature', catLabel:'Miniature Collections', price:529, oldPrice:749, emoji:'🍱', bg:'prod-bg-3', badge:'new', rating:4.9, reviews:19, custom:true,
+    desc:'Exquisite sushi bento miniature food clock — an artistic masterpiece for Japanese cuisine lovers. Multiple sushi pieces arranged in a bento box, all hand-sculpted from clay. A truly unique wall decor and gift item.',
+    sizes:['Medium (8 inch)','Large (10 inch)'],
+    colors:['#e3f2fd','#bbdefb','#E8CFCF'],
+    specs:{ Material:'Air-dry clay & polymer clay', Finish:'Hand-painted', Size:'8 or 10 inch', 'Custom Available':'Yes' },
+    thumb_emojis:['🍱','🍱','🍱'],
+    thumb_bgs:['prod-bg-3','prod-bg-1','prod-bg-8'],
+  },
+  { id:12, name:'Kawaii Fridge Magnet Set', category:'kawaii', catLabel:'Kawaii Collections', price:249, oldPrice:349, emoji:'🐣', bg:'prod-bg-4', badge:'new', rating:4.8, reviews:32, custom:false,
+    desc:'Super cute kawaii-themed fridge magnet set, handcrafted from polymer clay. Set of 4 adorable characters — perfect for refrigerators, magnetic boards, and gifting.',
+    sizes:['Set of 4','Set of 6','Set of 8'],
+    colors:['#fce4ec','#f8bbd9','#e8f5e9'],
+    specs:{ Material:'Polymer clay', 'Set Size':'4 / 6 / 8 pieces', 'Magnet Type':'Neodymium', 'Custom Available':'No' },
+    thumb_emojis:['🐣','🐣','🐣'],
+    thumb_bgs:['prod-bg-4','prod-bg-2','prod-bg-6'],
+  },
+  { id:18, name:"Valentine's Day Clay Gift Set", category:'gifts', catLabel:'Gift Collections', price:699, oldPrice:899, emoji:'❤️', bg:'prod-bg-9', badge:'hot', rating:4.9, reviews:53, custom:true,
+    desc:"A stunning Valentine's Day gift set handcrafted from clay — includes a heart-shaped decor piece, a love-themed keychain, and a tiny rose clay sculpture. Gift-packed in a beautiful box. Custom name engraving available.",
+    sizes:['Standard Set','Deluxe Set (with box)'],
+    colors:['#fce4ec','#f8bbd9','#ffccbc'],
+    specs:{ Material:'Air-dry & polymer clay', Contents:'3-piece set', 'Gift Packing':'Included', 'Custom Available':'Yes (name/message)' },
+    thumb_emojis:['❤️','❤️','❤️'],
+    thumb_bgs:['prod-bg-9','prod-bg-1','prod-bg-10'],
+  },
+  { id:29, name:'Polymer Clay Stud Earrings', category:'jewellery', catLabel:'Jewellery Collections', price:299, oldPrice:399, emoji:'💫', bg:'prod-bg-10', badge:'new', rating:4.8, reviews:41, custom:true,
+    desc:'Gorgeous lightweight polymer clay stud earrings, handcrafted with intricate floral and geometric patterns. Hypoallergenic stainless steel posts. Each pair is unique and made to order.',
+    sizes:['Small (10mm)','Medium (14mm)'],
+    colors:['#f3e5f5','#fce4ec','#e8f5e9'],
+    specs:{ Material:'Polymer clay', Post:'Stainless steel (hypoallergenic)', Size:'10mm or 14mm', 'Custom Available':'Yes (colors/patterns)' },
+    thumb_emojis:['💫','💫','💫'],
+    thumb_bgs:['prod-bg-10','prod-bg-6','prod-bg-2'],
+  },
+  { id:30, name:'Terracotta Jhumka Earrings', category:'jewellery', catLabel:'Jewellery Collections', price:349, oldPrice:499, emoji:'💛', bg:'prod-bg-1', badge:'hot', rating:4.9, reviews:27, custom:true,
+    desc:'Traditional terracotta jhumka earrings with hand-painted gold motifs. Lightweight, eco-friendly, and beautifully detailed. Perfect for ethnic wear and festive occasions.',
+    sizes:['Small','Medium','Large'],
+    colors:['#e8c99f','#f5deb3','#E8CFCF'],
+    specs:{ Material:'Terracotta clay', Finish:'Hand-painted', Weight:'~8g per pair', 'Custom Available':'Yes' },
+    thumb_emojis:['💛','💛','💛'],
+    thumb_bgs:['prod-bg-1','prod-bg-3','prod-bg-5'],
+  },
+  { id:25, name:'Clay Pen Holder – Floral', category:'utility', catLabel:'Utility & Decor', price:349, oldPrice:449, emoji:'✏️', bg:'prod-bg-6', badge:null, rating:4.7, reviews:19, custom:true,
+    desc:'A beautiful hand-sculpted clay pen holder with delicate floral motifs. Functional and artistic — adds a handcrafted touch to your desk or workspace. Custom names available.',
+    sizes:['Single holder','Double holder'],
+    colors:['#f3e5f5','#e8f5e9','#fff3e0'],
+    specs:{ Material:'Air-dry clay', Capacity:'5–8 pens', Finish:'Hand-painted', 'Custom Available':'Yes (name/theme)' },
+    thumb_emojis:['✏️','✏️','✏️'],
+    thumb_bgs:['prod-bg-6','prod-bg-2','prod-bg-4'],
+  },
+];
+
+const REVIEWS = [
+  { name:'Priya R.', loc:'Chennai', rating:5, text:'Absolutely stunning! The miniature food clock looks even better in person. The detailing is unreal — my family couldn\'t believe it\'s handmade. Worth every rupee.', date:'Dec 2024' },
+  { name:'Sowmya K.', loc:'Coimbatore', rating:5, text:'Ordered as a birthday gift and it was a huge hit! Came beautifully packed, delivered on time. Will definitely order again for Navaratri return gifts.', date:'Nov 2024' },
+  { name:'Anitha D.', loc:'Bangalore', rating:4, text:'The quality is amazing and the product is really unique. The only reason for 4 stars is I expected slightly faster delivery, but the product itself is 5/5!', date:'Oct 2024' },
+];
+
+let cart = JSON.parse(localStorage.getItem('mg_cart') || '[]');
+let wishlist = JSON.parse(localStorage.getItem('mg_wishlist') || '[]');
+let currentProduct = null;
+let selectedQty = 1;
+let selectedSize = 0;
+let activeTab = 'description';
+let wishedThis = false;
+
+function init() {
+  const params = new URLSearchParams(window.location.search);
+  const id = parseInt(params.get('id')) || 1;
+  currentProduct = ALL_PRODUCTS.find(p => p.id === id) || ALL_PRODUCTS[0];
+  wishedThis = wishlist.includes(currentProduct.id);
+  renderProduct();
+  renderRelated();
+  updateCartUI();
+  observeReveal();
+  document.getElementById('stickyName').textContent = currentProduct.name;
+  document.getElementById('stickyPrice').textContent = `₹${currentProduct.price}`;
+}
+
+function renderProduct() {
+  const p = currentProduct;
+  document.title = `${p.name} – Mythris Gleams`;
+  document.getElementById('metaTitle').textContent = `${p.name} – Handmade Clay Gift | Mythris Gleams`;
+  document.getElementById('metaDesc').setAttribute('content', `Buy ${p.name} handcrafted by Uma Gayathri. ${p.desc.substring(0,120)}…`);
+  document.getElementById('breadcrumbCat').textContent = p.catLabel;
+  document.getElementById('breadcrumbCat').href = `category.html?cat=${p.category}`;
+  document.getElementById('breadcrumbProduct').textContent = p.name;
+
+  const savings = p.oldPrice ? p.oldPrice - p.price : 0;
+  const savePct = p.oldPrice ? Math.round((savings/p.oldPrice)*100) : 0;
+
+  const specRows = Object.entries(p.specs).map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  const reviewStars = (n) => '★'.repeat(Math.floor(n)) + (n%1?'½':'');
+  const reviewCards = REVIEWS.map(r => `
+    <div class="review-card">
+      <div class="review-card-header">
+        <div class="reviewer">
+          <div class="reviewer-avatar">${r.name[0]}</div>
+          <div><div class="reviewer-name">${r.name} · ${r.loc}</div><div class="reviewer-date">${r.date}</div></div>
+        </div>
+        <div class="review-stars">${'★'.repeat(r.rating)}</div>
+      </div>
+      <p class="review-text">"${r.text}"</p>
+    </div>
+  `).join('');
+
+  document.getElementById('productPage').innerHTML = `
+    <!-- GALLERY -->
+    <div class="product-gallery">
+      <div class="main-image ${p.bg}" id="mainImage" role="img" aria-label="${p.name}">
+        <span id="mainEmoji" style="position:relative;z-index:1;">${p.emoji}</span>
+      </div>
+      <div class="thumb-row">
+        ${p.thumb_bgs.map((bg,i) => `
+          <div class="thumb ${bg} ${i===0?'active':''}" onclick="switchThumb(${i},'${bg}','${p.thumb_emojis[i]}')" aria-label="View ${i+1}">
+            ${p.thumb_emojis[i]}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- INFO PANEL -->
+    <div class="product-info-panel">
+      <div class="product-badge-row">
+        <span class="badge-pill badge-cat">${p.catLabel}</span>
+        ${p.badge ? `<span class="badge-pill badge-${p.badge}">${p.badge==='new'?'✦ New Arrival':p.badge==='hot'?'🔥 Best Seller':'% Sale'}</span>` : ''}
+        ${p.custom ? `<span class="badge-pill badge-custom">Custom Available</span>` : ''}
+      </div>
+      <h1 class="product-title">${p.name}</h1>
+      <div class="product-rating-row">
+        <span class="stars">${'★'.repeat(Math.floor(p.rating))}</span>
+        <span class="rating-num">${p.rating}</span>
+        <span class="rating-count">(${p.reviews} verified reviews)</span>
+        <span class="verified-badge">✓ Verified</span>
+      </div>
+
+      <div class="price-block">
+        <div>
+          <span class="price-main">₹${p.price.toLocaleString()}</span>
+          ${p.oldPrice ? `<span class="price-old">₹${p.oldPrice.toLocaleString()}</span><span class="price-save">Save ₹${savings} (${savePct}% off)</span>` : ''}
+        </div>
+        <div class="price-note">💚 Free shipping on orders above ₹999 · Pan India Delivery</div>
+      </div>
+
+      <div class="option-section">
+        <span class="option-label">Choose Size / Variant <strong id="selectedSizeLabel">${p.sizes[0]}</strong></span>
+        <div class="size-btns">
+          ${p.sizes.map((s,i) => `<button class="size-btn ${i===0?'active':''}" onclick="selectSize(this,'${s}')">${s}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="option-section">
+        <span class="option-label">Color Variant</span>
+        <div class="color-btns">
+          ${p.colors.map((c,i) => `<div class="color-btn ${i===0?'active':''}" style="background:${c}" onclick="selectColor(this)" title="${c}"></div>`).join('')}
+        </div>
+      </div>
+
+      <div class="qty-section">
+        <span class="option-label">Quantity</span>
+        <div class="qty-row">
+          <div class="qty-control">
+            <button class="qty-btn-c" onclick="changeQtyMain(-1)">−</button>
+            <span class="qty-display" id="mainQtyDisplay">1</span>
+            <button class="qty-btn-c" onclick="changeQtyMain(1)">+</button>
+          </div>
+          <span class="stock-label">✓ In Stock · Ships in 5–7 days</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-primary" onclick="addToCartMain()"><span>🛒 Add to Cart</span></button>
+        <a href="https://wa.me/918300034451?text=Hi!%20I%27m%20interested%20in%20${encodeURIComponent(p.name)}%20(₹${p.price})" class="btn-wa" target="_blank" rel="noopener">💬 Buy via WhatsApp</a>
+        <div class="btn-wish-row">
+          <button class="btn-wish" id="wishBtn" onclick="toggleWishThis()">
+            ${wishedThis ? '❤️ Wishlisted' : '🤍 Add to Wishlist'}
+          </button>
+          <button class="btn-share" onclick="shareProduct()">🔗 Share</button>
+        </div>
+      </div>
+
+      <div class="trust-badges">
+        <div class="trust-badge"><div class="trust-badge-icon">🖐️</div><div class="trust-badge-text"><strong>100% Handmade</strong><span>By Uma Gayathri</span></div></div>
+        <div class="trust-badge"><div class="trust-badge-icon">🚚</div><div class="trust-badge-text"><strong>Pan India Delivery</strong><span>5–7 business days</span></div></div>
+        <div class="trust-badge"><div class="trust-badge-icon">🎁</div><div class="trust-badge-text"><strong>Gift Packaging</strong><span>Available on request</span></div></div>
+        <div class="trust-badge"><div class="trust-badge-icon">✨</div><div class="trust-badge-text"><strong>Custom Orders</strong><span>Name & theme options</span></div></div>
+      </div>
+
+      <!-- TABS -->
+      <div class="product-tabs">
+        <div class="tab-nav">
+          <button class="tab-btn active" onclick="switchTab('description',this)">Description</button>
+          <button class="tab-btn" onclick="switchTab('specs',this)">Specifications</button>
+          <button class="tab-btn" onclick="switchTab('reviews',this)">Reviews (${p.reviews})</button>
+          <button class="tab-btn" onclick="switchTab('shipping',this)">Shipping</button>
+        </div>
+
+        <div class="tab-content active" id="tab-description">
+          ${p.desc.split('\n').filter(Boolean).map(para => `<p>${para}</p>`).join('')}
+          <ul>
+            <li>Individually hand-sculpted — no two pieces are identical</li>
+            <li>Made from premium air-dry clay and resin</li>
+            <li>Finished with non-toxic, food-safe paints</li>
+            <li>Battery-operated clock mechanism (AA battery, not included)</li>
+            <li>Suitable for wall mounting — hardware included</li>
+          </ul>
+        </div>
+
+        <div class="tab-content" id="tab-specs">
+          <table class="spec-table">${specRows}</table>
+        </div>
+
+        <div class="tab-content" id="tab-reviews">
+          <div class="reviews-summary">
+            <div>
+              <div class="review-big-num">${p.rating}</div>
+              <div class="review-stars-big">${'★'.repeat(Math.floor(p.rating))}</div>
+              <div class="review-total">${p.reviews} reviews</div>
+            </div>
+            <div class="review-bars">
+              <div class="review-bar-row"><span class="review-bar-label">5★</span><div class="review-bar-track"><div class="review-bar-fill" style="width:85%"></div></div></div>
+              <div class="review-bar-row"><span class="review-bar-label">4★</span><div class="review-bar-track"><div class="review-bar-fill" style="width:10%"></div></div></div>
+              <div class="review-bar-row"><span class="review-bar-label">3★</span><div class="review-bar-track"><div class="review-bar-fill" style="width:3%"></div></div></div>
+              <div class="review-bar-row"><span class="review-bar-label">2★</span><div class="review-bar-track"><div class="review-bar-fill" style="width:1%"></div></div></div>
+              <div class="review-bar-row"><span class="review-bar-label">1★</span><div class="review-bar-track"><div class="review-bar-fill" style="width:1%"></div></div></div>
+            </div>
+          </div>
+          <div class="review-cards">${reviewCards}</div>
+        </div>
+
+        <div class="tab-content" id="tab-shipping">
+          <ul>
+            <li>Standard delivery: 5–7 business days across India</li>
+            <li>Custom orders: 10–14 business days</li>
+            <li>Bulk orders (25+ units): 14–21 business days</li>
+            <li>Free shipping on all orders above ₹999</li>
+            <li>Shipped via trusted courier partners (BlueDart, Delhivery, DTDC)</li>
+            <li>Each item is carefully bubble-wrapped and packed in a sturdy box</li>
+            <li>Tracking number shared via WhatsApp after dispatch</li>
+            <li>In case of transit damage, replacement provided within 48 hours</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderRelated() {
+  const p = currentProduct;
+  const related = ALL_PRODUCTS.filter(pr => pr.category === p.category && pr.id !== p.id).slice(0,4);
+  document.getElementById('relatedGrid').innerHTML = related.map(r => `
+    <a href="product.html?id=${r.id}" class="product-card reveal">
+      <div class="product-card-img ${r.bg}">${r.emoji}</div>
+      <div class="product-card-info">
+        <div class="product-card-name">${r.name}</div>
+        <div class="product-card-price">₹${r.price.toLocaleString()} ${r.oldPrice ? `<span style="font-size:0.8rem;color:var(--text-muted);text-decoration:line-through;font-family:'DM Sans',sans-serif;">₹${r.oldPrice}</span>` : ''}</div>
+      </div>
+    </a>
+  `).join('');
+  observeReveal();
+}
+
+function switchThumb(idx, bg, emoji) {
+  const mainImg = document.getElementById('mainImage');
+  mainImg.className = `main-image ${bg}`;
+  document.getElementById('mainEmoji').textContent = emoji;
+  document.querySelectorAll('.thumb').forEach((t,i) => t.classList.toggle('active', i===idx));
+}
+
+function selectSize(btn, label) {
+  btn.closest('.size-btns').querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('selectedSizeLabel').textContent = label;
+}
+
+function selectColor(btn) {
+  btn.closest('.color-btns').querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function changeQtyMain(d) {
+  selectedQty = Math.max(1, selectedQty + d);
+  const el = document.getElementById('mainQtyDisplay');
+  if (el) el.textContent = selectedQty;
+}
+
+function addToCartMain() {
+  const p = currentProduct;
+  const existing = cart.find(c => c.id === p.id);
+  if (existing) existing.qty += selectedQty;
+  else cart.push({ ...p, qty: selectedQty });
+  saveCart();
+  updateCartUI();
+  showToast(`${p.emoji} Added ${selectedQty} to cart!`);
+  document.getElementById('cartSidebar').classList.add('open');
+  document.getElementById('cartOverlay').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+
+function toggleWishThis() {
+  const p = currentProduct;
+  const btn = document.getElementById('wishBtn');
+  wishedThis = !wishedThis;
+  if (wishedThis) { wishlist.push(p.id); btn.textContent = '❤️ Wishlisted'; showToast('Added to wishlist ❤️'); }
+  else { wishlist = wishlist.filter(w => w !== p.id); btn.textContent = '🤍 Add to Wishlist'; }
+  localStorage.setItem('mg_wishlist', JSON.stringify(wishlist));
+}
+
+function shareProduct() {
+  if (navigator.share) {
+    navigator.share({ title: currentProduct.name, text: `Check out this handmade ${currentProduct.name} from Mythris Gleams!`, url: window.location.href });
+  } else {
+    navigator.clipboard.writeText(window.location.href);
+    showToast('Link copied! 🔗');
+  }
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// CART
+function removeFromCart(id) { cart = cart.filter(c => c.id !== id); saveCart(); updateCartUI(); }
+function changeQty(id, delta) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) removeFromCart(id); else { saveCart(); updateCartUI(); }
+}
+function saveCart() { localStorage.setItem('mg_cart', JSON.stringify(cart)); }
+function updateCartUI() {
+  const count = cart.reduce((s,c) => s+c.qty, 0);
+  document.getElementById('cartCount').textContent = count;
+  const total = cart.reduce((s,c) => s+c.price*c.qty, 0);
+  const itemsEl = document.getElementById('cartItems');
+  const footerEl = document.getElementById('cartFooter');
+  if (cart.length === 0) {
+    itemsEl.innerHTML = `<div class="cart-empty"><div class="cart-empty-icon">🛒</div><h4>Your cart is empty</h4></div>`;
+    footerEl.innerHTML = ''; return;
+  }
+  itemsEl.innerHTML = cart.map(item => `
+    <div class="cart-item">
+      <div class="cart-item-img">${item.emoji}</div>
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-price">₹${item.price}</div>
+        <div class="cart-item-qty">
+          <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
+          <span class="qty-num">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
+        </div>
+      </div>
+      <button class="cart-remove" onclick="removeFromCart(${item.id})">✕</button>
+    </div>
+  `).join('');
+  footerEl.innerHTML = `
+    <div class="cart-total"><span class="cart-total-label">Total</span><span class="cart-total-amount">₹${total.toLocaleString()}</span></div>
+    <button class="btn-checkout" onclick="showToast('Redirecting to checkout…')">Proceed to Checkout</button>
+    <a href="https://wa.me/918300034451?text=Hi!%20I%20want%20to%20order%3A%20${encodeURIComponent(cart.map(c=>c.name+' x'+c.qty).join(', '))}" class="btn-wa-order" target="_blank">💬 Order via WhatsApp</a>
+  `;
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function observeReveal() {
+  const obs = new IntersectionObserver(entries => { entries.forEach(e => { if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target);}});},{threshold:0.1});
+  document.querySelectorAll('.reveal:not(.visible)').forEach(el => obs.observe(el));
+}
+window.addEventListener('scroll',() => { document.getElementById('mainHeader').classList.toggle('scrolled',window.scrollY>20); },{passive:true});
+document.getElementById('cartBtn').addEventListener('click',()=>{ document.getElementById('cartSidebar').classList.add('open'); document.getElementById('cartOverlay').classList.add('open'); document.body.style.overflow='hidden'; });
+function closeCart() { document.getElementById('cartSidebar').classList.remove('open'); document.getElementById('cartOverlay').classList.remove('open'); document.body.style.overflow=''; }
+document.getElementById('cartClose').addEventListener('click',closeCart);
+document.getElementById('cartOverlay').addEventListener('click',closeCart);
+document.getElementById('hamburgerBtn').addEventListener('click',()=>{ document.getElementById('mobileNav').classList.add('open'); document.body.style.overflow='hidden'; });
+document.getElementById('mobileNavClose').addEventListener('click',()=>{ document.getElementById('mobileNav').classList.remove('open'); document.body.style.overflow=''; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){closeCart();document.getElementById('mobileNav').classList.remove('open');document.body.style.overflow='';} });
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mythris Gleams – Handcrafted Miniature Food Clock & Clay Gift Items India</title>
+  <meta name="description" content="Mythris Gleams offers premium handmade miniature food clocks, clay keychains, resin decor & custom return gifts across India. Handcrafted by Uma Gayathri. Shop now!" />
+  <meta name="keywords" content="miniature food clock, handmade miniature gifts, clay handmade products India, return gifts India, custom handmade gifts, kawaii clay products, polymer clay jewellery" />
+  <meta property="og:title" content="Mythris Gleams – Handcrafted Clay & Resin Miniatures India" />
+  <meta property="og:description" content="Premium handmade clay miniature gifts, decor & jewellery. Custom & bulk orders available." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FBF7F2;
+      --gold: #D4AF37;
+      --gold-light: #e8cc6a;
+      --blush: #E8CFCF;
+      --brown: #5C3A2E;
+      --brown-light: #8B5E50;
+      --text: #2A2A2A;
+      --text-muted: #7A6B63;
+      --white: #fff;
+      --card-bg: #FEFAF5;
+      --border: rgba(212,175,55,0.2);
+      --shadow: 0 8px 40px rgba(92,58,46,0.10);
+      --shadow-lg: 0 20px 60px rgba(92,58,46,0.16);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      overflow-x: hidden;
+    }
+
+    /* ─── NOISE TEXTURE OVERLAY ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
+
+    /* ─── TYPOGRAPHY ─── */
+    h1, h2, h3 { font-family: 'Cormorant Garamond', serif; font-weight: 600; line-height: 1.15; }
+    .serif-italic { font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 300; }
+    .playfair { font-family: 'Playfair Display', serif; }
+
+    /* ─── SCROLLBAR ─── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 2px; }
+
+    /* ─── ANNOUNCEMENT BAR ─── */
+    .announcement {
+      background: var(--brown);
+      color: var(--gold-light);
+      text-align: center;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      padding: 9px 1rem;
+      text-transform: uppercase;
+    }
+    .announcement span { margin: 0 1.5rem; }
+
+    /* ─── HEADER ─── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(251,247,242,0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      transition: box-shadow 0.3s;
+    }
+    header.scrolled { box-shadow: 0 4px 30px rgba(92,58,46,0.10); }
+
+    .header-inner {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 72px;
+      gap: 1rem;
+    }
+
+    .logo {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .logo-main {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 600;
+      font-size: 1.55rem;
+      color: var(--brown);
+      letter-spacing: 0.04em;
+      line-height: 1;
+    }
+    .logo-sub {
+      font-size: 0.58rem;
+      letter-spacing: 0.22em;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    nav { display: flex; align-items: center; gap: 0; }
+    .nav-item {
+      position: relative;
+    }
+    .nav-link {
+      display: block;
+      padding: 0.5rem 1.1rem;
+      font-size: 0.82rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text);
+      text-decoration: none;
+      transition: color 0.2s;
+      white-space: nowrap;
+    }
+    .nav-link:hover { color: var(--gold); }
+    .nav-item:hover .dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
+
+    .dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem 0;
+      min-width: 220px;
+      box-shadow: var(--shadow-lg);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-8px);
+      transition: all 0.25s ease;
+      z-index: 200;
+    }
+    .dropdown a {
+      display: block;
+      padding: 0.55rem 1.25rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: all 0.18s;
+    }
+    .dropdown a:hover { color: var(--brown); padding-left: 1.5rem; background: var(--bg); }
+
+    .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .btn-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+      color: var(--brown);
+      transition: color 0.2s;
+      position: relative;
+    }
+    .btn-icon:hover { color: var(--gold); }
+    .cart-count {
+      position: absolute;
+      top: 0; right: 0;
+      background: var(--gold);
+      color: var(--white);
+      font-size: 0.6rem;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 500;
+    }
+
+    .btn-whatsapp-header {
+      display: flex; align-items: center; gap: 0.45rem;
+      background: #25D366;
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 0.48rem 1rem;
+      font-size: 0.78rem;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-whatsapp-header:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,211,102,0.3); }
+
+    .hamburger { display: none; background: none; border: none; cursor: pointer; padding: 0.5rem; flex-direction: column; gap: 5px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: var(--brown); border-radius: 2px; transition: all 0.3s; }
+
+    /* ─── MOBILE NAV ─── */
+    .mobile-nav {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 500;
+      overflow-y: auto;
+      padding: 2rem;
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.77,0,0.18,1);
+    }
+    .mobile-nav.open { transform: translateX(0); }
+    .mobile-nav-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--brown); position: absolute; top: 1.5rem; right: 1.5rem; }
+    .mobile-nav .logo-main { font-size: 1.4rem; margin-bottom: 2rem; display: block; color: var(--brown); }
+    .mobile-nav-section { margin-bottom: 1.5rem; }
+    .mobile-nav-section h4 { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.75rem; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+    .mobile-nav-section a { display: block; padding: 0.6rem 0; font-size: 1.05rem; font-family: 'Cormorant Garamond', serif; color: var(--brown); text-decoration: none; border-bottom: 1px solid var(--border); }
+
+    /* ─── HERO ─── */
+    .hero {
+      min-height: 100svh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 6rem 4rem 6rem 6rem;
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+    .hero-eyebrow::before {
+      content: '';
+      display: block;
+      width: 30px; height: 1px;
+      background: var(--gold);
+    }
+
+    .hero h1 {
+      font-size: clamp(2.4rem, 4vw, 3.8rem);
+      line-height: 1.1;
+      color: var(--brown);
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 em { color: var(--gold); font-style: italic; }
+
+    .hero-sub {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      line-height: 1.8;
+      max-width: 420px;
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-cta { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: var(--brown);
+      color: var(--white);
+      text-decoration: none;
+      padding: 0.9rem 2rem;
+      border-radius: 50px;
+      font-size: 0.88rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--gold);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.4s cubic-bezier(0.77,0,0.18,1);
+    }
+    .btn-primary:hover::before { transform: scaleX(1); }
+    .btn-primary span { position: relative; z-index: 1; }
+
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: transparent;
+      color: var(--brown);
+      text-decoration: none;
+      padding: 0.9rem 2rem;
+      border-radius: 50px;
+      border: 1.5px solid var(--brown);
+      font-size: 0.88rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-outline:hover { background: var(--brown); color: var(--white); }
+
+    .hero-stats {
+      display: flex;
+      gap: 2rem;
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+    }
+    .hero-stat-num { font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 600; color: var(--brown); display: block; }
+    .hero-stat-label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+
+    .hero-right {
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-right::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--blush) 0%, #f5e6d3 100%);
+    }
+    .hero-bg-pattern {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background-image: radial-gradient(circle at 30% 30%, rgba(212,175,55,0.15) 0%, transparent 60%),
+                        radial-gradient(circle at 80% 70%, rgba(232,207,207,0.4) 0%, transparent 50%);
+    }
+    .hero-product-showcase {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .hero-product-card {
+      width: 320px;
+      background: var(--white);
+      border-radius: 24px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      transform: rotate(3deg);
+      transition: transform 0.5s;
+    }
+    .hero-product-card:hover { transform: rotate(0deg) scale(1.02); }
+    .hero-product-img {
+      width: 100%;
+      aspect-ratio: 1;
+      background: linear-gradient(135deg, var(--blush), #f5deb3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 6rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-product-img::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 40% 40%, rgba(255,255,255,0.5) 0%, transparent 60%);
+    }
+    .hero-product-info { padding: 1.25rem; }
+    .hero-product-info h3 { font-size: 0.95rem; font-family: 'Cormorant Garamond', serif; font-weight: 600; color: var(--brown); }
+    .hero-product-info p { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem; }
+    .hero-product-price { font-size: 1.1rem; font-family: 'Cormorant Garamond', serif; color: var(--gold); font-weight: 600; margin-top: 0.5rem; }
+
+    .floating-badges {
+      position: absolute;
+      z-index: 3;
+    }
+    .floating-badge {
+      background: var(--white);
+      border-radius: 50px;
+      padding: 0.6rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--brown);
+      box-shadow: 0 4px 20px rgba(92,58,46,0.15);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+      animation: float 3s ease-in-out infinite;
+    }
+    .badge-1 { top: 18%; left: 5%; animation-delay: 0s; }
+    .badge-2 { top: 60%; right: 3%; animation-delay: 1.5s; }
+    .badge-3 { bottom: 15%; left: 8%; animation-delay: 0.8s; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    /* ─── SECTION COMMONS ─── */
+    section { padding: 6rem 2rem; }
+    .container { max-width: 1320px; margin: 0 auto; }
+
+    .section-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1rem;
+    }
+    .section-eyebrow::before, .section-eyebrow::after {
+      content: '✦';
+      font-size: 0.5rem;
+    }
+
+    .section-title {
+      font-size: clamp(2rem, 3.5vw, 3rem);
+      color: var(--brown);
+      margin-bottom: 1rem;
+    }
+
+    .section-sub {
+      color: var(--text-muted);
+      font-size: 1rem;
+      line-height: 1.8;
+      max-width: 540px;
+    }
+
+    .section-header { margin-bottom: 3.5rem; }
+    .section-header-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 3.5rem;
+      flex-wrap: wrap;
+    }
+
+    /* ─── MARQUEE ─── */
+    .marquee-wrap {
+      background: var(--brown);
+      overflow: hidden;
+      padding: 1rem 0;
+    }
+    .marquee-track {
+      display: flex;
+      gap: 3rem;
+      animation: marquee 20s linear infinite;
+      width: max-content;
+    }
+    .marquee-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--gold-light);
+      font-size: 0.78rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .marquee-dot { color: var(--gold); }
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
+    /* ─── BRAND STORY ─── */
+    .brand-story { background: var(--white); }
+    .brand-story-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5rem;
+      align-items: center;
+    }
+    .story-visual {
+      position: relative;
+    }
+    .story-img {
+      width: 100%;
+      aspect-ratio: 4/5;
+      border-radius: 24px;
+      background: linear-gradient(135deg, var(--blush) 0%, #f5deb3 60%, var(--blush) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8rem;
+      overflow: hidden;
+      position: relative;
+    }
+    .story-img::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 50%, rgba(92,58,46,0.15) 100%);
+    }
+    .story-badge {
+      position: absolute;
+      bottom: -20px;
+      right: -20px;
+      width: 120px;
+      height: 120px;
+      background: var(--gold);
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Cormorant Garamond', serif;
+      color: var(--white);
+      text-align: center;
+      line-height: 1.2;
+      font-size: 0.85rem;
+      font-weight: 600;
+      box-shadow: 0 8px 30px rgba(212,175,55,0.4);
+    }
+    .story-badge span { font-size: 1.4rem; font-weight: 600; display: block; }
+
+    .story-content .section-eyebrow { display: flex; }
+    .story-features { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 2rem; }
+    .story-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.25rem;
+      background: var(--bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+    .story-feature:hover { border-color: var(--gold); transform: translateX(4px); }
+    .story-feature-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 0.1rem; }
+    .story-feature h4 { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; color: var(--brown); margin-bottom: 0.25rem; }
+    .story-feature p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.6; }
+
+    /* ─── CATEGORIES ─── */
+    .categories-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    .category-card {
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .category-card:hover { transform: translateY(-6px); }
+    .category-card-inner {
+      aspect-ratio: 3/4;
+      position: relative;
+      overflow: hidden;
+    }
+    .category-card:first-child .category-card-inner { aspect-ratio: auto; height: 100%; }
+    .category-card:nth-child(1) { grid-row: span 2; }
+    .cat-bg {
+      position: absolute;
+      inset: 0;
+      transition: transform 0.6s ease;
+    }
+    .category-card:hover .cat-bg { transform: scale(1.06); }
+    .cat-bg-1 { background: linear-gradient(135deg, #f5deb3 0%, #e8c99f 50%, var(--blush) 100%); }
+    .cat-bg-2 { background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); }
+    .cat-bg-3 { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); }
+    .cat-bg-4 { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); }
+    .cat-bg-5 { background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); }
+    .cat-bg-6 { background: linear-gradient(135deg, var(--blush) 0%, #f5deb3 100%); }
+    .cat-emoji {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -60%);
+      font-size: 5rem;
+      filter: drop-shadow(0 8px 20px rgba(0,0,0,0.1));
+      transition: transform 0.4s;
+    }
+    .category-card:hover .cat-emoji { transform: translate(-50%, -65%) scale(1.1); }
+    .cat-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 40%, rgba(92,58,46,0.85) 100%);
+    }
+    .cat-info {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1.5rem;
+      color: var(--white);
+    }
+    .cat-count { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold-light); margin-bottom: 0.35rem; }
+    .cat-name { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; font-weight: 600; }
+    .cat-arrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.6);
+      margin-top: 0.5rem;
+      transition: gap 0.2s, color 0.2s;
+    }
+    .category-card:hover .cat-arrow { gap: 0.7rem; color: var(--gold-light); }
+
+    /* ─── PRODUCTS ─── */
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.5rem;
+    }
+
+    .product-card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      cursor: pointer;
+      position: relative;
+    }
+    .product-card:hover {
+      transform: translateY(-8px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--gold);
+    }
+
+    .product-img-wrap {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
+    }
+    .product-img {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      transition: transform 0.5s ease;
+    }
+    .product-card:hover .product-img { transform: scale(1.08); }
+
+    .prod-bg-1 { background: linear-gradient(135deg, #fce4ec 0%, #f5deb3 100%); }
+    .prod-bg-2 { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); }
+    .prod-bg-3 { background: linear-gradient(135deg, #fff3e0 0%, var(--blush) 100%); }
+    .prod-bg-4 { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); }
+    .prod-bg-5 { background: linear-gradient(135deg, var(--blush) 0%, #e8c99f 100%); }
+    .prod-bg-6 { background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); }
+    .prod-bg-7 { background: linear-gradient(135deg, #fbe9e7 0%, #ffccbc 100%); }
+    .prod-bg-8 { background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%); }
+
+    .product-badge {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      background: var(--brown);
+      color: var(--gold-light);
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.7rem;
+      border-radius: 50px;
+    }
+    .badge-new { background: var(--gold); color: var(--white); }
+    .badge-hot { background: #e53935; color: var(--white); }
+
+    .product-wish {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      background: var(--white);
+      border: none;
+      border-radius: 50%;
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s;
+      opacity: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .product-card:hover .product-wish { opacity: 1; }
+    .product-wish.wished { opacity: 1; }
+    .product-wish:hover { transform: scale(1.15); }
+
+    .product-info { padding: 1.1rem; }
+    .product-cat { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.4rem; }
+    .product-name { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; font-weight: 600; color: var(--brown); line-height: 1.3; margin-bottom: 0.5rem; }
+    .product-price-row { display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; }
+    .product-price { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; color: var(--brown); font-weight: 600; }
+    .product-price-old { font-size: 0.82rem; color: var(--text-muted); text-decoration: line-through; margin-left: 0.4rem; }
+
+    .btn-add-cart {
+      background: var(--brown);
+      color: var(--white);
+      border: none;
+      border-radius: 50px;
+      padding: 0.45rem 1rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .btn-add-cart:hover { background: var(--gold); transform: scale(1.05); }
+    .btn-add-cart.added { background: #2e7d32; }
+
+    .product-rating { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.4rem; }
+    .stars { color: var(--gold); font-size: 0.7rem; letter-spacing: 1px; }
+    .rating-count { font-size: 0.7rem; color: var(--text-muted); }
+
+    /* ─── CUSTOM ORDER ─── */
+    .custom-section {
+      background: linear-gradient(135deg, var(--brown) 0%, #3d2218 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .custom-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle at 20% 50%, rgba(212,175,55,0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 50%, rgba(232,207,207,0.08) 0%, transparent 50%);
+    }
+    .custom-inner {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+    .custom-content .section-eyebrow { color: var(--gold-light); }
+    .custom-content .section-eyebrow::before, .custom-content .section-eyebrow::after { color: var(--gold); }
+    .custom-content .section-title { color: var(--white); }
+    .custom-content .section-sub { color: rgba(255,255,255,0.7); }
+
+    .custom-steps { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 2rem; }
+    .custom-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .step-num {
+      width: 36px; height: 36px;
+      border: 1.5px solid var(--gold);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1rem;
+      color: var(--gold);
+      flex-shrink: 0;
+    }
+    .step-text h4 { color: var(--white); font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; margin-bottom: 0.2rem; }
+    .step-text p { color: rgba(255,255,255,0.6); font-size: 0.82rem; }
+
+    .custom-form-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 24px;
+      padding: 2.5rem;
+      backdrop-filter: blur(8px);
+    }
+    .custom-form-card h3 { font-family: 'Cormorant Garamond', serif; color: var(--white); font-size: 1.5rem; margin-bottom: 1.5rem; }
+    .form-group { margin-bottom: 1.1rem; }
+    .form-group label { display: block; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 0.8rem 1rem;
+      color: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input::placeholder, .form-group textarea::placeholder { color: rgba(255,255,255,0.3); }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--gold); }
+    .form-group select option { background: var(--brown); }
+    .form-group textarea { resize: vertical; min-height: 90px; }
+    .btn-submit {
+      width: 100%;
+      background: var(--gold);
+      color: var(--white);
+      border: none;
+      border-radius: 50px;
+      padding: 1rem;
+      font-size: 0.88rem;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-top: 0.5rem;
+    }
+    .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(212,175,55,0.4); }
+
+    /* ─── BULK ORDERS ─── */
+    .bulk-section { background: var(--white); }
+    .bulk-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    .bulk-card {
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .bulk-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transition: transform 0.3s;
+    }
+    .bulk-card:hover::before { transform: scaleX(1); }
+    .bulk-card:hover { box-shadow: var(--shadow); border-color: var(--gold); }
+    .bulk-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+    .bulk-card h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--brown); margin-bottom: 0.75rem; }
+    .bulk-card p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.7; }
+    .bulk-card .moq { display: inline-block; margin-top: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 50px; padding: 0.35rem 1rem; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brown); }
+
+    /* ─── TESTIMONIALS ─── */
+    .testimonials { background: var(--bg); }
+    .testimonial-slider {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    .testimonial-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 2rem;
+      border: 1px solid var(--border);
+      position: relative;
+      transition: all 0.3s;
+    }
+    .testimonial-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+    .testimonial-card::before {
+      content: '\201C';
+      position: absolute;
+      top: -0.5rem; left: 1.5rem;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 5rem;
+      color: var(--gold);
+      opacity: 0.3;
+      line-height: 1;
+    }
+    .testimonial-text { font-size: 0.92rem; color: var(--text); line-height: 1.8; margin-bottom: 1.25rem; font-style: italic; font-family: 'Cormorant Garamond', serif; font-size: 1rem; }
+    .testimonial-author { display: flex; align-items: center; gap: 0.75rem; }
+    .author-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--blush), var(--gold)); display: flex; align-items: center; justify-content: center; font-family: 'Cormorant Garamond', serif; font-weight: 600; color: var(--white); font-size: 1.1rem; }
+    .author-name { font-weight: 500; font-size: 0.88rem; color: var(--brown); }
+    .author-loc { font-size: 0.72rem; color: var(--text-muted); }
+    .test-stars { color: var(--gold); font-size: 0.75rem; margin-bottom: 1rem; }
+
+    /* ─── FAQ ─── */
+    .faq-section { background: var(--white); }
+    .faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .faq-item {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .faq-item.open { border-color: var(--gold); }
+    .faq-question {
+      width: 100%;
+      background: none;
+      border: none;
+      text-align: left;
+      padding: 1.25rem 1.5rem;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.05rem;
+      color: var(--brown);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .faq-question-text { flex: 1; }
+    .faq-chevron { color: var(--gold); font-size: 1.2rem; transition: transform 0.3s; flex-shrink: 0; }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+    .faq-item.open .faq-answer { max-height: 300px; }
+    .faq-answer-inner { padding: 0 1.5rem 1.25rem; font-size: 0.88rem; color: var(--text-muted); line-height: 1.8; }
+
+    /* ─── CONTACT ─── */
+    .contact-section { background: var(--bg); }
+    .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: start; }
+    .contact-info-items { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 2rem; }
+    .contact-info-item { display: flex; align-items: flex-start; gap: 1rem; }
+    .contact-icon { width: 44px; height: 44px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+    .contact-info-text h4 { font-family: 'Cormorant Garamond', serif; font-size: 1rem; color: var(--brown); margin-bottom: 0.25rem; }
+    .contact-info-text a, .contact-info-text p { font-size: 0.88rem; color: var(--text-muted); text-decoration: none; }
+    .contact-info-text a:hover { color: var(--gold); }
+
+    .contact-social { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+    .social-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      font-size: 1.1rem;
+      text-decoration: none;
+      transition: all 0.2s;
+      color: var(--brown);
+    }
+    .social-btn:hover { background: var(--brown); color: var(--white); border-color: var(--brown); transform: translateY(-2px); }
+    .social-wa { border-color: #25D366; color: #25D366; }
+    .social-wa:hover { background: #25D366; color: var(--white); border-color: #25D366; }
+
+    .contact-form-card { background: var(--white); border-radius: 24px; padding: 2.5rem; border: 1px solid var(--border); }
+    .contact-form-card .form-group label { color: var(--text-muted); }
+    .contact-form-card .form-group input,
+    .contact-form-card .form-group textarea,
+    .contact-form-card .form-group select {
+      background: var(--bg);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .contact-form-card .form-group input:focus,
+    .contact-form-card .form-group textarea:focus { border-color: var(--gold); }
+    .contact-form-card .btn-submit { background: var(--brown); }
+    .contact-form-card .btn-submit:hover { background: var(--gold); }
+
+    /* ─── FOOTER ─── */
+    footer { background: var(--brown); color: rgba(255,255,255,0.7); }
+    .footer-top { padding: 4rem 2rem; }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 3rem; max-width: 1320px; margin: 0 auto; }
+    .footer-brand .logo-main { color: var(--gold-light); font-size: 1.4rem; display: block; margin-bottom: 1rem; }
+    .footer-brand p { font-size: 0.85rem; line-height: 1.8; color: rgba(255,255,255,0.6); max-width: 280px; }
+    .footer-brand .contact-social { margin-top: 1.25rem; }
+    .footer-brand .social-btn { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.6); }
+    .footer-brand .social-btn:hover { background: var(--gold); border-color: var(--gold); color: var(--white); }
+    .footer-col h4 { color: var(--gold-light); font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 1.25rem; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+    .footer-col a { display: block; color: rgba(255,255,255,0.6); text-decoration: none; font-size: 0.85rem; margin-bottom: 0.6rem; transition: color 0.2s; }
+    .footer-col a:hover { color: var(--gold-light); }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.08); padding: 1.5rem 2rem; text-align: center; font-size: 0.78rem; max-width: 1320px; margin: 0 auto; }
+    .footer-bottom span { color: var(--gold); }
+
+    /* ─── CART SIDEBAR ─── */
+    .cart-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 998;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+    }
+    .cart-overlay.open { opacity: 1; visibility: visible; }
+    .cart-sidebar {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: 400px;
+      max-width: 100vw;
+      background: var(--white);
+      z-index: 999;
+      transform: translateX(100%);
+      transition: transform 0.4s cubic-bezier(0.77,0,0.18,1);
+      display: flex;
+      flex-direction: column;
+    }
+    .cart-sidebar.open { transform: translateX(0); }
+    .cart-header { padding: 1.5rem 1.5rem 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .cart-header h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; color: var(--brown); }
+    .cart-close { background: none; border: none; cursor: pointer; font-size: 1.4rem; color: var(--text-muted); transition: color 0.2s; }
+    .cart-close:hover { color: var(--brown); }
+    .cart-items { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
+    .cart-item { display: flex; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+    .cart-item-img { width: 60px; height: 60px; border-radius: 10px; background: linear-gradient(135deg, var(--blush), #f5deb3); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+    .cart-item-info { flex: 1; }
+    .cart-item-name { font-family: 'Cormorant Garamond', serif; font-size: 0.95rem; color: var(--brown); }
+    .cart-item-price { font-size: 0.88rem; color: var(--gold); font-weight: 500; margin-top: 0.25rem; }
+    .cart-item-qty { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+    .qty-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.9rem; color: var(--brown); transition: all 0.2s; }
+    .qty-btn:hover { background: var(--brown); color: var(--white); }
+    .qty-num { font-size: 0.88rem; color: var(--text); min-width: 20px; text-align: center; }
+    .cart-remove { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.8rem; margin-left: auto; align-self: flex-start; transition: color 0.2s; }
+    .cart-remove:hover { color: #c62828; }
+    .cart-footer { padding: 1.5rem; border-top: 1px solid var(--border); }
+    .cart-total { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .cart-total-label { font-size: 0.88rem; color: var(--text-muted); }
+    .cart-total-amount { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; color: var(--brown); font-weight: 600; }
+    .btn-checkout { width: 100%; background: var(--brown); color: var(--white); border: none; border-radius: 50px; padding: 1rem; font-size: 0.88rem; font-family: 'DM Sans', sans-serif; font-weight: 500; letter-spacing: 0.06em; cursor: pointer; transition: all 0.3s; margin-bottom: 0.75rem; }
+    .btn-checkout:hover { background: var(--gold); }
+    .btn-wa-order { width: 100%; background: #25D366; color: var(--white); border: none; border-radius: 50px; padding: 1rem; font-size: 0.88rem; font-family: 'DM Sans', sans-serif; font-weight: 500; letter-spacing: 0.06em; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; text-decoration: none; }
+    .btn-wa-order:hover { opacity: 0.9; }
+    .cart-empty { text-align: center; padding: 3rem 1rem; }
+    .cart-empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .cart-empty h4 { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--brown); }
+    .cart-empty p { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; }
+
+    /* ─── WHATSAPP FLOAT ─── */
+    .wa-float {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 900;
+      width: 58px; height: 58px;
+      background: #25D366;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem;
+      box-shadow: 0 4px 20px rgba(37,211,102,0.4);
+      text-decoration: none;
+      transition: all 0.3s;
+      animation: pulse-wa 2s infinite;
+    }
+    .wa-float:hover { transform: scale(1.1); box-shadow: 0 8px 30px rgba(37,211,102,0.5); }
+    @keyframes pulse-wa {
+      0%, 100% { box-shadow: 0 4px 20px rgba(37,211,102,0.4); }
+      50% { box-shadow: 0 4px 35px rgba(37,211,102,0.6); }
+    }
+
+    /* ─── MODAL / PRODUCT DETAIL ─── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 997;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+      padding: 1rem;
+    }
+    .modal-overlay.open { opacity: 1; visibility: visible; }
+    .modal {
+      background: var(--white);
+      border-radius: 28px;
+      max-width: 860px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.9);
+      transition: transform 0.3s;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal-inner { display: grid; grid-template-columns: 1fr 1fr; }
+    .modal-img {
+      aspect-ratio: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 7rem;
+      border-radius: 28px 0 0 28px;
+      position: sticky;
+      top: 0;
+    }
+    .modal-content { padding: 2.5rem; }
+    .modal-close { background: none; border: none; cursor: pointer; font-size: 1.3rem; color: var(--text-muted); position: absolute; top: 1.25rem; right: 1.25rem; transition: color 0.2s; }
+    .modal-close:hover { color: var(--brown); }
+    .modal-category { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.5rem; }
+    .modal-title { font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; color: var(--brown); line-height: 1.2; margin-bottom: 1rem; }
+    .modal-price { font-family: 'Cormorant Garamond', serif; font-size: 2rem; color: var(--brown); font-weight: 600; margin-bottom: 1.5rem; }
+    .modal-price-old { font-size: 1.1rem; color: var(--text-muted); text-decoration: line-through; margin-left: 0.5rem; }
+    .modal-desc { font-size: 0.88rem; color: var(--text-muted); line-height: 1.8; margin-bottom: 1.5rem; }
+    .modal-options { margin-bottom: 1.5rem; }
+    .modal-options label { display: block; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .size-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .size-btn { border: 1.5px solid var(--border); border-radius: 8px; padding: 0.4rem 0.9rem; font-size: 0.82rem; color: var(--brown); cursor: pointer; transition: all 0.2s; background: none; }
+    .size-btn.active, .size-btn:hover { border-color: var(--brown); background: var(--brown); color: var(--white); }
+    .modal-qty-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+    .modal-qty { display: flex; align-items: center; gap: 0.75rem; background: var(--bg); border-radius: 50px; padding: 0.4rem 1rem; border: 1px solid var(--border); }
+    .modal-qty .qty-btn { background: none; border: none; width: auto; height: auto; }
+    .modal-actions { display: flex; flex-direction: column; gap: 0.75rem; }
+    .modal-features { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+    .modal-feature { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
+    .modal-feature span:first-child { color: var(--gold); }
+
+    /* ─── SCROLL ANIMATIONS ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ─── TOAST ─── */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--brown);
+      color: var(--white);
+      padding: 0.75rem 1.5rem;
+      border-radius: 50px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 1100px) {
+      .products-grid { grid-template-columns: repeat(3, 1fr); }
+      .footer-grid { grid-template-columns: 1fr 1fr; gap: 2rem; }
+    }
+
+    @media (max-width: 900px) {
+      nav { display: none; }
+      .hamburger { display: flex; }
+      .mobile-nav { display: block; }
+      .btn-whatsapp-header span { display: none; }
+
+      .hero { grid-template-columns: 1fr; min-height: 100svh; }
+      .hero-left { padding: 3rem 1.5rem 2rem; order: 2; }
+      .hero-right { order: 1; min-height: 340px; }
+      .hero-product-card { width: 220px; }
+      .hero-stats { gap: 1.25rem; }
+
+      .brand-story-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+      .story-img { aspect-ratio: 16/9; font-size: 5rem; }
+      .story-badge { right: 1rem; bottom: -15px; width: 90px; height: 90px; font-size: 0.72rem; }
+
+      .categories-grid { grid-template-columns: 1fr 1fr; }
+      .category-card:nth-child(1) { grid-row: auto; }
+
+      .products-grid { grid-template-columns: repeat(2, 1fr); }
+
+      .custom-inner { grid-template-columns: 1fr; gap: 2rem; }
+      .bulk-grid { grid-template-columns: 1fr; }
+      .testimonial-slider { grid-template-columns: 1fr; }
+      .faq-grid { grid-template-columns: 1fr; }
+      .contact-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+
+      .modal-inner { grid-template-columns: 1fr; }
+      .modal-img { border-radius: 28px 28px 0 0; aspect-ratio: 4/3; font-size: 5rem; }
+
+      section { padding: 4rem 1.25rem; }
+    }
+
+    @media (max-width: 560px) {
+      .products-grid { grid-template-columns: 1fr 1fr; gap: 1rem; }
+      .categories-grid { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr; gap: 2rem; }
+      .hero-left { padding: 2rem 1.25rem 2rem; }
+      .header-inner { padding: 0 1.25rem; }
+      .announcement span { display: none; }
+      .announcement span:first-child { display: inline; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ANNOUNCEMENT BAR -->
+<div class="announcement" role="banner">
+  <span>✨ Free shipping on orders above ₹999</span>
+  <span>🎁 Custom & Bulk Orders Available</span>
+  <span>📦 Pan India Delivery</span>
+</div>
+
+<!-- HEADER -->
+<header id="mainHeader" role="banner">
+  <div class="header-inner">
+    <a href="#" class="logo" aria-label="Mythris Gleams Home">
+      <span class="logo-main">Mythris Gleams</span>
+      <span class="logo-sub">Handcrafted with Soul</span>
+    </a>
+
+    <nav role="navigation" aria-label="Main navigation">
+      <div class="nav-item">
+        <a href="#categories" class="nav-link">Collections</a>
+        <div class="dropdown" role="menu">
+          <a href="#" role="menuitem">Miniature Collections</a>
+          <a href="#" role="menuitem">Kawaii Collections</a>
+          <a href="#" role="menuitem">Gift Collections</a>
+          <a href="#" role="menuitem">Utility & Decor</a>
+          <a href="#" role="menuitem">Jewellery</a>
+          <a href="#" role="menuitem">Corporate Orders</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <a href="#products" class="nav-link">Best Sellers</a>
+      </div>
+      <div class="nav-item">
+        <a href="#custom" class="nav-link">Custom Order</a>
+      </div>
+      <div class="nav-item">
+        <a href="#bulk" class="nav-link">Bulk Orders</a>
+      </div>
+      <div class="nav-item">
+        <a href="#contact" class="nav-link">Contact</a>
+      </div>
+    </nav>
+
+    <div class="header-actions">
+      <button class="btn-icon" id="cartBtn" aria-label="Open cart">
+        🛒
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+      <a href="https://wa.me/918300034451" class="btn-whatsapp-header" target="_blank" rel="noopener" aria-label="WhatsApp us">
+        💬 <span>WhatsApp</span>
+      </a>
+      <button class="hamburger" id="hamburgerBtn" aria-label="Open menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- MOBILE NAV -->
+<div class="mobile-nav" id="mobileNav" role="dialog" aria-label="Mobile menu">
+  <button class="mobile-nav-close" id="mobileNavClose" aria-label="Close menu">✕</button>
+  <span class="logo-main">Mythris Gleams</span>
+  <div class="mobile-nav-section">
+    <h4>Miniature Collections</h4>
+    <a href="#">Miniature Food Clock</a>
+    <a href="#">Food Wall Spatulas</a>
+    <a href="#">Food Magnets</a>
+    <a href="#">Food Keychains</a>
+    <a href="#">Navaratri Golu Display</a>
+  </div>
+  <div class="mobile-nav-section">
+    <h4>Kawaii Collections</h4>
+    <a href="#">Fridge Magnets</a>
+    <a href="#">Keychains</a>
+    <a href="#">Tic Tac Toe Game</a>
+    <a href="#">Trinket Trays</a>
+  </div>
+  <div class="mobile-nav-section">
+    <h4>Gift Collections</h4>
+    <a href="#">Valentine's Day</a>
+    <a href="#">Mother's Day</a>
+    <a href="#">Birthday Gifts</a>
+    <a href="#">Return Gifts</a>
+    <a href="#">Housewarming</a>
+  </div>
+  <div class="mobile-nav-section">
+    <h4>More</h4>
+    <a href="#">Jewellery</a>
+    <a href="#">Utility & Decor</a>
+    <a href="#">Bulk Orders</a>
+    <a href="#">Custom Order</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<main>
+<section class="hero" aria-label="Hero section">
+  <div class="hero-left">
+    <div class="hero-eyebrow">Handcrafted in India</div>
+    <h1>
+      Handcrafted <em>Miniature Food Clock</em> &amp; Unique Clay Gift Items
+    </h1>
+    <p class="hero-sub">Premium handmade miniature creations designed by Uma Gayathri — for gifting, decor, and memories that last a lifetime.</p>
+    <div class="hero-cta">
+      <a href="#products" class="btn-primary" aria-label="Shop now">
+        <span>✦ Shop Now</span>
+      </a>
+      <a href="#custom" class="btn-outline" aria-label="Custom order">Custom Order</a>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <span class="hero-stat-num">500+</span>
+        <span class="hero-stat-label">Happy Customers</span>
+      </div>
+      <div>
+        <span class="hero-stat-num">100%</span>
+        <span class="hero-stat-label">Handcrafted</span>
+      </div>
+      <div>
+        <span class="hero-stat-num">50+</span>
+        <span class="hero-stat-label">Unique Designs</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div class="hero-bg-pattern"></div>
+    <div class="hero-product-showcase">
+      <div class="hero-product-card" id="heroCard">
+        <div class="hero-product-img">🍕</div>
+        <div class="hero-product-info">
+          <h3>Miniature Food Clock</h3>
+          <p>Handcrafted clay wall decor</p>
+          <div class="hero-product-price">₹ 499</div>
+        </div>
+      </div>
+    </div>
+    <div class="floating-badges">
+      <div class="floating-badge badge-1">🎨 Hand Sculpted</div>
+      <div class="floating-badge badge-2">🚚 Pan India Shipping</div>
+      <div class="floating-badge badge-3">🎁 Gift Ready</div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee-wrap" aria-hidden="true">
+  <div class="marquee-track" id="marqueeTrack">
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Miniature Food Clocks</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Kawaii Keychains</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Navaratri Return Gifts</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Polymer Clay Jewellery</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Custom Orders</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Corporate Gifting</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Handcrafted in India</div>
+    <!-- duplicate for infinite -->
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Miniature Food Clocks</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Kawaii Keychains</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Navaratri Return Gifts</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Polymer Clay Jewellery</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Custom Orders</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Corporate Gifting</div>
+    <div class="marquee-item"><span class="marquee-dot">✦</span> Handcrafted in India</div>
+  </div>
+</div>
+
+<!-- BRAND STORY -->
+<section class="brand-story reveal" aria-labelledby="story-heading">
+  <div class="container">
+    <div class="brand-story-grid">
+      <div class="story-visual reveal">
+        <div class="story-img" aria-label="Uma Gayathri crafting">🎨</div>
+        <div class="story-badge"><span>5★</span>Rated by Customers</div>
+      </div>
+      <div class="story-content reveal reveal-delay-2">
+        <div class="section-eyebrow">Our Story</div>
+        <h2 class="section-title" id="story-heading">Crafted with<br><em>Love &amp; Soul</em></h2>
+        <p class="section-sub">Hi, I'm <strong>Uma Gayathri</strong> — the heart behind Mythris Gleams. Every piece I create is hand-sculpted using clay and resin, infused with intricate detailing and genuine emotion. Each item is one-of-a-kind, made to carry meaning in every gifting moment.</p>
+        <div class="story-features">
+          <div class="story-feature">
+            <span class="story-feature-icon">🖐️</span>
+            <div>
+              <h4>100% Handmade</h4>
+              <p>Every product is individually sculpted by hand — no moulds, no machines.</p>
+            </div>
+          </div>
+          <div class="story-feature">
+            <span class="story-feature-icon">🎁</span>
+            <div>
+              <h4>Perfect for Gifting</h4>
+              <p>From return gifts to corporate hampers — each piece is thoughtfully gift-packed.</p>
+            </div>
+          </div>
+          <div class="story-feature">
+            <span class="story-feature-icon">🌸</span>
+            <div>
+              <h4>Fully Customizable</h4>
+              <p>Name it, theme it, size it. Custom orders are our specialty.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CATEGORIES -->
+<section id="categories" aria-labelledby="cat-heading">
+  <div class="container">
+    <div class="section-header-row">
+      <div>
+        <div class="section-eyebrow reveal">Shop by Collection</div>
+        <h2 class="section-title reveal reveal-delay-1" id="cat-heading">Every Piece,<br>A Story</h2>
+      </div>
+      <a href="#products" class="btn-outline reveal reveal-delay-2">View All</a>
+    </div>
+
+    <div class="categories-grid">
+      <a href="#" class="category-card reveal" aria-label="Miniature Collections">
+        <div class="category-card-inner">
+          <div class="cat-bg cat-bg-1"></div>
+          <div class="cat-emoji" aria-hidden="true">🍱</div>
+          <div class="cat-overlay"></div>
+          <div class="cat-info">
+            <div class="cat-count">6 Subcategories</div>
+            <div class="cat-name">Miniature Collections</div>
+            <div class="cat-arrow">Explore →</div>
+          </div>
+        </div>
+      </a>
+      <a href="#" class="category-card reveal reveal-delay-1" aria-label="Kawaii Collections">
+        <div class="category-card-inner">
+          <div class="cat-bg cat-bg-2"></div>
+          <div class="cat-emoji" aria-hidden="true">🌸</div>
+          <div class="cat-overlay"></div>
+          <div class="cat-info">
+            <div class="cat-count">5 Subcategories</div>
+            <div class="cat-name">Kawaii Collections</div>
+            <div class="cat-arrow">Explore →</div>
+          </div>
+        </div>
+      </a>
+      <a href="#" class="category-card reveal reveal-delay-2" aria-label="Gift Collections">
+        <div class="category-card-inner">
+          <div class="cat-bg cat-bg-3"></div>
+          <div class="cat-emoji" aria-hidden="true">🎁</div>
+          <div class="cat-overlay"></div>
+          <div class="cat-info">
+            <div class="cat-count">7 Occasions</div>
+            <div class="cat-name">Gift Collections</div>
+            <div class="cat-arrow">Explore →</div>
+          </div>
+        </div>
+      </a>
+      <a href="#" class="category-card reveal reveal-delay-1" aria-label="Utility & Decor">
+        <div class="category-card-inner">
+          <div class="cat-bg cat-bg-4"></div>
+          <div class="cat-emoji" aria-hidden="true">🏺</div>
+          <div class="cat-overlay"></div>
+          <div class="cat-info">
+            <div class="cat-count">4 Types</div>
+            <div class="cat-name">Utility &amp; Decor</div>
+            <div class="cat-arrow">Explore →</div>
+          </div>
+        </div>
+      </a>
+      <a href="#" class="category-card reveal reveal-delay-2" aria-label="Jewellery Collections">
+        <div class="category-card-inner">
+          <div class="cat-bg cat-bg-5"></div>
+          <div class="cat-emoji" aria-hidden="true">💍</div>
+          <div class="cat-overlay"></div>
+          <div class="cat-info">
+            <div class="cat-count">3 Types</div>
+            <div class="cat-name">Jewellery Collections</div>
+            <div class="cat-arrow">Explore →</div>
+          </div>
+        </div>
+      </a>
+      <a href="#bulk" class="category-card reveal reveal-delay-3" aria-label="Corporate & Bulk Orders">
+        <div class="category-card-inner">
+          <div class="cat-bg cat-bg-6"></div>
+          <div class="cat-emoji" aria-hidden="true">🏢</div>
+          <div class="cat-overlay"></div>
+          <div class="cat-info">
+            <div class="cat-count">Bulk & Custom</div>
+            <div class="cat-name">Corporate &amp; Bulk</div>
+            <div class="cat-arrow">Enquire →</div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- BEST SELLERS -->
+<section id="products" style="background: var(--white);" aria-labelledby="products-heading">
+  <div class="container">
+    <div class="section-header-row">
+      <div>
+        <div class="section-eyebrow reveal">Best Sellers</div>
+        <h2 class="section-title reveal reveal-delay-1" id="products-heading">Most Loved<br>Creations</h2>
+      </div>
+      <a href="#" class="btn-outline reveal reveal-delay-2">Shop All</a>
+    </div>
+
+    <div class="products-grid" id="productsGrid">
+      <!-- Products injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- CUSTOM ORDER -->
+<section id="custom" class="custom-section" aria-labelledby="custom-heading">
+  <div class="container">
+    <div class="custom-inner">
+      <div class="custom-content reveal">
+        <div class="section-eyebrow">Made Just for You</div>
+        <h2 class="section-title" id="custom-heading">Looking for Something Unique?</h2>
+        <p class="section-sub">We bring your imagination to life. From wedding return gifts to personalized name pieces — every custom order is handcrafted with extra love.</p>
+        <div class="custom-steps">
+          <div class="custom-step">
+            <div class="step-num">1</div>
+            <div class="step-text">
+              <h4>Share Your Idea</h4>
+              <p>Tell us what you have in mind — theme, quantity, occasion.</p>
+            </div>
+          </div>
+          <div class="custom-step">
+            <div class="step-num">2</div>
+            <div class="step-text">
+              <h4>Get a Quote</h4>
+              <p>We'll send you a detailed price quote within 24 hours.</p>
+            </div>
+          </div>
+          <div class="custom-step">
+            <div class="step-num">3</div>
+            <div class="step-text">
+              <h4>We Craft it</h4>
+              <p>Your piece is handmade and dispatched with care.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="custom-form-card reveal reveal-delay-2">
+        <h3>Request a Custom Order</h3>
+        <div class="form-group">
+          <label for="cust-name">Your Name</label>
+          <input type="text" id="cust-name" placeholder="Uma Gayathri" />
+        </div>
+        <div class="form-group">
+          <label for="cust-phone">Phone / WhatsApp</label>
+          <input type="tel" id="cust-phone" placeholder="+91 98765 43210" />
+        </div>
+        <div class="form-group">
+          <label for="cust-cat">Category</label>
+          <select id="cust-cat">
+            <option>Miniature Collections</option>
+            <option>Kawaii Collections</option>
+            <option>Gift Collections</option>
+            <option>Jewellery</option>
+            <option>Utility & Decor</option>
+            <option>Corporate / Bulk</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="cust-qty">Quantity</label>
+          <input type="number" id="cust-qty" placeholder="e.g. 50" min="1" />
+        </div>
+        <div class="form-group">
+          <label for="cust-msg">Your Requirements</label>
+          <textarea id="cust-msg" placeholder="Describe your idea, occasion, colors…"></textarea>
+        </div>
+        <button class="btn-submit" onclick="submitCustomOrder()">✦ Send Enquiry</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BULK ORDERS -->
+<section id="bulk" class="bulk-section" aria-labelledby="bulk-heading">
+  <div class="container">
+    <div class="section-header" style="text-align:center;">
+      <div class="section-eyebrow reveal" style="justify-content:center;">For Every Occasion</div>
+      <h2 class="section-title reveal reveal-delay-1" id="bulk-heading">Bulk &amp; Corporate Orders</h2>
+      <p class="section-sub reveal reveal-delay-2" style="margin: 0 auto;">Whether it's 50 return gifts or 500 corporate hampers — we handle it all with the same handcrafted quality and care.</p>
+    </div>
+    <div class="bulk-grid">
+      <div class="bulk-card reveal">
+        <div class="bulk-icon">🏢</div>
+        <h3>Corporate Gifting</h3>
+        <p>Premium branded gifts for your team, clients, and events. Add your company logo or message to each piece.</p>
+        <span class="moq">MOQ: 50 Units</span>
+      </div>
+      <div class="bulk-card reveal reveal-delay-1">
+        <div class="bulk-icon">🎊</div>
+        <h3>Return Gifts</h3>
+        <p>Navaratri, wedding, naming ceremony — we create memorable return gifts that guests will treasure forever.</p>
+        <span class="moq">MOQ: 25 Units</span>
+      </div>
+      <div class="bulk-card reveal reveal-delay-2">
+        <div class="bulk-icon">🤝</div>
+        <h3>Custom Bulk Orders</h3>
+        <p>Have a unique idea? We'll craft it in bulk — your design, your theme, your brand. Delivered pan-India.</p>
+        <span class="moq">MOQ: 20 Units</span>
+      </div>
+    </div>
+    <div style="text-align: center; margin-top: 2.5rem;">
+      <a href="https://wa.me/918300034451?text=Hi%2C%20I%27m%20interested%20in%20bulk%20orders%20from%20Mythris%20Gleams" class="btn-primary" target="_blank" rel="noopener" aria-label="WhatsApp for bulk orders">
+        <span>💬 WhatsApp for Bulk Quote</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials" aria-labelledby="testimonials-heading">
+  <div class="container">
+    <div class="section-header" style="text-align: center;">
+      <div class="section-eyebrow reveal" style="justify-content:center;">What Customers Say</div>
+      <h2 class="section-title reveal reveal-delay-1" id="testimonials-heading">Stories of Joy</h2>
+    </div>
+    <div class="testimonial-slider">
+      <div class="testimonial-card reveal">
+        <div class="test-stars">★★★★★</div>
+        <p class="testimonial-text">The miniature food clock I ordered for my daughter's room is absolutely stunning. The detailing is unbelievable — it looks straight out of a dream. Packaging was perfect too!</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">P</div>
+          <div>
+            <div class="author-name">Priya Rajan</div>
+            <div class="author-loc">Chennai, Tamil Nadu</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card reveal reveal-delay-1">
+        <div class="test-stars">★★★★★</div>
+        <p class="testimonial-text">Ordered 100 Navaratri return gifts and every single piece was flawless. Uma Gayathri's work is truly one-of-a-kind. Our guests loved them — many asked where to buy more!</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">S</div>
+          <div>
+            <div class="author-name">Sowmya Krishnan</div>
+            <div class="author-loc">Coimbatore, Tamil Nadu</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card reveal reveal-delay-2">
+        <div class="test-stars">★★★★★</div>
+        <p class="testimonial-text">The kawaii keychain I ordered is the cutest thing ever! Super quick delivery and beautifully packed. Will definitely order again for my friend's birthday. Highly recommend!</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">A</div>
+          <div>
+            <div class="author-name">Anitha Devi</div>
+            <div class="author-loc">Bangalore, Karnataka</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section" aria-labelledby="faq-heading">
+  <div class="container">
+    <div class="section-header" style="text-align:center; margin-bottom: 3rem;">
+      <div class="section-eyebrow reveal" style="justify-content:center;">Got Questions?</div>
+      <h2 class="section-title reveal reveal-delay-1" id="faq-heading">Frequently Asked</h2>
+    </div>
+    <div class="faq-grid" id="faqGrid">
+      <!-- FAQs injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact" class="contact-section" aria-labelledby="contact-heading">
+  <div class="container">
+    <div class="contact-grid">
+      <div class="reveal">
+        <div class="section-eyebrow">Get in Touch</div>
+        <h2 class="section-title" id="contact-heading">We'd Love to<br>Hear from You</h2>
+        <p class="section-sub">Have a question, custom order idea, or just want to say hello? Reach out — we respond within 24 hours.</p>
+        <div class="contact-info-items">
+          <div class="contact-info-item">
+            <div class="contact-icon">📞</div>
+            <div class="contact-info-text">
+              <h4>Phone & WhatsApp</h4>
+              <a href="tel:+918300034451">+91 83000 34451</a>
+            </div>
+          </div>
+          <div class="contact-info-item">
+            <div class="contact-icon">✉️</div>
+            <div class="contact-info-text">
+              <h4>Email</h4>
+              <a href="mailto:admin@mythrisgleams.co.in">admin@mythrisgleams.co.in</a>
+            </div>
+          </div>
+          <div class="contact-info-item">
+            <div class="contact-icon">📍</div>
+            <div class="contact-info-text">
+              <h4>Ships From</h4>
+              <p>Chennai, Tamil Nadu – Pan India Delivery</p>
+            </div>
+          </div>
+        </div>
+        <div class="contact-social">
+          <a href="https://wa.me/918300034451" class="social-btn social-wa" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+          <a href="https://instagram.com" class="social-btn" target="_blank" rel="noopener" aria-label="Instagram">📸</a>
+          <a href="mailto:admin@mythrisgleams.co.in" class="social-btn" aria-label="Email">✉️</a>
+        </div>
+      </div>
+
+      <div class="contact-form-card reveal reveal-delay-2">
+        <h3 style="font-family:'Cormorant Garamond',serif; font-size:1.5rem; color:var(--brown); margin-bottom:1.5rem;">Send a Message</h3>
+        <div class="form-group">
+          <label for="con-name">Full Name</label>
+          <input type="text" id="con-name" placeholder="Your Name" />
+        </div>
+        <div class="form-group">
+          <label for="con-email">Email</label>
+          <input type="email" id="con-email" placeholder="you@email.com" />
+        </div>
+        <div class="form-group">
+          <label for="con-phone">Phone</label>
+          <input type="tel" id="con-phone" placeholder="+91 98765 43210" />
+        </div>
+        <div class="form-group">
+          <label for="con-msg">Message</label>
+          <textarea id="con-msg" placeholder="Your message or order enquiry…"></textarea>
+        </div>
+        <button class="btn-submit" onclick="submitContact()">Send Message ✦</button>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- FOOTER -->
+<footer role="contentinfo">
+  <div class="footer-top">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <span class="logo-main">Mythris Gleams</span>
+        <p>Premium handmade clay and resin miniature creations — crafted with love by Uma Gayathri. Each piece tells a story.</p>
+        <div class="contact-social">
+          <a href="https://wa.me/918300034451" class="social-btn social-wa" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+          <a href="https://instagram.com" class="social-btn" target="_blank" rel="noopener" aria-label="Instagram">📸</a>
+          <a href="mailto:admin@mythrisgleams.co.in" class="social-btn" aria-label="Email">✉️</a>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Collections</h4>
+        <a href="#">Miniature Food Clock</a>
+        <a href="#">Kawaii Collections</a>
+        <a href="#">Gift Collections</a>
+        <a href="#">Jewellery</a>
+        <a href="#">Utility & Decor</a>
+      </div>
+      <div class="footer-col">
+        <h4>Orders</h4>
+        <a href="#">Custom Orders</a>
+        <a href="#">Bulk Orders</a>
+        <a href="#">Corporate Gifts</a>
+        <a href="#">Return Gifts</a>
+        <a href="#">Track Order</a>
+      </div>
+      <div class="footer-col">
+        <h4>Help</h4>
+        <a href="#">FAQ</a>
+        <a href="#">Shipping Policy</a>
+        <a href="#">Return Policy</a>
+        <a href="#">Privacy Policy</a>
+        <a href="#contact">Contact Us</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2025 <span>Mythris Gleams</span>. All rights reserved. Handcrafted with ❤️ by Uma Gayathri · Chennai, India.</p>
+  </div>
+</footer>
+
+<!-- CART SIDEBAR -->
+<div class="cart-overlay" id="cartOverlay" role="dialog" aria-label="Shopping cart" aria-modal="true"></div>
+<div class="cart-sidebar" id="cartSidebar">
+  <div class="cart-header">
+    <h3>Your Cart 🛒</h3>
+    <button class="cart-close" id="cartClose" aria-label="Close cart">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems"></div>
+  <div class="cart-footer" id="cartFooter"></div>
+</div>
+
+<!-- PRODUCT MODAL -->
+<div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-label="Product details">
+  <div class="modal" id="productModal">
+    <button class="modal-close" id="modalClose" aria-label="Close modal" style="position:relative; display:flex; justify-content:flex-end; padding: 1rem 1.5rem 0; background:none; border:none; cursor:pointer; font-size:1.4rem; color:var(--text-muted);">✕</button>
+    <div class="modal-inner" id="modalInner"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+<!-- WHATSAPP FLOAT -->
+<a href="https://wa.me/918300034451?text=Hi%2C%20I%20found%20you%20on%20Mythris%20Gleams!" class="wa-float" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">💬</a>
+
+<script>
+// ─── DATA ───
+const products = [
+  { id: 1, name: 'Handmade Miniature Food Clock', category: 'Miniature Collections', price: 499, oldPrice: 699, emoji: '🍕', bg: 'prod-bg-1', badge: 'hot', rating: 4.9, reviews: 48, description: 'A stunning handcrafted miniature food clock made from air-dry clay. Perfect as a unique wall decor piece or a thoughtful gift. Available in pizza, sushi, burger themes. Custom themes available on request. Ideal for gifting and home decor across India.', sizes: ['Small (6")', 'Medium (8")', 'Large (10")'] },
+  { id: 2, name: 'Kawaii Fridge Magnet Set', category: 'Kawaii Collections', price: 249, oldPrice: 349, emoji: '🐣', bg: 'prod-bg-2', badge: 'new', rating: 4.8, reviews: 32, description: 'Adorable kawaii-themed fridge magnets handcrafted from polymer clay. Set of 4 cute characters. Perfect as gifts or personal decor.', sizes: ['Set of 4', 'Set of 6', 'Set of 8'] },
+  { id: 3, name: 'Polymer Clay Keychain', category: 'Miniature Collections', price: 179, oldPrice: null, emoji: '🍩', bg: 'prod-bg-3', badge: null, rating: 4.7, reviews: 61, description: 'Charming handcrafted polymer clay keychains with miniature food designs. A delightful everyday accessory or gifting item.', sizes: ['Standard'] },
+  { id: 4, name: 'Terracotta Earrings', category: 'Jewellery Collections', price: 349, oldPrice: 499, emoji: '💛', bg: 'prod-bg-4', badge: 'hot', rating: 4.9, reviews: 27, description: 'Handcrafted terracotta earrings with intricate motifs. Lightweight, eco-friendly, and perfect for festive or casual wear.', sizes: ['Small', 'Medium'] },
+  { id: 5, name: 'Navaratri Return Gift Set', category: 'Gift Collections', price: 799, oldPrice: 999, emoji: '🪔', bg: 'prod-bg-5', badge: 'new', rating: 5.0, reviews: 19, description: 'Beautiful hand-sculpted Navaratri Thamboolam return gift set. Includes miniature golu display items. Bulk orders available.', sizes: ['Set of 2', 'Set of 4', 'Bulk (50+)'] },
+  { id: 6, name: 'Trinket Tray – Kawaii', category: 'Kawaii Collections', price: 399, oldPrice: null, emoji: '🌷', bg: 'prod-bg-6', badge: null, rating: 4.6, reviews: 15, description: 'Charming hand-painted kawaii trinket tray made from air-dry clay. Perfect to organize your jewelry, pins, or small accessories.', sizes: ['Small', 'Large'] },
+  { id: 7, name: 'Clay Agarbathi Holder', category: 'Utility & Decor', price: 299, oldPrice: 399, emoji: '🌿', bg: 'prod-bg-7', badge: null, rating: 4.8, reviews: 22, description: 'Handcrafted decorative agarbathi (incense) holder in floral motifs. Functional and beautifully designed for your home altar.', sizes: ['Standard'] },
+  { id: 8, name: 'Miniature Food Wall Spatula', category: 'Miniature Collections', price: 329, oldPrice: 449, emoji: '🍳', bg: 'prod-bg-8', badge: 'new', rating: 4.7, reviews: 11, description: 'Unique clay miniature food items mounted on a spatula — a whimsical wall decor piece for kitchens and dining spaces.', sizes: ['Set of 3', 'Set of 5'] }
+];
+
+const faqs = [
+  { q: 'Are all products 100% handmade?', a: 'Yes! Every piece is individually hand-sculpted by Uma Gayathri using clay and resin. No moulds are used — making each item truly one-of-a-kind.' },
+  { q: 'How long does delivery take?', a: 'Standard orders are delivered within 5–7 business days across India. Custom and bulk orders take 10–14 days depending on quantity.' },
+  { q: 'Do you accept custom orders?', a: 'Absolutely! We love custom orders. Share your idea via WhatsApp or the enquiry form and we\'ll get back within 24 hours with a quote.' },
+  { q: 'What is the minimum order for bulk orders?', a: 'Minimum order quantity (MOQ) is 20 units for custom bulk orders, 25 for return gifts, and 50 for corporate gifting packages.' },
+  { q: 'Do you ship across India?', a: 'Yes, we ship pan-India through trusted courier partners. Free shipping is available on orders above ₹999.' },
+  { q: 'What payment methods do you accept?', a: 'We accept UPI, net banking, debit/credit cards via Razorpay, and also WhatsApp Pay / GPay for quick orders.' },
+  { q: 'Can I get a product customized with a name?', a: 'Yes! Name personalization is available on most products. Mention the name in your order notes or WhatsApp us.' },
+  { q: 'What if my product arrives damaged?', a: 'We take utmost care in packaging. In the rare case of damage in transit, WhatsApp us a photo within 24 hours and we\'ll arrange a replacement.' }
+];
+
+// ─── CART STATE ───
+let cart = [];
+let wishlist = [];
+
+// ─── RENDER PRODUCTS ───
+function renderProducts() {
+  const grid = document.getElementById('productsGrid');
+  grid.innerHTML = products.map(p => `
+    <article class="product-card reveal" data-id="${p.id}" onclick="openModal(${p.id})" aria-label="${p.name}">
+      <div class="product-img-wrap">
+        <div class="product-img ${p.bg}" role="img" aria-label="${p.name}">${p.emoji}</div>
+        ${p.badge ? `<span class="product-badge badge-${p.badge}">${p.badge === 'new' ? 'New' : '🔥 Hot'}</span>` : ''}
+        <button class="product-wish ${wishlist.includes(p.id) ? 'wished' : ''}" onclick="toggleWish(event,${p.id})" aria-label="Wishlist">
+          ${wishlist.includes(p.id) ? '❤️' : '🤍'}
+        </button>
+      </div>
+      <div class="product-info">
+        <div class="product-cat">${p.category}</div>
+        <h3 class="product-name">${p.name}</h3>
+        <div class="product-rating">
+          <span class="stars">${'★'.repeat(Math.floor(p.rating))}</span>
+          <span class="rating-count">(${p.reviews})</span>
+        </div>
+        <div class="product-price-row">
+          <div>
+            <span class="product-price">₹${p.price}</span>
+            ${p.oldPrice ? `<span class="product-price-old">₹${p.oldPrice}</span>` : ''}
+          </div>
+          <button class="btn-add-cart" onclick="addToCart(event,${p.id})" aria-label="Add to cart">Add +</button>
+        </div>
+      </div>
+    </article>
+  `).join('');
+  observeReveal();
+}
+
+// ─── RENDER FAQs ───
+function renderFAQs() {
+  const grid = document.getElementById('faqGrid');
+  grid.innerHTML = faqs.map((f, i) => `
+    <div class="faq-item" id="faq-${i}">
+      <button class="faq-question" onclick="toggleFAQ(${i})" aria-expanded="false" aria-controls="faq-ans-${i}">
+        <span class="faq-question-text">${f.q}</span>
+        <span class="faq-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="faq-answer" id="faq-ans-${i}" role="region">
+        <div class="faq-answer-inner">${f.a}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleFAQ(i) {
+  const item = document.getElementById('faq-' + i);
+  const btn = item.querySelector('.faq-question');
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item.open').forEach(el => {
+    el.classList.remove('open');
+    el.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+  });
+  if (!isOpen) {
+    item.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+// ─── CART ───
+function addToCart(e, id) {
+  e && e.stopPropagation();
+  const product = products.find(p => p.id === id);
+  const existing = cart.find(c => c.id === id);
+  if (existing) { existing.qty++; }
+  else { cart.push({ ...product, qty: 1 }); }
+  updateCartUI();
+  showToast(`${product.emoji} Added to cart!`);
+  const btn = e && e.target;
+  if (btn) {
+    btn.textContent = 'Added ✓';
+    btn.classList.add('added');
+    setTimeout(() => { btn.textContent = 'Add +'; btn.classList.remove('added'); }, 1500);
+  }
+}
+
+function removeFromCart(id) {
+  cart = cart.filter(c => c.id !== id);
+  updateCartUI();
+}
+
+function changeQty(id, delta) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) removeFromCart(id);
+  else updateCartUI();
+}
+
+function updateCartUI() {
+  const count = cart.reduce((s, c) => s + c.qty, 0);
+  document.getElementById('cartCount').textContent = count;
+  const total = cart.reduce((s, c) => s + c.price * c.qty, 0);
+
+  const itemsEl = document.getElementById('cartItems');
+  const footerEl = document.getElementById('cartFooter');
+
+  if (cart.length === 0) {
+    itemsEl.innerHTML = `<div class="cart-empty"><div class="cart-empty-icon">🛒</div><h4>Your cart is empty</h4><p>Explore our handcrafted collections</p></div>`;
+    footerEl.innerHTML = '';
+    return;
+  }
+
+  itemsEl.innerHTML = cart.map(item => `
+    <div class="cart-item">
+      <div class="cart-item-img">${item.emoji}</div>
+      <div class="cart-item-info">
+        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-price">₹${item.price}</div>
+        <div class="cart-item-qty">
+          <button class="qty-btn" onclick="changeQty(${item.id},-1)" aria-label="Decrease">−</button>
+          <span class="qty-num">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty(${item.id},1)" aria-label="Increase">+</button>
+        </div>
+      </div>
+      <button class="cart-remove" onclick="removeFromCart(${item.id})" aria-label="Remove">✕</button>
+    </div>
+  `).join('');
+
+  footerEl.innerHTML = `
+    <div class="cart-total">
+      <span class="cart-total-label">Total</span>
+      <span class="cart-total-amount">₹${total}</span>
+    </div>
+    <button class="btn-checkout" onclick="checkout()">Proceed to Checkout</button>
+    <a href="https://wa.me/918300034451?text=Hi!%20I%20want%20to%20order%3A%20${encodeURIComponent(cart.map(c => c.name + ' x' + c.qty).join(', '))}" 
+       class="btn-wa-order" target="_blank" rel="noopener" aria-label="Order via WhatsApp">
+      💬 Order via WhatsApp
+    </a>
+  `;
+}
+
+function checkout() {
+  showToast('Redirecting to secure checkout…');
+  setTimeout(() => { alert('Razorpay checkout integration ready.\n\nTo activate: add your Razorpay Key ID in the checkout script.'); }, 500);
+}
+
+// ─── WISHLIST ───
+function toggleWish(e, id) {
+  e.stopPropagation();
+  const btn = e.currentTarget;
+  if (wishlist.includes(id)) {
+    wishlist = wishlist.filter(w => w !== id);
+    btn.textContent = '🤍';
+    btn.classList.remove('wished');
+  } else {
+    wishlist.push(id);
+    btn.textContent = '❤️';
+    btn.classList.add('wished');
+    showToast('Added to wishlist ❤️');
+  }
+}
+
+// ─── MODAL ───
+function openModal(id) {
+  const p = products.find(pr => pr.id === id);
+  if (!p) return;
+  const inner = document.getElementById('modalInner');
+  inner.innerHTML = `
+    <div class="modal-img ${p.bg}" role="img" aria-label="${p.name}">${p.emoji}</div>
+    <div class="modal-content">
+      <div class="modal-category">${p.category}</div>
+      <h2 class="modal-title">${p.name}</h2>
+      <div class="modal-price">₹${p.price} ${p.oldPrice ? `<span class="modal-price-old">₹${p.oldPrice}</span>` : ''}</div>
+      <p class="modal-desc">${p.description}</p>
+      <div class="modal-options">
+        <label>Choose Size / Variant</label>
+        <div class="size-btns">
+          ${p.sizes.map((s, i) => `<button class="size-btn ${i===0?'active':''}" onclick="selectSize(this)">${s}</button>`).join('')}
+        </div>
+      </div>
+      <div class="modal-qty-row">
+        <div class="modal-qty">
+          <button class="qty-btn" onclick="modalQtyChange(-1)" aria-label="Decrease">−</button>
+          <span class="qty-num" id="modalQty">1</span>
+          <button class="qty-btn" onclick="modalQtyChange(1)" aria-label="Increase">+</button>
+        </div>
+        <span style="font-size:0.78rem; color:var(--text-muted);">Available in stock</span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="addToCart(null,${p.id}); document.getElementById('modalOverlay').classList.remove('open');" style="width:100%; justify-content:center;" aria-label="Add to cart">
+          <span>🛒 Add to Cart</span>
+        </button>
+        <a href="https://wa.me/918300034451?text=Hi!%20I%27m%20interested%20in%20${encodeURIComponent(p.name)}" target="_blank" rel="noopener" class="btn-wa-order" style="border-radius:50px; padding:0.85rem; justify-content:center;" aria-label="Buy via WhatsApp">
+          💬 Buy via WhatsApp
+        </a>
+      </div>
+      <div class="modal-features">
+        <div class="modal-feature"><span>✦</span> 100% Handcrafted by Uma Gayathri</div>
+        <div class="modal-feature"><span>✦</span> Ships pan-India in 5–7 days</div>
+        <div class="modal-feature"><span>✦</span> Gift-ready packaging available</div>
+        <div class="modal-feature"><span>✦</span> Custom orders welcome</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function selectSize(btn) {
+  btn.closest('.size-btns').querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+let modalQty = 1;
+function modalQtyChange(d) {
+  modalQty = Math.max(1, modalQty + d);
+  const el = document.getElementById('modalQty');
+  if (el) el.textContent = modalQty;
+}
+
+// ─── TOAST ───
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─── FORM SUBMISSIONS ───
+function submitCustomOrder() {
+  const name = document.getElementById('cust-name').value;
+  const phone = document.getElementById('cust-phone').value;
+  const cat = document.getElementById('cust-cat').value;
+  const qty = document.getElementById('cust-qty').value;
+  const msg = document.getElementById('cust-msg').value;
+  if (!name || !phone) { showToast('Please fill name and phone!'); return; }
+  const wa = `https://wa.me/918300034451?text=${encodeURIComponent(`Hi! I'm ${name} (${phone}).\n\nCustom Order Enquiry:\nCategory: ${cat}\nQuantity: ${qty}\nRequirements: ${msg}`)}`;
+  window.open(wa, '_blank');
+  showToast('Opening WhatsApp… ✓');
+}
+
+function submitContact() {
+  const name = document.getElementById('con-name').value;
+  const email = document.getElementById('con-email').value;
+  const phone = document.getElementById('con-phone').value;
+  const msg = document.getElementById('con-msg').value;
+  if (!name || !msg) { showToast('Please fill required fields!'); return; }
+  const wa = `https://wa.me/918300034451?text=${encodeURIComponent(`Hi Mythris Gleams!\n\nFrom: ${name}\nEmail: ${email}\nPhone: ${phone}\n\nMessage: ${msg}`)}`;
+  window.open(wa, '_blank');
+  showToast('Message sent! ✓');
+}
+
+// ─── SCROLL ANIMATION ───
+function observeReveal() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal:not(.visible)').forEach(el => observer.observe(el));
+}
+
+// ─── HEADER SCROLL ───
+window.addEventListener('scroll', () => {
+  const header = document.getElementById('mainHeader');
+  if (window.scrollY > 20) header.classList.add('scrolled');
+  else header.classList.remove('scrolled');
+}, { passive: true });
+
+// ─── HERO CARD CYCLE ───
+const heroEmojis = [
+  { e: '🍕', n: 'Miniature Food Clock', p: '₹ 499' },
+  { e: '🍩', n: 'Kawaii Keychain', p: '₹ 179' },
+  { e: '🪔', n: 'Navaratri Gift Set', p: '₹ 799' },
+  { e: '💍', n: 'Terracotta Earrings', p: '₹ 349' },
+];
+let heroIdx = 0;
+setInterval(() => {
+  heroIdx = (heroIdx + 1) % heroEmojis.length;
+  const card = document.getElementById('heroCard');
+  if (!card) return;
+  card.style.opacity = '0';
+  card.style.transform = 'rotate(3deg) scale(0.95)';
+  setTimeout(() => {
+    const h = heroEmojis[heroIdx];
+    card.querySelector('.hero-product-img').textContent = h.e;
+    card.querySelector('.hero-product-info h3').textContent = h.n;
+    card.querySelector('.hero-product-price').textContent = h.p;
+    card.style.opacity = '1';
+    card.style.transform = 'rotate(3deg) scale(1)';
+  }, 350);
+}, 3000);
+
+// ─── CART OPEN/CLOSE ───
+document.getElementById('cartBtn').addEventListener('click', () => {
+  document.getElementById('cartSidebar').classList.add('open');
+  document.getElementById('cartOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  updateCartUI();
+});
+function closeCart() {
+  document.getElementById('cartSidebar').classList.remove('open');
+  document.getElementById('cartOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.getElementById('cartClose').addEventListener('click', closeCart);
+document.getElementById('cartOverlay').addEventListener('click', closeCart);
+
+// ─── MODAL CLOSE ───
+document.getElementById('modalClose').addEventListener('click', () => {
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+});
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modalOverlay')) {
+    document.getElementById('modalOverlay').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+});
+
+// ─── MOBILE NAV ───
+document.getElementById('hamburgerBtn').addEventListener('click', () => {
+  document.getElementById('mobileNav').classList.add('open');
+  document.body.style.overflow = 'hidden';
+});
+document.getElementById('mobileNavClose').addEventListener('click', () => {
+  document.getElementById('mobileNav').classList.remove('open');
+  document.body.style.overflow = '';
+});
+
+// ─── INIT ───
+renderProducts();
+renderFAQs();
+observeReveal();
+updateCartUI();
+
+// Keyboard accessibility
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeCart();
+    document.getElementById('modalOverlay').classList.remove('open');
+    document.getElementById('mobileNav').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+});
+</script>
+</body>
+</html>
