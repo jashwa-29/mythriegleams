@@ -51,6 +51,18 @@ export const updateInquiryStatus = createAsyncThunk(
     }
 );
 
+export const deleteInquiry = createAsyncThunk(
+    'inquiries/delete',
+    async (id: string, thunkAPI) => {
+        try {
+            await api.delete(`/inquiries/${id}`);
+            return id;
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
+        }
+    }
+);
+
 const inquirySlice = createSlice({
     name: 'inquiries',
     initialState,
@@ -73,8 +85,25 @@ const inquirySlice = createSlice({
                 state.loading = false;
                 state.error = action.payload as string;
             })
+            .addCase(createInquiry.pending, (state) => {
+                state.loading = true;
+                state.success = false;
+                state.error = null;
+            })
+            .addCase(createInquiry.fulfilled, (state, action) => {
+                state.loading = false;
+                state.success = true;
+                state.inquiries.unshift(action.payload);
+            })
+            .addCase(createInquiry.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload as string;
+            })
             .addCase(updateInquiryStatus.fulfilled, (state, action) => {
                 state.inquiries = state.inquiries.map(i => i._id === action.payload._id ? action.payload : i);
+            })
+            .addCase(deleteInquiry.fulfilled, (state, action) => {
+                state.inquiries = state.inquiries.filter(i => i._id !== action.payload);
             });
     }
 });

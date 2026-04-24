@@ -3,13 +3,17 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { createInquiry } from "@/redux/slices/inquirySlice";
+import { createInquiry, resetInquiryState } from "@/redux/slices/inquirySlice";
 import Breadcrumb from "@/components/Breadcrumb";
 import { Phone, Mail, MapPin, Send, Upload, Sparkles, CheckCircle2 } from "lucide-react";
 
 export default function ContactPage() {
   const dispatch = useAppDispatch();
   const { loading, success, error } = useAppSelector((state) => state.inquiries);
+  
+  React.useEffect(() => {
+    dispatch(resetInquiryState());
+  }, [dispatch]);
 
   const [formData, setFormData] = useState({
     type: "contact",
@@ -41,8 +45,8 @@ export default function ContactPage() {
         data.append("image", file);
     }
     
-    dispatch(createInquiry(data)).then(() => {
-        if (!error) {
+    dispatch(createInquiry(data)).then((res: any) => {
+        if (res.meta.requestStatus === "fulfilled") {
             setFormData({ type: "contact", name: "", email: "", phone: "", subject: "", message: "" });
             setFile(null);
         }

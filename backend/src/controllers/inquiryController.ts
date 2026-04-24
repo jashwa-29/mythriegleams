@@ -71,3 +71,20 @@ export const updateInquiryStatus = asyncHandler(async (req: Request, res: Respon
 
     res.status(200).json({ success: true, data: updatedInquiry });
 });
+
+/**
+ * @desc    Delete an inquiry (Admin)
+ * @route   DELETE /api/inquiries/:id
+ * @access  Private/Admin
+ */
+export const deleteInquiry = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const inquiry = await Inquiry.findById(req.params.id);
+
+    if (!inquiry) {
+        return next(new ErrorResponse('Inquiry not found for deletion.', 404));
+    }
+
+    await inquiry.deleteOne();
+
+    res.status(200).json({ success: true, message: 'Inquiry narrative removed from registry.' });
+});

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-import { fetchInquiries, updateInquiryStatus } from '@/redux/slices/inquirySlice';
+import { fetchInquiries, updateInquiryStatus, deleteInquiry } from '@/redux/slices/inquirySlice';
 import { 
     Mail, 
     MessageCircle, 
@@ -18,7 +18,8 @@ import {
     Download,
     Paperclip,
     Shield,
-    Bell
+    Bell,
+    Trash2
 } from 'lucide-react';
 import { RootState } from '@/redux/store';
 import EmptyState from '@/components/admin/EmptyState';
@@ -39,6 +40,14 @@ const InquiryManagement = () => {
         toast.success(`Log Updated: ${status}`);
         if (inspectedInquiry && inspectedInquiry._id === id) {
             setInspectedInquiry((prev: any) => ({ ...prev, status }));
+        }
+    };
+
+    const handleInquiryDelete = (id: string) => {
+        if (window.confirm("Are you sure you want to delete this inquiry forever? This action cannot be undone.")) {
+            dispatch(deleteInquiry(id));
+            toast.success("Inquiry removed from registry.");
+            setInspectedInquiry(null);
         }
     };
 
@@ -168,6 +177,7 @@ const InquiryManagement = () => {
                                 </div>
                             </div>
                             <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex justify-end gap-3">
+                                <button onClick={() => handleInquiryDelete(inspectedInquiry._id)} className="px-4 py-2.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-rose-100 flex items-center gap-2 mr-auto"><Trash2 size={14}/> Delete</button>
                                 <a href={`mailto:${inspectedInquiry.email}`} className="px-6 py-2.5 bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-zinc-300 flex items-center gap-2"><Mail size={14}/> Reply (Email)</a>
                                 <button onClick={() => setInspectedInquiry(null)} className="px-6 py-2.5 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black">Close</button>
                             </div>

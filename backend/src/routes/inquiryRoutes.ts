@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createInquiry, getInquiries, updateInquiryStatus } from '../controllers/inquiryController';
+import { createInquiry, getInquiries, updateInquiryStatus, deleteInquiry } from '../controllers/inquiryController';
 import upload from '../middlewares/uploadMiddleware';
 import { protect, admin } from '../middlewares/authMiddleware';
 
@@ -11,5 +11,6 @@ router.post('/', upload.single('image'), createInquiry); // Submit inquiry with 
 // Admin Routes
 router.get('/', protect, admin, getInquiries); // Admin list
 router.put('/:id/status', protect, admin, updateInquiryStatus); // Update status (Admin)
+router.delete('/:id', protect, admin, deleteInquiry); // Delete inquiry (Admin)
 
 export default router;
