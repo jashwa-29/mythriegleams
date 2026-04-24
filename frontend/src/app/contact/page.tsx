@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { createInquiry, resetInquiryState } from "@/redux/slices/inquirySlice";
 import Breadcrumb from "@/components/Breadcrumb";
-import { Phone, Mail, MapPin, Send, Upload, Sparkles, CheckCircle2 } from "lucide-react";
+import { Phone, Mail, MapPin, Send, Upload, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function ContactPage() {
   const dispatch = useAppDispatch();
@@ -23,10 +23,56 @@ export default function ContactPage() {
     subject: "",
     message: "",
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [file, setFile] = useState<File | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    // Clear error when user starts typing
+    if (errors[name]) {
+        setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[name];
+            return newErrors;
+        });
+    }
+  };
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+    if (!formData.name.trim()) newErrors.name = "Artisan name is required.";
+    else if (formData.name.length < 3) newErrors.name = "Name must be at least 3 characters.";
+
+    if (!formData.email.trim()) newErrors.email = "Correspondence email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = "Please provide a valid email narrative.";
+
+    const phoneClean = formData.phone.replace(/[^0-9]/g, "");
+    if (formData.phone) {
+        const isValidIndianMobile = (p: string) => /^[6-9]\d{9}$/.test(p);
+        
+        let valid = false;
+        if (phoneClean.length === 10 && isValidIndianMobile(phoneClean)) {
+            valid = true;
+        } else if (phoneClean.length === 11 && phoneClean.startsWith("0") && isValidIndianMobile(phoneClean.substring(1))) {
+            valid = true;
+        } else if (phoneClean.length === 12 && phoneClean.startsWith("91") && isValidIndianMobile(phoneClean.substring(2))) {
+            valid = true;
+        }
+
+        if (!valid) {
+            newErrors.phone = "Please provide a valid Indian mobile number (e.g., 9876543210).";
+        }
+    }
+
+    if (!formData.subject.trim()) newErrors.subject = "Please specify a subject for the artisan.";
+    else if (formData.subject.length < 5) newErrors.subject = "Subject is too brief.";
+
+    if (!formData.message.trim()) newErrors.message = "The artisan requires a detailed message.";
+    else if (formData.message.length < 10) newErrors.message = "Message is too concise.";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,6 +83,9 @@ export default function ContactPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validate()) return;
+
     const data = new FormData();
     Object.entries(formData).forEach(([key, val]) => {
         data.append(key, val);
@@ -116,19 +165,22 @@ export default function ContactPage() {
             <form onSubmit={handleSubmit} className="flex flex-col gap-8">
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                   <div className="flex flex-col gap-3">
-                     <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#8c8273]">Name</label>
-                     <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full bg-[#f8f6f3] border border-[#e8e4db] rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none focus:border-[#a69076] transition-colors" placeholder="Your Name" />
+                     <label className={`text-[11px] font-medium uppercase tracking-[0.1em] ${errors.name ? 'text-red-500' : 'text-[#8c8273]'}`}>Name</label>
+                     <input type="text" name="name" value={formData.name} onChange={handleChange} className={`w-full bg-[#f8f6f3] border ${errors.name ? 'border-red-300 focus:border-red-400' : 'border-[#e8e4db] focus:border-[#a69076]'} rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none transition-colors`} placeholder="Your Name" />
+                     {errors.name && <p className="text-[10px] text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> {errors.name}</p>}
                   </div>
                   <div className="flex flex-col gap-3">
-                     <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#8c8273]">Email</label>
-                     <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full bg-[#f8f6f3] border border-[#e8e4db] rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none focus:border-[#a69076] transition-colors" placeholder="you@example.com" />
+                     <label className={`text-[11px] font-medium uppercase tracking-[0.1em] ${errors.email ? 'text-red-500' : 'text-[#8c8273]'}`}>Email</label>
+                     <input type="email" name="email" value={formData.email} onChange={handleChange} className={`w-full bg-[#f8f6f3] border ${errors.email ? 'border-red-300 focus:border-red-400' : 'border-[#e8e4db] focus:border-[#a69076]'} rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none transition-colors`} placeholder="you@example.com" />
+                     {errors.email && <p className="text-[10px] text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> {errors.email}</p>}
                   </div>
                </div>
 
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                   <div className="flex flex-col gap-3">
-                     <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#8c8273]">Phone (Optional)</label>
-                     <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className="w-full bg-[#f8f6f3] border border-[#e8e4db] rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none focus:border-[#a69076] transition-colors" placeholder="+91 XXXXX XXXXX" />
+                     <label className={`text-[11px] font-medium uppercase tracking-[0.1em] ${errors.phone ? 'text-red-500' : 'text-[#8c8273]'}`}>Phone (Optional)</label>
+                     <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`w-full bg-[#f8f6f3] border ${errors.phone ? 'border-red-300 focus:border-red-400' : 'border-[#e8e4db] focus:border-[#a69076]'} rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none transition-colors`} placeholder="+91 XXXXX XXXXX" />
+                     {errors.phone && <p className="text-[10px] text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> {errors.phone}</p>}
                   </div>
                   <div className="flex flex-col gap-3">
                      <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#8c8273]">Inquiry Type</label>
@@ -146,13 +198,15 @@ export default function ContactPage() {
                </div>
 
                <div className="flex flex-col gap-3">
-                   <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#8c8273]">Subject</label>
-                   <input required type="text" name="subject" value={formData.subject} onChange={handleChange} className="w-full bg-[#f8f6f3] border border-[#e8e4db] rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none focus:border-[#a69076] transition-colors" placeholder="Regarding..." />
+                   <label className={`text-[11px] font-medium uppercase tracking-[0.1em] ${errors.subject ? 'text-red-500' : 'text-[#8c8273]'}`}>Subject</label>
+                   <input type="text" name="subject" value={formData.subject} onChange={handleChange} className={`w-full bg-[#f8f6f3] border ${errors.subject ? 'border-red-300 focus:border-red-400' : 'border-[#e8e4db] focus:border-[#a69076]'} rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none transition-colors`} placeholder="Regarding..." />
+                   {errors.subject && <p className="text-[10px] text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> {errors.subject}</p>}
                </div>
 
                <div className="flex flex-col gap-3">
-                   <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[#8c8273]">Message</label>
-                   <textarea required name="message" value={formData.message} onChange={handleChange} rows={5} className="w-full bg-[#f8f6f3] border border-[#e8e4db] rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none focus:border-[#a69076] transition-colors resize-none" placeholder="Elaborate on your inquiry..." />
+                   <label className={`text-[11px] font-medium uppercase tracking-[0.1em] ${errors.message ? 'text-red-500' : 'text-[#8c8273]'}`}>Message</label>
+                   <textarea name="message" value={formData.message} onChange={handleChange} rows={5} className={`w-full bg-[#f8f6f3] border ${errors.message ? 'border-red-300 focus:border-red-400' : 'border-[#e8e4db] focus:border-[#a69076]'} rounded-xl px-5 py-4 text-[14px] text-[#3d332a] focus:outline-none transition-colors resize-none`} placeholder="Elaborate on your inquiry..." />
+                   {errors.message && <p className="text-[10px] text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> {errors.message}</p>}
                </div>
 
                <div className="flex flex-col gap-3">
