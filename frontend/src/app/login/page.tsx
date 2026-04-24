@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -26,7 +27,7 @@ const signupSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 type SignupForm = z.infer<typeof signupSchema>;
 
-const LoginPage = () => {
+const LoginContent = () => {
     const [isLogin, setIsLogin] = useState(true);
     const dispatch = useAppDispatch();
     const { userInfo, loading, error } = useAppSelector((state) => state.auth);
@@ -179,6 +180,18 @@ const LoginPage = () => {
                 </div>
             </motion.div>
         </div>
+    );
+};
+
+const LoginPage = () => {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+                <Loader2 className="animate-spin text-zinc-900" size={40} />
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     );
 };
 
