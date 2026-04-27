@@ -36,7 +36,6 @@ const OrderManagement = () => {
     const userId = searchParams.get('userId');
     
     // UI State
-    const [showUnpaid, setShowUnpaid] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [inspectedOrder, setInspectedOrder] = useState<any>(null);
     const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
@@ -47,8 +46,8 @@ const OrderManagement = () => {
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
     useEffect(() => {
-        dispatch(fetchOrders({ includeUnpaid: showUnpaid }));
-    }, [dispatch, showUnpaid]);
+        dispatch(fetchOrders({ includeUnpaid: false }));
+    }, [dispatch]);
 
     useEffect(() => {
         if (success) {
@@ -104,6 +103,8 @@ const OrderManagement = () => {
 
     const filteredOrders = useMemo(() => {
         let result = userId ? orders.filter((o: any) => o.user === userId || o.user?._id === userId) : orders;
+        result = result.filter((o: any) => o.isPaid); // Only show paid orders
+
         if (searchTerm) {
             const lowTerm = searchTerm.toLowerCase();
             result = result.filter((o: any) => 
@@ -130,8 +131,7 @@ const OrderManagement = () => {
                         <span>Export Excel</span>
                     </button>
                     <div className="flex bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-                        <button onClick={() => setShowUnpaid(false)} className={`px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${!showUnpaid ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}>Paid Only</button>
-                        <button onClick={() => setShowUnpaid(true)} className={`px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${showUnpaid ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}>Show All</button>
+                        <button className="bg-zinc-900 text-white shadow-sm px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all">Paid Only</button>
                     </div>
                 </div>
             </div>

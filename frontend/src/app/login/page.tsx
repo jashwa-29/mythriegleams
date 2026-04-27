@@ -129,7 +129,7 @@ const LoginContent = () => {
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center ml-1">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300">Credentials</label>
-                                            <Link href="#" className="text-[9px] font-black text-zinc-300 hover:text-gold transition-colors underline underline-offset-4 decoration-zinc-100">FORGOT?</Link>
+
                                         </div>
                                         <div className="relative group">
                                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300 group-focus-within:text-gold transition-colors" size={18} />
@@ -153,7 +153,7 @@ const LoginContent = () => {
                                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300 ml-1">Full Identity</label>
                                         <div className="relative group">
                                             <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300 group-focus-within:text-gold transition-colors" size={18} />
-                                            <input {...signupForm.register('name')} type="text" placeholder="Uma Gayathri" className="w-full bg-zinc-50 border-none rounded-2xl py-4 pl-12 pr-4 text-zinc-900 text-sm focus:ring-2 focus:ring-gold/20 transition-all outline-none font-medium" />
+                                            <input {...signupForm.register('name')} type="text" placeholder="Your Name" className="w-full bg-zinc-50 border-none rounded-2xl py-4 pl-12 pr-4 text-zinc-900 text-sm focus:ring-2 focus:ring-gold/20 transition-all outline-none font-medium" />
                                         </div>
                                     </div>
                                     <div className="space-y-2">
