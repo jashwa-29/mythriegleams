@@ -12,7 +12,7 @@ const app: Application = express();
 // Middlewares
 app.use(helmet()); // Security headers
 app.use(cors({
-    origin: process.env.CLIENT_URL || '*', // Restrict to front-end in prod
+    origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : '*', // Restrict to front-end in prod
     credentials: true
 }));
 app.use(morgan('dev')); // Logger

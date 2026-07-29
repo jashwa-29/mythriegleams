@@ -5,7 +5,7 @@ import Order from './models/Order';
 import { seedAdmin } from './seedAdmin';
 dotenv.config();
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5010;
 
 // Connect to Database
 connectDB();
@@ -13,7 +13,7 @@ seedAdmin();
  
 const server = app.listen(PORT, () => {
     console.log(`🚀 Mythris Gleams Server running in ${process.env.NODE_ENV || 'production'} mode on http://localhost:${PORT}`);
-});
+}); 
 
 // Background job to clean up pending (unpaid) orders older than 20 minutes
 const cleanPendingOrders = async () => {
