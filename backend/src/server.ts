@@ -11,6 +11,14 @@ const PORT = process.env.PORT || 5010;
 connectDB();
 seedAdmin();
  
+import fs from 'fs';
+import path from 'path';
+
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+
 const server = app.listen(PORT, () => {
     console.log(`🚀 Mythris Gleams Server running in ${process.env.NODE_ENV || 'production'} mode on http://localhost:${PORT}`);
 }); 
