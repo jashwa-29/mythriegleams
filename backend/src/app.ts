@@ -59,34 +59,39 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Central Error Handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    let error = { ...err };
-    error.message = err.message;
-
-    // Log to console for dev
-    console.error(`[Error] ${err.name}: ${err.message}`);
+    console.error(`[Error] ${err.name || typeof err}: ${err.message || err}`);
     if (err.stack) console.error(err.stack);
+
+    let message = err.message || 'Internal Server Error';
+    let statusCode = err.statusCode || 500;
 
     // Mongoose bad ObjectId
     if (err.name === 'CastError') {
-        const message = `Resource not found with id of ${err.value}`;
-        error = { message, statusCode: 404 };
+        message = `Resource not found with id of ${err.value}`;
+        statusCode = 404;
     }
 
     // Mongoose duplicate key
     if (err.code === 11000) {
-        const message = 'Duplicate field value entered';
-        error = { message, statusCode: 400 };
+        message = 'Duplicate field value entered';
+        statusCode = 400;
     }
 
     // Mongoose validation error
     if (err.name === 'ValidationError') {
-        const message = Object.values(err.errors).map((val: any) => val.message).join(', ');
-        error = { message, statusCode: 400 };
+        message = Object.values(err.errors).map((val: any) => val.message).join(', ');
+        statusCode = 400;
     }
 
-    res.status(error.statusCode || 500).json({
+    // Multer / string errors (e.g. file type rejection)
+    if (typeof err === 'string') {
+        message = err;
+        statusCode = 400;
+    }
+
+    res.status(statusCode).json({
         success: false,
-        error: error.message || 'Internal Server Error',
+        error: message,
         stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
 });
