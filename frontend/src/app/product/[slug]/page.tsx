@@ -11,6 +11,7 @@ import { fetchProductBySlug, fetchProducts } from "@/redux/slices/productSlice";
 import { Product } from "@/data/products";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
+import { getImageUrl } from '@/utils/getImageUrl';
     Loader2, ChevronRight, Truck, 
     MessageCircle, 
     Minus, Plus, Leaf, Droplets, Wind
@@ -108,7 +109,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.6, ease: "easeInOut" }}
-                      src={p.images[activeImage]} 
+                      src={getImageUrl(p.images[activeImage])} 
                       alt={p.name} 
                       className="w-full h-full object-contain sm:object-cover" 
                     />

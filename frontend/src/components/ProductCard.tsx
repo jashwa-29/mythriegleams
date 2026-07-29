@@ -5,6 +5,7 @@ import { CATEGORIES } from "@/data/categories";
 import { type Product } from "@/data/products";
 import { useCart } from "@/hooks/useCart";
 import { Plus } from "lucide-react";
+import { getImageUrl } from '@/utils/getImageUrl';
 
 interface ProductCardProps {
   product: Product;
@@ -41,7 +42,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       <div className="relative aspect-[4/5] overflow-hidden bg-[#f8f6f3]">
         {productImage ? (
           <img
-            src={productImage}
+            src={getImageUrl(productImage)}
             alt={product.name}
             className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 group-hover:opacity-90"
           />

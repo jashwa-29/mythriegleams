@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/hooks/useCart";
 import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2 } from "lucide-react";
 import { CartItem } from "@/redux/slices/cartSlice";
+import { getImageUrl } from '@/utils/getImageUrl';
 
 export default function CartDrawer() {
   const { items, isOpen, close, setQty, remove, totalPrice, totalItems, loading } = useCart();
@@ -87,7 +88,7 @@ export default function CartDrawer() {
                   {/* Image */}
                   <div className="w-20 h-20 rounded-2xl overflow-hidden bg-[#f8f6f3] border border-[#e8e4db] shrink-0">
                     {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      <img src={getImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#a1988c] text-xs font-light font-serif italic">No image</div>
                     )}

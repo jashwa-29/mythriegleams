@@ -28,6 +28,7 @@ import { RootState } from '@/redux/store';
 import Modal from '@/components/ui/Modal';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { getImageUrl } from '@/utils/getImageUrl';
 
 const OrderManagement = () => {
     const dispatch = useAppDispatch();
@@ -236,7 +237,7 @@ const OrderManagement = () => {
                                                         {inspectedOrder.orderItems.map((item: any, i: number) => (
                                                             <tr key={i}>
                                                                 <td className="px-6 py-4 flex items-center gap-4">
-                                                                    <div className="w-8 h-8 bg-zinc-50 rounded border border-zinc-100 overflow-hidden"><img src={item.image} className="w-full h-full object-cover" /></div>
+                                                                    <div className="w-8 h-8 bg-zinc-50 rounded border border-zinc-100 overflow-hidden"><img src={getImageUrl(item.image)} className="w-full h-full object-cover" /></div>
                                                                     <div className="font-bold text-zinc-900">{item.name}</div>
                                                                 </td>
                                                                 <td className="px-6 py-4 text-center font-bold">x{item.qty}</td>

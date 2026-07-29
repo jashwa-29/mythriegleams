@@ -8,6 +8,7 @@ import { getMyOrders } from "@/redux/slices/orderSlice";
 import Breadcrumb from "@/components/Breadcrumb";
 import { Package, ArrowLeft, Loader2, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { getImageUrl } from '@/utils/getImageUrl';
 
 const STATUS_COLORS: Record<string, string> = {
   "Pending": "bg-[#fff8e6] text-[#b48d28] border-[#f2e6c4]",
@@ -147,7 +148,7 @@ export default function MyOrdersPage() {
                         <div key={i} className="flex items-center gap-4">
                           <div className="w-16 h-16 rounded-xl overflow-hidden bg-[#f8f6f3] border border-[#e8e4db] shrink-0">
                             {item.image ? (
-                              <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                              <img src={getImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-[#a1988c] text-[10px]">No Img</div>
                             )}

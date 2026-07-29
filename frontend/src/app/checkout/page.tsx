@@ -12,6 +12,7 @@ import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
 import { useCart } from "@/hooks/useCart";
 import Breadcrumb from "@/components/Breadcrumb";
 import {
+import { getImageUrl } from '@/utils/getImageUrl';
   MapPin, User, Mail, Phone, Home, Package,
   CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
 } from "lucide-react";
@@ -433,7 +434,7 @@ export default function CheckoutPage() {
               {items.map(item => (
                 <div key={item._id} className="flex gap-4 items-start">
                   <div className="w-16 h-16 rounded-2xl bg-[#f8f6f3] border border-[#e8e4db] overflow-hidden shrink-0">
-                    {item.image ? <img src={item.image} alt={item.name} className="w-full h-full object-cover" /> :
+                    {item.image ? <img src={getImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover" /> :
                       <div className="w-full h-full flex items-center justify-center text-[#a1988c]"><Home size={16} strokeWidth={1} /></div>}
                   </div>
                   <div className="flex-grow">

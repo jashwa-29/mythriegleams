@@ -11,6 +11,7 @@ import {
   CheckCircle2, Clock, Truck, Home, FileText 
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { getImageUrl } from '@/utils/getImageUrl';
 
 const STATUS_COLORS: Record<string, string> = {
   "Pending": "bg-[#fff8e6] text-[#b48d28] border-[#f2e6c4]",
@@ -158,7 +159,7 @@ export default function OrderDetailsPage() {
                   <div key={i} className="flex items-start gap-6 pb-6 border-b border-[#e8e4db] last:border-0 last:pb-0">
                     <div className="w-24 h-24 rounded-2xl overflow-hidden bg-[#f8f6f3] border border-[#e8e4db] shrink-0">
                       {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                        <img src={getImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-[#a1988c]"><Home size={20} /></div>
                       )}

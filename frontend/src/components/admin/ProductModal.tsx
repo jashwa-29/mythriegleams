@@ -23,6 +23,7 @@ import * as z from 'zod';
 import { fetchCollections } from '@/redux/slices/collectionSlice';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { RootState } from '@/redux/store';
+import { getImageUrl } from '@/utils/getImageUrl';
 
 const artisanalSchema = z.object({
     name: z.string().min(3, "Name your creation"),
@@ -94,7 +95,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                     stockStatus: initialData.stockStatus,
                 });
                 if (initialData.images) {
-                    setMediaItems(initialData.images.map((url: string) => ({ type: 'existing', url })));
+                    setMediaItems(initialData.images.map((url: string) => ({ type: 'existing', url: getImageUrl(url) })));
                 } else {
                     setMediaItems([]);
                 }
@@ -196,7 +197,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                         <div className="space-y-4">
                                             {mediaItems.length > 0 ? (
                                                 <div className="aspect-[4/3] rounded-[2.5rem] overflow-hidden border border-zinc-100 relative group">
-                                                    <img src={mediaItems[0].url} alt="Master" className="w-full h-full object-cover" />
+                                                    <img src={getImageUrl(mediaItems[0].url)} alt="Master" className="w-full h-full object-cover" />
                                                     <div className="absolute top-4 left-4 px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-[8px] font-black text-white uppercase tracking-widest border border-white/20">
                                                         Master Visual
                                                     </div>
@@ -219,7 +220,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             <div className="grid grid-cols-4 gap-4">
                                                 {mediaItems.slice(1).map((item, i) => (
                                                     <div key={i} className="aspect-square rounded-2xl border border-zinc-100 overflow-hidden relative group">
-                                                        <img src={item.url} alt="Sub" className="w-full h-full object-cover" />
+                                                        <img src={getImageUrl(item.url)} alt="Sub" className="w-full h-full object-cover" />
                                                         <button 
                                                             type="button"
                                                             onClick={() => handleRemoveMedia(i + 1)}

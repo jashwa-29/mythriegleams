@@ -25,6 +25,7 @@ import { RootState } from '@/redux/store';
 import EmptyState from '@/components/admin/EmptyState';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getImageUrl } from '@/utils/getImageUrl';
 
 const InquiryManagement = () => {
     const dispatch = useAppDispatch();
@@ -164,8 +165,8 @@ const InquiryManagement = () => {
                                         {inspectedInquiry.image && (
                                             <div className="mt-4 pt-4 border-t border-zinc-100">
                                                 <div className="text-[8px] font-bold text-zinc-300 uppercase tracking-[0.2em] mb-3">Attached Image</div>
-                                                <a href={inspectedInquiry.image} target="_blank" className="block w-full h-48 rounded-lg overflow-hidden border border-zinc-200 bg-white group hover:border-zinc-900 transition-all">
-                                                    <img src={inspectedInquiry.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                                                <a href={getImageUrl(inspectedInquiry.image)} target="_blank" className="block w-full h-48 rounded-lg overflow-hidden border border-zinc-200 bg-white group hover:border-zinc-900 transition-all">
+                                                    <img src={getImageUrl(inspectedInquiry.image)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                                                 </a>
                                             </div>
                                         )}

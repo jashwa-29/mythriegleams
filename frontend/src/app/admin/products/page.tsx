@@ -29,6 +29,7 @@ import ProductModal from '@/components/admin/ProductModal';
 import { RootState } from '@/redux/store';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getImageUrl } from '@/utils/getImageUrl';
 
 const ProductManagement = () => {
     const dispatch = useAppDispatch();
@@ -157,7 +158,7 @@ const ProductManagement = () => {
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded border border-zinc-100 bg-zinc-50 overflow-hidden shrink-0 group-hover:scale-105 transition-transform">
-                                                    {product.images?.[0] ? <img src={product.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto" size={16} />}
+                                                    {product.images?.[0] ? <img src={getImageUrl(product.images[0])} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto" size={16} />}
                                                 </div>
                                                 <div>
                                                     <div className="font-bold text-zinc-900 line-clamp-1">{product.name}</div>
@@ -196,7 +197,7 @@ const ProductManagement = () => {
                             <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh]">
                                 <div className="flex gap-8">
                                     <div className="w-40 h-40 rounded-xl border border-zinc-200 overflow-hidden shrink-0 bg-zinc-50">
-                                        {inspectedProduct.images?.[0] ? <img src={inspectedProduct.images[0]} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto mt-12" size={40} />}
+                                        {inspectedProduct.images?.[0] ? <img src={getImageUrl(inspectedProduct.images[0])} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto mt-12" size={40} />}
                                     </div>
                                     <div className="space-y-4 flex-1">
                                         <div className="space-y-1">

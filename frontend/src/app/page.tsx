@@ -12,6 +12,7 @@ import { createInquiry } from "@/redux/slices/inquirySlice";
 import { RootState } from "@/redux/store";
 import { Sparkles, Loader2, Package, CheckCircle2 } from "lucide-react";
 import { Product } from "@/data/products";
+import { getImageUrl } from '@/utils/getImageUrl';
 
 export default function Home() {
   const dispatch = useAppDispatch();
@@ -91,7 +92,7 @@ export default function Home() {
                         className="group relative h-[300px] rounded-[2.5rem] overflow-hidden border border-border shadow-sm hover:border-gold transition-all"
                     >
                         {col.image ? (
-                            <img src={col.image} alt={col.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                            <img src={getImageUrl(col.image)} alt={col.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                         ) : (
                             <div className="w-full h-full bg-zinc-50 flex items-center justify-center text-zinc-200"><Package size={48} /></div>
                         )}

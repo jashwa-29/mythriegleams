@@ -29,6 +29,7 @@ import EmptyState from '@/components/admin/EmptyState';
 import Modal from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getImageUrl } from '@/utils/getImageUrl';
 
 const collectionSchema = z.object({
     name: z.string().min(2, "Collection name required"),
@@ -141,7 +142,7 @@ const CollectionManagement = () => {
                                     <tr key={col._id} onClick={() => setInspectedCollection(col)} className="hover:bg-zinc-50/50 transition-all text-xs cursor-pointer group">
                                         <td className="px-6 py-4">
                                             <div className="w-10 h-10 rounded border border-zinc-100 bg-zinc-50 overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-500">
-                                                {col.image ? <img src={col.image} className="w-full h-full object-cover" /> : <Layers className="text-zinc-200 m-auto" size={16} />}
+                                                {col.image ? <img src={getImageUrl(col.image)} className="w-full h-full object-cover" /> : <Layers className="text-zinc-200 m-auto" size={16} />}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -171,7 +172,7 @@ const CollectionManagement = () => {
                             <div className="p-8 space-y-8">
                                 <div className="flex gap-6">
                                     <div className="w-24 h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shadow-inner shrink-0">
-                                        {inspectedCollection.image ? <img src={inspectedCollection.image} className="w-full h-full object-cover" /> : <Layers className="text-zinc-200 m-auto mt-7" size={24} />}
+                                        {inspectedCollection.image ? <img src={getImageUrl(inspectedCollection.image)} className="w-full h-full object-cover" /> : <Layers className="text-zinc-200 m-auto mt-7" size={24} />}
                                     </div>
                                     <div className="space-y-2 flex-1">
                                         <h4 className="text-xl font-bold text-zinc-900 tracking-tight">{inspectedCollection.name}</h4>
