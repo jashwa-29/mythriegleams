@@ -11,8 +11,8 @@ import { createOrder, resetOrderSuccess } from "@/redux/slices/orderSlice";
 import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
 import { useCart } from "@/hooks/useCart";
 import Breadcrumb from "@/components/Breadcrumb";
-import {
 import { getImageUrl } from '@/utils/getImageUrl';
+import {
   MapPin, User, Mail, Phone, Home, Package,
   CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
 } from "lucide-react";

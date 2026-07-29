@@ -10,8 +10,8 @@ import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProductBySlug, fetchProducts } from "@/redux/slices/productSlice";
 import { Product } from "@/data/products";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
 import { getImageUrl } from '@/utils/getImageUrl';
+import { 
     Loader2, ChevronRight, Truck, 
     MessageCircle, 
     Minus, Plus, Leaf, Droplets, Wind
