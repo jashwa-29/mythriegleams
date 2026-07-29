@@ -2,13 +2,14 @@ import app from './app';
 import connectDB from './config/db';
 import dotenv from 'dotenv';
 import Order from './models/Order';
-
+import { seedAdmin } from './seedAdmin';
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
 // Connect to Database
 connectDB();
+seedAdmin();
  
 const server = app.listen(PORT, () => {
     console.log(`🚀 Mythris Gleams Server running in ${process.env.NODE_ENV || 'production'} mode on http://localhost:${PORT}`);
