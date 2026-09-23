@@ -13,26 +13,32 @@ import {
     Layers, 
     Image as ImageIcon,
     Plus,
-    Minus,
     Trash2,
     Palette,
-    Camera
+    Camera,
+    Weight
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
 import { fetchCollections } from '@/redux/slices/collectionSlice';
+import { fetchOccasions } from '@/redux/slices/occasionSlice';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { RootState } from '@/redux/store';
 import { getImageUrl } from '@/utils/getImageUrl';
+import toast from 'react-hot-toast';
 
 const artisanalSchema = z.object({
     name: z.string().min(3, "Name your creation"),
     slug: z.string().min(3, "Unique identifier required"),
     category: z.string().min(1, "Choose a collection"),
+    subcategory: z.string().optional(),
+    occasion: z.string().optional(),
+    occasionSub: z.string().optional(),
     price: z.number().min(1, "Enter artisanal value"),
     mrp: z.number().min(1, "Enter valuation (MRP)"),
+    weight: z.number().min(0, "Enter weight in grams"),
     story: z.string().min(10, "Share the inspiration behind this piece"),
     details: z.string().min(5, "Technical details are mandatory"),
     metaDescription: z.string().max(160, "Keep SEO hooks concise").optional(),
@@ -46,12 +52,32 @@ interface ProductModalProps {
     onClose: () => void;
     onSubmit: (data: FormData) => void;
     loading?: boolean;
-    initialData?: any; // Data for editing
+    initialData?: Partial<{
+        _id?: string;
+        id: number;
+        name: string;
+        slug: string;
+        category: string;
+        subcategory?: string | null;
+        occasion?: string | null;
+        occasionSub?: string | null;
+        price: number;
+        mrp?: number | null;
+        weight?: number | null;
+        story?: string;
+        details?: string;
+        metaDescription?: string;
+        stockStatus?: string;
+        requiresImage?: boolean;
+        images?: string[];
+        variants?: { type: string; options: string[] }[];
+    }>; // Data for editing
 }
 
 const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, loading, initialData }) => {
     const dispatch = useAppDispatch();
     const { collections } = useAppSelector((state: RootState) => state.collections);
+    const { occasions } = useAppSelector((state: RootState) => state.occasions);
     const [mediaItems, setMediaItems] = useState<{ type: 'existing' | 'new', url: string, file?: File }[]>([]);
     const [variants, setVariants] = useState<string[]>(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
     const [colors, setColors] = useState<string[]>([]);
@@ -84,7 +110,25 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         formState: { errors },
     } = useForm<ArtisanalFormData>({
         resolver: zodResolver(artisanalSchema),
-        defaultValues: { stockStatus: 'made-to-order' }
+        defaultValues: { stockStatus: 'made-to-order', subcategory: '', weight: 0 }
+    });
+
+    const selectedCategory = watch('category');
+    const mainCategories = collections.filter(c => !c.parent);
+    const selectedCategoryObj = collections.find(c => c.name === selectedCategory && !c.parent);
+    const subcategories = collections.filter(c => {
+        if (!c.parent || !selectedCategoryObj) return false;
+        const parentId = typeof c.parent === 'object' ? c.parent._id : c.parent;
+        return parentId === selectedCategoryObj._id;
+    });
+
+    const selectedOccasion = watch('occasion');
+    const mainOccasions = occasions.filter(o => !o.parent);
+    const selectedOccasionObj = occasions.find(o => o.name === selectedOccasion && !o.parent);
+    const occasionSubs = occasions.filter(o => {
+        if (!o.parent || !selectedOccasionObj) return false;
+        const parentId = typeof o.parent === 'object' ? o.parent._id : o.parent;
+        return parentId === selectedOccasionObj._id;
     });
 
     // Auto-Slug Generation Logic
@@ -104,30 +148,35 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     useEffect(() => {
         if (isOpen) {
             dispatch(fetchCollections());
+            dispatch(fetchOccasions());
             if (initialData) {
                 reset({
-                    name: initialData.name,
-                    slug: initialData.slug,
-                    category: initialData.category,
-                    price: initialData.price,
-                    mrp: initialData.mrp,
+                    name: initialData.name || '',
+                    slug: initialData.slug || '',
+                    category: initialData.category || '',
+                    subcategory: initialData.subcategory || '',
+                    occasion: initialData.occasion || '',
+                    occasionSub: initialData.occasionSub || '',
+                    price: initialData.price || 0,
+                    mrp: initialData.mrp || 0,
+                    weight: initialData.weight || 0,
                     story: initialData.story,
                     details: initialData.details,
                     metaDescription: initialData.metaDescription || '',
-                    stockStatus: initialData.stockStatus,
+                    stockStatus: (initialData.stockStatus as ArtisanalFormData['stockStatus']) || 'made-to-order',
                 });
                 if (initialData.images) {
-                    setMediaItems(initialData.images.map((url: string) => ({ type: 'existing', url: getImageUrl(url) })));
+                    setMediaItems(initialData.images.map((url: string) => ({ type: 'existing', url })));
                 } else {
                     setMediaItems([]);
                 }
-                const sizeVariants = initialData.variants?.find((v: any) => v.type === 'Size')?.options || [];
-                const colorVariants = initialData.variants?.find((v: any) => v.type === 'Color')?.options || [];
+const sizeVariants = initialData.variants?.find((v) => v.type === 'Size')?.options || [];
+                                    const colorVariants = initialData.variants?.find((v) => v.type === 'Color')?.options || [];
                 setVariants(Array.isArray(sizeVariants) && sizeVariants.length > 0 ? sizeVariants : []);
                 setColors(Array.isArray(colorVariants) ? colorVariants : []);
                 setRequiresImage(!!initialData.requiresImage);
             } else {
-                reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', price: 0, mrp: 0, story: '', details: '', metaDescription: '' });
+                reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', subcategory: '', occasion: '', occasionSub: '', price: 0, mrp: 0, weight: 0, story: '', details: '', metaDescription: '' });
                 setMediaItems([]);
                 setVariants(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
                 setColors([]);
@@ -145,7 +194,16 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         if (files.length > 0) {
-            const newMedia = files.map(file => ({
+            const allowed = Math.max(0, 10 - mediaItems.length);
+            if (allowed <= 0) {
+                toast.error("Maximum 10 images per product");
+                return;
+            }
+            const accepted = files.slice(0, allowed);
+            if (accepted.length < files.length) {
+                toast.error(`Maximum 10 images per product (skipped ${files.length - accepted.length})`);
+            }
+            const newMedia = accepted.map(file => ({
                 type: 'new' as const,
                 url: URL.createObjectURL(file), // create temporary URL for preview
                 file
@@ -161,7 +219,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const handleFormSubmit = (data: ArtisanalFormData) => {
         const formData = new FormData();
         Object.keys(data).forEach(key => {
-            formData.append(key, (data as any)[key]);
+            formData.append(key, String((data as Record<string, unknown>)[key]));
         });
         
         // Add variants
@@ -172,7 +230,12 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         formData.append('requiresImage', String(requiresImage));
 
         // Add kept existing images
-        const existingImagesToKeep = mediaItems.filter(m => m.type === 'existing').map(m => m.url);
+        const existingImagesToKeep = mediaItems
+            .filter(m => m.type === 'existing')
+            .map(m => {
+                const idx = m.url.indexOf('/uploads/');
+                return idx !== -1 ? m.url.slice(idx) : m.url;
+            });
         formData.append('existingImages', JSON.stringify(existingImagesToKeep));
 
         // Add new images
@@ -230,7 +293,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                         <div className="space-y-4">
                                             {mediaItems.length > 0 ? (
                                                 <div className="aspect-[4/3] rounded-[2.5rem] overflow-hidden border border-zinc-100 relative group">
-                                                    <img src={getImageUrl(mediaItems[0].url)} alt="Master" className="w-full h-full object-cover" />
+                                                    <img src={mediaItems[0].type === 'new' ? mediaItems[0].url : getImageUrl(mediaItems[0].url)} alt="Master" className="w-full h-full object-cover" />
                                                     <div className="absolute top-4 left-4 px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-[8px] font-black text-white uppercase tracking-widest border border-white/20">
                                                         Master Visual
                                                     </div>
@@ -253,7 +316,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             <div className="grid grid-cols-4 gap-4">
                                                 {mediaItems.slice(1).map((item, i) => (
                                                     <div key={i} className="aspect-square rounded-2xl border border-zinc-100 overflow-hidden relative group">
-                                                        <img src={getImageUrl(item.url)} alt="Sub" className="w-full h-full object-cover" />
+                                                        <img src={item.type === 'new' ? item.url : getImageUrl(item.url)} alt="Sub" className="w-full h-full object-cover" />
                                                         <button 
                                                             type="button"
                                                             onClick={() => handleRemoveMedia(i + 1)}
@@ -343,7 +406,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             {/* Active Variants List */}
                                             <div className="grid grid-cols-1 gap-2 pt-2">
                                                 <AnimatePresence>
-                                                    {variants.map((v, i) => (
+                                                    {variants.map((v) => (
                                                         <motion.div 
                                                             key={v}
                                                             initial={{ opacity: 0, x: -10 }}
@@ -500,8 +563,35 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Collection</label>
                                             <select {...register('category')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
                                                 <option value="">Select Gallery...</option>
-                                                {collections.map((col: any) => (
+                                                {mainCategories.map((col) => (
                                                     <option key={col._id} value={col.name}>{col.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Subcategory</label>
+                                            <select {...register('subcategory')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
+                                                <option value="">Select Subcategory...</option>
+                                                {subcategories.map((sub) => (
+                                                    <option key={sub._id} value={sub.name}>{sub.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Occasion</label>
+                                            <select {...register('occasion')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
+                                                <option value="">Select Occasion...</option>
+                                                {mainOccasions.map((occ) => (
+                                                    <option key={occ._id} value={occ.name}>{occ.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Occasion Subcategory</label>
+                                            <select {...register('occasionSub')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
+                                                <option value="">Select Occasion Subcategory...</option>
+                                                {occasionSubs.map((sub) => (
+                                                    <option key={sub._id} value={sub.name}>{sub.name}</option>
                                                 ))}
                                             </select>
                                         </div>
@@ -524,6 +614,14 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                                     <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
                                                     <input {...register('mrp', { valueAsNumber: true })} type="number" className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pl-12 text-sm font-bold text-zinc-400 focus:ring-1 focus:ring-white/20 outline-none" placeholder="0.00" />
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-6 space-y-2">
+                                            <label className="text-[10px] font-black tracking-widest text-zinc-400 ml-1">Item Weight (grams)</label>
+                                            <div className="relative">
+                                                <Weight className="absolute left-4 top-1/2 -translate-y-1/2 text-gold" size={16} />
+                                                <input {...register('weight', { valueAsNumber: true })} type="number" min={0} className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pl-12 text-sm font-bold text-white focus:ring-1 focus:ring-white/20 outline-none" placeholder="e.g. 850" />
                                             </div>
                                         </div>
                                         

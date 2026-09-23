@@ -6,6 +6,7 @@ export interface ICartItem {
     name: string;
     image: string;
     price: number;
+    weight?: number;
     quantity: number;
     selectedVariant?: string;
     selectedColor?: string;
@@ -23,6 +24,7 @@ const CartItemSchema = new Schema({
     name:            { type: String, required: true },
     image:           { type: String, default: '' },
     price:           { type: Number, required: true },
+    weight:          { type: Number, default: 0 },
     quantity:        { type: Number, required: true, min: 1, default: 1 },
     selectedVariant: { type: String, default: '' },
     selectedColor:   { type: String, default: '' },

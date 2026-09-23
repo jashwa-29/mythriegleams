@@ -98,3 +98,12 @@
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--bg-muted); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Embla carousel touch handling */
+.embla {
+  overflow: hidden;
+}
+.embla__container {
+  display: flex;
+  touch-action: pan-y pinch-zoom;
+}

@@ -7,6 +7,7 @@ export interface Product {
   subcategory?: string;
   price: number;
   mrp?: number; // Backend valuation
+  weight?: number; // grams
   oldPrice: number | null;
   emoji: string;
   bg: string;

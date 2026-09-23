@@ -6,10 +6,13 @@ import ErrorResponse from '../utils/errorResponse';
 // @desc    Get all products (with optional filtering)
 // @route   GET /api/products
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
-    const { category, sort, search } = req.query;
+    const { category, subcategory, occasion, occasionSub, sort, search } = req.query;
     let query: any = {};
 
     if (category) query.category = category;
+    if (subcategory) query.subcategory = subcategory;
+    if (occasion) query.occasion = occasion;
+    if (occasionSub) query.occasionSub = occasionSub;
     if (search) {
         query.$or = [
             { name: { $regex: search, $options: 'i' } },
@@ -47,8 +50,12 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         name, 
         slug, 
         category, 
+        subcategory, 
+        occasion, 
+        occasionSub, 
         price, 
         mrp, 
+        weight,
         story, 
         details, 
         metaDescription,
@@ -61,8 +68,12 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         name,
         slug,
         category,
+        subcategory,
+        occasion,
+        occasionSub,
         price: Number(price),
         mrp: Number(mrp || 0),
+        weight: Number(weight || 0),
         story,
         details,
         metaDescription,
@@ -110,13 +121,17 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
         return next(new ErrorResponse('Product for revision not found.', 404));
     }
 
-    const { name, slug, category, price, mrp, story, details, metaDescription, stockStatus, requiresImage, variants, existingImages } = req.body;
+    const { name, slug, category, subcategory, occasion, occasionSub, price, mrp, weight, story, details, metaDescription, stockStatus, requiresImage, variants, existingImages } = req.body;
     
     product.name = name || product.name;
     product.slug = slug || product.slug;
     product.category = category || product.category;
+    if (subcategory !== undefined) product.subcategory = subcategory;
+    if (occasion !== undefined) product.occasion = occasion;
+    if (occasionSub !== undefined) product.occasionSub = occasionSub;
     product.price = price ? Number(price) : product.price;
     product.mrp = mrp ? Number(mrp) : product.mrp;
+    if (weight !== undefined) product.weight = Number(weight) || 0;
     product.story = story || product.story;
     product.details = details || product.details;
     product.metaDescription = metaDescription || product.metaDescription;

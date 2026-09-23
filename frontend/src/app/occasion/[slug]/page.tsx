@@ -5,18 +5,18 @@ import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProducts } from "@/redux/slices/productSlice";
-import { fetchCollections } from "@/redux/slices/collectionSlice";
+import { fetchOccasions } from "@/redux/slices/occasionSlice";
 import { RootState } from "@/redux/store";
 import { getImageUrl } from "@/utils/getImageUrl";
 import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight } from "lucide-react";
 import { Product } from "@/data/products";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
+export default function OccasionPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const dispatch = useAppDispatch();
 
-  const { collections } = useAppSelector((state: RootState) => state.collections);
+  const { occasions } = useAppSelector((state: RootState) => state.occasions);
   const { products, loading } = useAppSelector((state: RootState) => state.products);
 
   const [maxPrice, setMaxPrice] = useState(100000);
@@ -24,41 +24,41 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   useEffect(() => {
-    dispatch(fetchCollections());
+    dispatch(fetchOccasions());
   }, [dispatch]);
 
-  const getParentId = (c: { parent?: string | { _id: string } | null }) =>
-    typeof c.parent === 'object' && c.parent ? c.parent._id : null;
+  const getParentId = (o: { parent?: string | { _id: string } | null }) =>
+    typeof o.parent === 'object' && o.parent ? o.parent._id : null;
 
-  const currentCollection = collections.find(c => c.slug === slug);
-  const isSubcategory = !!currentCollection?.parent;
+  const currentOccasion = occasions.find(o => o.slug === slug);
+  const isSubOccasion = !!currentOccasion?.parent;
 
-  // Resolve the top-level category either for this collection or its parent
-  const mainCollection = isSubcategory
-    ? collections.find(c => c._id === getParentId(currentCollection!))
-    : currentCollection;
+  // Resolve the top-level occasion either for this occasion or its parent
+  const mainOccasion = isSubOccasion
+    ? occasions.find(o => o._id === getParentId(currentOccasion!))
+    : currentOccasion;
 
-  const subCategories = collections.filter(c => {
-    if (!c.parent || !mainCollection) return false;
-    return getParentId(c) === mainCollection._id;
+  const subOccasions = occasions.filter(o => {
+    if (!o.parent || !mainOccasion) return false;
+    return getParentId(o) === mainOccasion._id;
   });
 
-  // Active subcategory: if the current slug IS a subcategory, pre-select it; else "all"
-  const activeSub = isSubcategory ? currentCollection?.slug : "all";
+  // Active sub-occasion: if the current slug IS a sub-occasion, pre-select it; else "all"
+  const activeSub = isSubOccasion ? currentOccasion?.slug : "all";
 
   useEffect(() => {
     if (slug === 'all') {
       dispatch(fetchProducts({ sort: sortBy }));
-    } else if (mainCollection?.name) {
-      const activeSubCategory = subCategories.find(s => s.slug === activeSub);
-      if (activeSub === 'all' || !activeSubCategory) {
-        dispatch(fetchProducts({ category: mainCollection.name, sort: sortBy }));
+    } else if (mainOccasion?.name) {
+      const activeSubOccasion = subOccasions.find(s => s.slug === activeSub);
+      if (activeSub === 'all' || !activeSubOccasion) {
+        dispatch(fetchProducts({ occasion: mainOccasion.name, sort: sortBy }));
       } else {
-        dispatch(fetchProducts({ category: mainCollection.name, subcategory: activeSubCategory.name, sort: sortBy }));
+        dispatch(fetchProducts({ occasion: mainOccasion.name, occasionSub: activeSubOccasion.name, sort: sortBy }));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, slug, mainCollection?.name, activeSub, sortBy]);
+  }, [dispatch, slug, mainOccasion?.name, activeSub, sortBy]);
 
   const filteredProducts = useMemo(() => {
     return (products as Product[]).filter(p => p.price <= maxPrice);
@@ -69,9 +69,9 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
     setSortBy("newest");
   };
 
-  const pageTitle = currentCollection?.name || (slug === 'all' ? "All Products" : "Collection");
-  const pageDesc = currentCollection?.description || mainCollection?.description || "A mindful exploration of all our handcrafted artifacts. Find pieces that resonate with your space and spirit.";
-  const bgImage = getImageUrl(currentCollection?.image || mainCollection?.image) || '/hero-bg.jpg';
+  const pageTitle = currentOccasion?.name || (slug === 'all' ? "All Occasions" : "Occasion");
+  const pageDesc = currentOccasion?.description || mainOccasion?.description || "Thoughtfully curated miniatures for every celebration — birthdays, weddings, festivals and every special moment worth treasuring.";
+  const bgImage = getImageUrl(currentOccasion?.image || mainOccasion?.image) || '/hero-bg.jpg';
 
   return (
     <div className="flex flex-col min-h-screen font-sans bg-[var(--bg)]">
@@ -100,14 +100,14 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
             <ChevronRight size={14} className="text-white/30" />
             {slug !== 'all' && (
               <>
-                <Link href="/category/all" className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
-                  All Products
+                <Link href="/occasion/all" className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
+                  All Occasions
                 </Link>
                 <ChevronRight size={14} className="text-white/30" />
-                {isSubcategory && mainCollection && (
+                {isSubOccasion && mainOccasion && (
                   <>
-                    <Link href={`/category/${mainCollection.slug}`} className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
-                      {mainCollection.name}
+                    <Link href={`/occasion/${mainOccasion.slug}`} className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
+                      {mainOccasion.name}
                     </Link>
                     <ChevronRight size={14} className="text-white/30" />
                   </>
@@ -197,7 +197,7 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
             </div>
           </div>
 
-          {/* Category Description */}
+          {/* Occasion Description */}
           {pageDesc && (
             <div className="p-6 rounded-[1.5rem] bg-white border border-[var(--border)] shadow-sm">
               <p className="text-[var(--text-muted)] text-[13px] leading-relaxed">{pageDesc}</p>
@@ -207,8 +207,8 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
 
         {/* PRODUCTS AREA */}
         <div className="flex flex-col gap-6 pb-16">
-          {/* Subcategory Tabs */}
-          {mainCollection && subCategories.length > 0 && (
+          {/* Sub-occasion Tabs */}
+          {mainOccasion && subOccasions.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -216,19 +216,19 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
               className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1"
             >
               <Link
-                href={`/category/${mainCollection.slug}`}
+                href={`/occasion/${mainOccasion.slug}`}
                 className={`shrink-0 px-5 py-2.5 rounded-full border text-[11px] font-bold tracking-wide transition-all duration-300 ${
-                  activeSub === "all" || (!isSubcategory && !activeSub)
+                  activeSub === "all" || (!isSubOccasion && !activeSub)
                     ? "bg-[var(--accent)] text-white border-[var(--accent)]"
                     : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
                 }`}
               >
                 All
               </Link>
-              {subCategories.map((sub) => (
+              {subOccasions.map((sub) => (
                 <Link
                   key={sub._id}
-                  href={`/category/${sub.slug}`}
+                  href={`/occasion/${sub.slug}`}
                   className={`shrink-0 px-5 py-2.5 rounded-full border text-[11px] font-bold tracking-wide transition-all duration-300 ${
                     activeSub === sub.slug
                       ? "bg-[var(--accent)] text-white border-[var(--accent)]"

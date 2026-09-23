@@ -10,8 +10,8 @@ router.get('/', getProducts);
 router.get('/:slug', getProductBySlug);
 
 // Admin Routes
-router.post('/', protect, admin, upload.array('images', 5), createProduct);
-router.put('/:id', protect, admin, upload.array('images', 5), updateProduct);
+router.post('/', protect, admin, upload.array('images', 10), createProduct);
+router.put('/:id', protect, admin, upload.array('images', 10), updateProduct);
 router.delete('/:id', protect, admin, deleteProduct);
 
 export default router;

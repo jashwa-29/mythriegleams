@@ -5,6 +5,7 @@ import orderReducer from './slices/orderSlice';
 import inquiryReducer from './slices/inquirySlice';
 import userReducer from './slices/userSlice';
 import collectionReducer from './slices/collectionSlice';
+import occasionReducer from './slices/occasionSlice';
 import cartReducer from './slices/cartSlice';
 
 export const store = configureStore({
@@ -15,6 +16,7 @@ export const store = configureStore({
         inquiries: inquiryReducer,
         users: userReducer,
         collections: collectionReducer,
+        occasions: occasionReducer,
         cart: cartReducer,
     }
 });

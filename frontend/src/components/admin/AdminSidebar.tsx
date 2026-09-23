@@ -15,7 +15,8 @@ import {
     ShieldCheck,
     Box,
     Globe,
-    Inbox
+    Inbox,
+    Gift
 } from 'lucide-react';
 import { useAppDispatch } from '@/redux/hooks';
 import { logout } from '@/redux/slices/authSlice';
@@ -28,6 +29,7 @@ const AdminSidebar = () => {
         { name: 'Dashboard', icon: <LayoutDashboard size={16} />, path: '/admin' },
         { name: 'Products', icon: <Box size={16} />, path: '/admin/products' },
         { name: 'Collections', icon: <Layers size={16} />, path: '/admin/collections' },
+        { name: 'Occasions', icon: <Gift size={16} />, path: '/admin/occasions' },
         { name: 'Orders', icon: <ShoppingBag size={16} />, path: '/admin/orders' },
         { name: 'Inquiries', icon: <Inbox size={16} />, path: '/admin/inquiries' },
         { name: 'Customers', icon: <Users size={16} />, path: '/admin/customers' },

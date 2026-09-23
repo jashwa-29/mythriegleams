@@ -1,534 +1,758 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import SectionHeader from "@/components/SectionHeader";
-import Hero from "@/components/Hero";
-import ProductCard from "@/components/ProductCard";
+import { motion } from "framer-motion";
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProducts } from "@/redux/slices/productSlice";
 import { fetchCollections } from "@/redux/slices/collectionSlice";
-import { createInquiry } from "@/redux/slices/inquirySlice";
+import { fetchOccasions } from "@/redux/slices/occasionSlice";
 import { RootState } from "@/redux/store";
-import { Loader2, Package, CheckCircle2, Plus } from "lucide-react";
-import { motion } from "framer-motion";
-import { Product } from "@/data/products";
-import { getImageUrl } from '@/utils/getImageUrl';
-import { useCart } from '@/hooks/useCart';
+import { getImageUrl } from "@/utils/getImageUrl";
+import ProductCard from "@/components/ProductCard";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  ArrowRight,
+} from "lucide-react";
 
-/* ── Inline add-to-cart button — needs hook so must be its own component ── */
-function BestSellerAddBtn({ product, className, showText }: { product: Product, className?: string, showText?: boolean }) {
-  const { addToCart } = useCart();
+/* ────────────────────────────────────────────────────────────
+   STATIC DATA (Categories / Occasions / Vibes)
+   — Replace images with your real ones from the backend later
+──────────────────────────────────────────────────────────── */
+
+const SHOP_BY_CATEGORIES = [
+  {
+    name: "Wall Clocks",
+    slug: "wall-clocks",
+    img: "https://images.unsplash.com/photo-1563861826-1efe393625ef?w=500&q=85",
+  },
+  {
+    name: "Art & Wall Décor",
+    slug: "wall-decor",
+    img: "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=500&q=85",
+  },
+  {
+    name: "Shops & Scenes",
+    slug: "shops-scenes",
+    img: "https://images.unsplash.com/photo-1593306449620-88b0e3c59869?w=500&q=85",
+  },
+  {
+    name: "Golu & Navaratri",
+    slug: "golu-navaratri",
+    img: "https://images.unsplash.com/photo-1604608672516-f1b9b1a0ef30?w=500&q=85",
+  },
+  {
+    name: "Dolls & Figures",
+    slug: "dolls-figures",
+    img: "https://images.unsplash.com/photo-1611145434331-c4b4a7a1d5f8?w=500&q=85",
+  },
+  {
+    name: "Fridge Magnets",
+    slug: "fridge-magnets",
+    img: "https://images.unsplash.com/photo-1628157588553-5eeea00af15c?w=500&q=85",
+  },
+  {
+    name: "Supplies",
+    slug: "supplies",
+    img: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=500&q=85",
+  },
+];
+
+const SHOP_BY_OCCASION = [
+  {
+    name: "Birthday",
+    slug: "birthday",
+    tag: "Popular",
+    img: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=500&q=85",
+  },
+  {
+    name: "Wedding",
+    slug: "wedding",
+    tag: "Love",
+    img: "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=500&q=85",
+  },
+  {
+    name: "Anniversary",
+    slug: "anniversary",
+    tag: "New",
+    img: "https://images.unsplash.com/photo-1516585427167-9f4af9627e6c?w=500&q=85",
+  },
+  {
+    name: "Housewarming",
+    slug: "housewarming",
+    tag: "Trending",
+    img: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=500&q=85",
+  },
+  {
+    name: "Naming Ceremony",
+    slug: "naming-ceremony",
+    tag: "New Born",
+    img: "https://images.unsplash.com/photo-1519689680058-324335c77eba?w=500&q=85",
+  },
+  {
+    name: "Baby Shower",
+    slug: "baby-shower",
+    tag: "Cute",
+    img: "https://images.unsplash.com/photo-1544126592-807ade215a0b?w=500&q=85",
+  },
+  {
+    name: "Congratulations",
+    slug: "congratulations",
+    tag: "Just Because",
+    img: "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?w=500&q=85",
+  },
+  {
+    name: "Festivals",
+    slug: "festivals",
+    tag: "Diwali",
+    img: "https://images.unsplash.com/photo-1604608672516-f1b9b1a0ef30?w=500&q=85",
+  },
+];
+
+const PROMO_SLIDES = [
+  {
+    eyebrow: "Birthday Joy,",
+    title: "Gift-wrapped",
+    subtitle: "Curated birthday gifts for thoughtful celebrations.",
+    cta: "Order Now",
+    href: "/occasion/birthday",
+    bgImage: "/miniature-clock-bg.jpg",
+  },
+  {
+    eyebrow: "Handcrafted,",
+    title: "Made for You",
+    subtitle: "Every miniature piece sculpted by hand — unique, timeless, unforgettable.",
+    cta: "Explore Collection",
+    href: "/category/all",
+    bgImage: "/miniature-clock-bg.jpg",
+  },
+  {
+    eyebrow: "Festive Season,",
+    title: "Celebrate in Style",
+    subtitle: "Discover our curated collection for Diwali, Navaratri, and every festival.",
+    cta: "Shop Festive",
+    href: "/occasion/festivals",
+    bgImage: "/miniature-clock-bg.jpg",
+  },
+];
+
+const VIBES_CATEGORIES = [
+  { name: "Orchids", slug: "orchids", img: "https://images.unsplash.com/photo-1567748157439-651aca2ff064?w=400&q=80" },
+  { name: "Crochet", slug: "crochet", img: "https://images.unsplash.com/photo-1615671524827-c1fe3973b648?w=400&q=80" },
+  { name: "Centrepiece", slug: "centrepiece", img: "https://images.unsplash.com/photo-1611486212355-d276af4581c0?w=400&q=80" },
+  { name: "Sunny Blooms", slug: "sunny", img: "https://images.unsplash.com/photo-1490750967868-88aa4486c946?w=400&q=80" },
+  { name: "Dried Blooms", slug: "dried", img: "https://images.unsplash.com/photo-1508610048659-a06b669e3321?w=400&q=80" },
+];
+
+/* ────────────────────────────────────────────────────────────
+   REUSABLE SUB-COMPONENTS
+──────────────────────────────────────────────────────────── */
+
+/** Simple section heading */
+function SectionTitle({ title, viewAllHref }: { title: string; viewAllHref?: string }) {
   return (
-    <button
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        addToCart({
-          productId: (product as any)._id || String(product.id),
-          name:      product.name,
-          image:     (product as any).images?.[0] || '',
-          price:     product.price,
-          quantity:  1,
-        });
-      }}
-      aria-label="Add to cart"
-      className={className || "w-9 h-9 rounded-full bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shrink-0"}
-    >
-      {showText ? "Add to Cart" : <Plus size={14} strokeWidth={2} />}
-    </button>
+    <div className="flex items-end justify-between mb-5 md:mb-6">
+      <h2 className="text-[var(--text)] text-xl md:text-2xl lg:text-[1.65rem] font-bold tracking-tight">
+        {title}
+      </h2>
+      {viewAllHref && (
+        <Link
+          href={viewAllHref}
+          className="text-[11px] font-bold tracking-[0.1em] uppercase text-[var(--accent)] hover:text-[var(--text)] transition-colors flex items-center gap-1 whitespace-nowrap"
+        >
+          View All <ArrowRight size={12} />
+        </Link>
+      )}
+    </div>
   );
 }
+/* ────────────────────────────────────────────────────────────
+   MAIN PAGE
+──────────────────────────────────────────────────────────── */
 
-export default function Home() {
+export default function HomePage() {
   const dispatch = useAppDispatch();
-  const { products, loading: productsLoading } = useAppSelector((state: RootState) => state.products);
-  const { collections, loading: collectionsLoading } = useAppSelector((state: RootState) => state.collections);
-  const { success: inquirySuccess, loading: inquiryLoading } = useAppSelector((state: RootState) => state.inquiries);
-  
-  const [inquiryData, setInquiryData] = useState({ name: '', phone: '', message: '' });
+  const { products, loading: productsLoading } = useAppSelector(
+    (state: RootState) => state.products
+  );
+  const { collections } = useAppSelector(
+    (state: RootState) => state.collections
+  );
+  const { occasions } = useAppSelector(
+    (state: RootState) => state.occasions
+  );
 
   useEffect(() => {
-    dispatch(fetchProducts({ sort: 'newest' }));
+    dispatch(fetchProducts({ sort: "newest" }));
     dispatch(fetchCollections());
-
-    // Premium Reveal Animation logic
-    const observerOptions = { threshold: 0.1 };
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-        }
-      });
-    }, observerOptions);
-
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-    // Parallax Animation logic
-    const handleScroll = () => {
-      document.querySelectorAll('.parallax').forEach(el => {
-        const rect = el.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        // Only animate if in or near viewport
-        if (rect.top < viewportHeight && rect.bottom > 0) {
-          const speed = parseFloat(el.getAttribute('data-speed') || '0.1');
-          const yOffset = (rect.top - viewportHeight / 2) * speed;
-          (el as HTMLElement).style.transform = `translate3d(0, ${yOffset}px, 0)`;
-        }
-      });
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    // Trigger once on load
-    handleScroll();
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('scroll', handleScroll);
-    };
+    dispatch(fetchOccasions());
   }, [dispatch]);
 
-  const handleInquirySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData();
-    formData.append('type', 'custom');
-    formData.append('name', inquiryData.name);
-    formData.append('phone', inquiryData.phone);
-    formData.append('message', inquiryData.message);
-    formData.append('subject', `Custom Design Request from ${inquiryData.name}`);
-    formData.append('email', 'guest@mythrisgleams.com'); 
-    dispatch(createInquiry(formData as any));
-  };
+  const bestSellers = products;
 
-  // Featured Products (Trending / Top Picks)
-  const featuredProducts = (products as Product[]).slice(0, 4);
+  // Curated "Browse the Atelier" rail — driven by backend collections (top-level categories)
+  const atelierCategories = useMemo(() => {
+    const mains = collections.filter((c) => !c.parent);
+    if (mains.length === 0) return SHOP_BY_CATEGORIES;
+    const fallback = SHOP_BY_CATEGORIES[0]?.img || "";
+    return mains.map((c) => ({
+      name: c.name,
+      slug: c.slug,
+      img:
+        getImageUrl(c.image) ||
+        SHOP_BY_CATEGORIES.find((s) => s.slug === c.slug)?.img ||
+        fallback,
+    }));
+  }, [collections]);
+
+  // Occasion rail — driven by backend occasions (top-level)
+  const occasionCards = useMemo(() => {
+    const mains = occasions.filter((o) => !o.parent);
+    if (mains.length === 0) return SHOP_BY_OCCASION;
+    const fallback = SHOP_BY_OCCASION[0]?.img || "";
+    return mains.map((o) => ({
+      name: o.name,
+      slug: o.slug,
+      tag: (SHOP_BY_OCCASION.find((s) => s.slug === o.slug) as { tag?: string } | undefined)?.tag,
+      img:
+        getImageUrl(o.image) ||
+        SHOP_BY_OCCASION.find((s) => s.slug === o.slug)?.img ||
+        fallback,
+    }));
+  }, [occasions]);
+
+  /* Embla carousel for the category rail */
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      skipSnaps: false,
+      dragFree: false,
+    },
+    [Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+
+    const onScroll = () => {
+      const progress = Math.max(0, Math.min(1, emblaApi.scrollProgress()));
+      setScrollProgress(progress * 100);
+    };
+
+    onScroll();
+    emblaApi.on("scroll", onScroll);
+    emblaApi.on("reInit", onScroll);
+
+    return () => {
+      emblaApi.off("scroll", onScroll);
+      emblaApi.off("reInit", onScroll);
+    };
+  }, [emblaApi]);
+
+  /* Embla carousel for the promo banner */
+  const [promoEmblaRef, promoEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+    },
+    [Autoplay({ delay: 5000, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+
+  const [promoIndex, setPromoIndex] = useState(0);
+
+  useEffect(() => {
+    if (!promoEmblaApi) return;
+
+    const onSelect = () => setPromoIndex(promoEmblaApi.selectedScrollSnap());
+
+    onSelect();
+    promoEmblaApi.on("select", onSelect);
+    promoEmblaApi.on("reInit", onSelect);
+
+    return () => {
+      promoEmblaApi.off("select", onSelect);
+      promoEmblaApi.off("reInit", onSelect);
+    };
+  }, [promoEmblaApi]);
+
+  /* Embla carousel for bestsellers */
+  const [bestEmblaRef, bestEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 5500, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+
+  const [bestProgress, setBestProgress] = useState(0);
+
+  useEffect(() => {
+    if (!bestEmblaApi) return;
+
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, bestEmblaApi.scrollProgress()));
+      setBestProgress(p * 100);
+    };
+
+    onScroll();
+    bestEmblaApi.on("scroll", onScroll);
+    bestEmblaApi.on("reInit", onScroll);
+
+    return () => {
+      bestEmblaApi.off("scroll", onScroll);
+      bestEmblaApi.off("reInit", onScroll);
+    };
+  }, [bestEmblaApi]);
 
   return (
-    <div className="flex flex-col font-sans">
-      <Hero />
+    <div className="flex flex-col font-sans bg-[var(--bg)] overflow-x-hidden">
 
+      {/* ══════════════════════════════════════════════════════════
+          1. SHOP BY CATEGORIES — Editorial Atelier Rail (Embla)
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full bg-[var(--bg)] border-b border-[var(--border)] overflow-hidden">
+        {/* Soft radial glow backdrop */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{
+            background:
+              "radial-gradient(60% 120% at 50% 0%, rgba(184,92,58,0.08) 0%, transparent 60%), radial-gradient(40% 80% at 80% 100%, rgba(184,92,58,0.05) 0%, transparent 70%)",
+          }}
+        />
 
-      {/* ── CURATED GALLERIES — POTTERY EDITORIAL LAYOUT ── */}
-      <section className="w-full py-16 md:py-24">
-        <div className="max-w-[1440px] mx-auto px-8 sm:px-12">
+        <div className="relative max-w-[1440px] mx-auto px-4 sm:px-8 pt-10 pb-12 md:pt-14 md:pb-16">
 
-          {/* ── TOP HEADER ROW ── */}
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 items-start mb-14 md:mb-16"
-          >
-
-            {/* Left: eyebrow + large heading */}
+          {/* ── Section heading ── */}
+          <div className="flex items-end justify-between mb-7 md:mb-9">
             <div>
-              <span className="text-[var(--text-faint)] text-[10px] font-bold tracking-[0.25em] uppercase mb-4 block">
-                Our Product
-              </span>
-              <h2 className="text-[var(--text)] text-3xl md:text-4xl lg:text-5xl font-bold leading-[1.2] tracking-tight">
-                Explore Our<br /> Artisanal Collections
+              <div className="flex items-center gap-3 mb-2">
+                <span className="h-[1px] w-8 bg-[var(--accent)]" />
+                <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-[var(--accent)]">
+                  Curated
+                </span>
+              </div>
+              <h2 className="font-serif text-[1.75rem] md:text-[2.25rem] leading-none text-[var(--text)] tracking-tight">
+                Browse the <em className="italic font-normal text-[var(--accent)]">Atelier</em>
               </h2>
             </div>
 
-            {/* Right: body text + CTA */}
-            <div className="flex flex-col items-start justify-center gap-6 pt-0 md:pt-10">
-              <p className="text-[var(--text-muted)] text-[15px] leading-relaxed">
-                Each piece in our collection is handcrafted by skilled artisans using 
-                premium clay — shaped, fired, and finished with care. From functional 
-                tableware to sculptural centerpieces, explore a world of texture, warmth, 
-                and timeless artisanal beauty.
-              </p>
+            {/* Nav arrows (visible on md+) */}
+            <div className="hidden md:flex items-center gap-6">
               <Link
                 href="/category/all"
-                className="inline-block bg-[var(--bg-muted)] hover:bg-[var(--accent)] text-[var(--text)] hover:text-white text-[11px] font-bold tracking-[0.2em] uppercase px-7 py-3 rounded-full transition-colors duration-300"
+                className="group inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
               >
-                All Products
+                All Collections
+                <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
               </Link>
-            </div>
-          </motion.div>
 
-          {/* ── BOTTOM: 4-CARD GRID ── */}
-          {collectionsLoading ? (
-            <div className="py-20 flex justify-center">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => emblaApi?.scrollPrev()}
+                  aria-label="Previous"
+                  className="w-10 h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => emblaApi?.scrollNext()}
+                  aria-label="Next"
+                  className="w-10 h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Embla Carousel ── */}
+          <div className="relative">
+            <div className="overflow-hidden" ref={emblaRef}>
+              <div className="flex touch-pan-y -ml-4 md:-ml-5">
+                {atelierCategories.map((cat, i) => (
+                  <div
+                    key={cat.slug}
+                    className="shrink-0 grow-0 pl-4 md:pl-5 basis-[calc(100%/2.2)] sm:basis-[calc(100%/3.2)] md:basis-[calc(100%/4.5)] lg:basis-[calc(100%/6.2)] xl:basis-[calc(100%/7.2)]"
+                  >
+                    <Link
+                      href={`/category/${cat.slug}`}
+                      className="group relative block w-full"
+                    >
+                      {/* Card */}
+                      <div className="relative w-full aspect-[3/4] rounded-[28px] overflow-hidden bg-[var(--bg-subtle)] shadow-[0_2px_10px_-4px_rgba(42,31,24,0.12)] group-hover:shadow-[0_24px_50px_-20px_rgba(184,92,58,0.35)] transition-all duration-500 ease-out">
+
+                        {/* Image */}
+                        <img
+                          src={cat.img}
+                          alt={cat.name}
+                          draggable={false}
+                          className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.12] select-none pointer-events-none"
+                        />
+
+                        {/* Warm gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-90 group-hover:from-black/80 transition-opacity duration-500" />
+
+                        {/* Inner hairline highlight */}
+                        <div className="absolute inset-0 rounded-[28px] ring-1 ring-inset ring-white/10 group-hover:ring-white/20 transition-all duration-500" />
+
+                        {/* Index number */}
+                        <span className="absolute top-4 left-4 font-serif italic text-[11px] tracking-widest text-white/70">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+
+                        {/* Gold accent dot */}
+                        <span className="absolute top-4 right-4 w-1.5 h-1.5 rounded-full bg-[var(--accent-light)] opacity-0 group-hover:opacity-100 scale-0 group-hover:scale-100 transition-all duration-500 ease-out" />
+
+                        {/* Bottom label block */}
+                        <div className="absolute inset-x-0 bottom-0 p-4 md:p-5">
+                          <h3 className="text-white text-[13px] md:text-[14px] font-bold tracking-[0.06em] uppercase leading-tight">
+                            {cat.name}
+                          </h3>
+
+                          <span className="block mt-2 h-[2px] w-0 bg-[var(--accent-light)] group-hover:w-10 transition-all duration-500 ease-out rounded-full" />
+
+                          <div className="flex items-center gap-1.5 mt-3 opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 delay-75">
+                            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/90">
+                              Explore
+                            </span>
+                            <ArrowRight size={11} className="text-white/90 group-hover:translate-x-1 transition-transform duration-300" />
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Progress bar underneath */}
+            <div className="mt-6 h-[2px] w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[var(--accent)] transition-all duration-300"
+                style={{ width: `${scrollProgress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Mobile: All link */}
+          <div className="mt-6 flex justify-center md:hidden">
+            <Link
+              href="/category/all"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[var(--border)] text-[11px] font-bold tracking-[0.15em] uppercase text-[var(--text-muted)]"
+            >
+              All Collections <ArrowRight size={12} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          2. SHOP BY OCCASIONS — Compact Editorial Row
+      ═══════════════════════════════════════════════════════════ */}
+      <section id="occasions" className="relative w-full bg-white border-b border-[var(--border)] py-10 md:py-14">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+
+          {/* ── Section header (inline, compact) ── */}
+          <div className="flex items-end justify-between mb-6 md:mb-8">
+            <div className="flex items-center gap-3">
+              <span className="h-[1px] w-8 bg-[var(--accent)]" />
+              <h2 className="font-serif text-[1.35rem] md:text-[1.65rem] leading-none tracking-tight text-[var(--text)]">
+                Shop By{" "}
+                <em className="italic font-normal text-[var(--accent)]">Occasions</em>
+              </h2>
+            </div>
+            <Link
+              href="/occasion/all"
+              className="group inline-flex items-center gap-1.5 text-[10px] md:text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+            >
+              View All
+              <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+
+          {/* ── Row of slim occasion cards ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
+            {occasionCards.map((occ, i) => (
+              <motion.div
+                key={occ.slug}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ duration: 0.5, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <Link
+                  href={`/occasion/${occ.slug}`}
+                  className="group relative block w-full"
+                >
+                  <div className="relative w-full aspect-[4/5] rounded-2xl overflow-hidden bg-[var(--bg-subtle)] shadow-[0_1px_6px_-2px_rgba(42,31,24,0.10)] group-hover:shadow-[0_18px_40px_-18px_rgba(184,92,58,0.35)] transition-all duration-500 ease-out">
+
+                    {/* Image */}
+                    <img
+                      src={occ.img}
+                      alt={occ.name}
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.10]"
+                    />
+
+                    {/* Gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent group-hover:from-black/85 transition-colors duration-500" />
+
+                    {/* Hairline */}
+                    <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 group-hover:ring-white/25 transition-all duration-500" />
+
+                    {/* Tag pill — top right */}
+                    {occ.tag && (
+                      <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md border border-white/25 text-[8px] font-bold tracking-[0.12em] uppercase text-white">
+                        {occ.tag}
+                      </span>
+                    )}
+
+                    {/* Bottom content */}
+                    <div className="absolute inset-x-0 bottom-0 p-3 md:p-3.5">
+                      <h3 className="text-white text-[12px] md:text-[13px] font-bold tracking-wide leading-tight">
+                        {occ.name}
+                      </h3>
+                      <span className="block mt-1.5 h-[1.5px] w-0 bg-[var(--accent-light)] rounded-full group-hover:w-6 transition-all duration-500" />
+                      <div className="flex items-center gap-1 mt-2 opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 delay-75">
+                        <span className="text-[8.5px] font-bold tracking-[0.2em] uppercase text-white/95">
+                          Explore
+                        </span>
+                        <ArrowRight size={9} className="text-white/95 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          3. PROMO BANNER — Auto-Scrolling Editorial Carousel
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full py-6 md:py-10">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+
+          {/* Embla viewport */}
+          <div className="relative rounded-[24px] md:rounded-[28px] overflow-hidden" ref={promoEmblaRef}>
+            <div className="flex">
+              {PROMO_SLIDES.map((slide, i) => (
+                <div
+                  key={i}
+                  className="relative shrink-0 grow-0 basis-full"
+                >
+                  {/* Background image */}
+                  <div className="relative w-full min-h-[280px] md:min-h-[360px] lg:min-h-[420px]">
+                    <img
+                      src={slide.bgImage}
+                      alt={slide.title}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+
+                    {/* Dark overlay for text legibility — heavier on left */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20" />
+
+                    {/* Warm terracotta tint */}
+                    <div className="absolute inset-0 bg-[var(--accent)]/10 mix-blend-multiply" />
+
+                    {/* Content */}
+                    <div className="relative z-10 h-full flex items-center">
+                      <div className="px-8 sm:px-12 md:px-16 lg:px-20 py-12 md:py-16 max-w-[640px]">
+
+                        {/* Eyebrow */}
+                        <p className="text-white/70 text-[10px] md:text-[11px] font-bold tracking-[0.3em] uppercase mb-4">
+                          {slide.eyebrow}
+                        </p>
+
+                        {/* Headline */}
+                        <h2 className="text-white font-serif text-[2rem] md:text-[2.75rem] lg:text-[3.25rem] leading-[1.05] tracking-tight mb-4">
+                          {slide.title}
+                        </h2>
+
+                        {/* Subline */}
+                        <p className="text-white/75 text-[13px] md:text-[15px] leading-relaxed mb-8 max-w-[420px]">
+                          {slide.subtitle}
+                        </p>
+
+                        {/* CTA */}
+                        <Link
+                          href={slide.href}
+                          className="group inline-flex items-center gap-3 px-7 py-3.5 bg-white text-[var(--text)] rounded-full text-[11px] font-bold tracking-[0.18em] uppercase hover:bg-[var(--accent)] hover:text-white transition-all duration-300 shadow-xl shadow-black/20"
+                        >
+                          {slide.cta}
+                          <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Dot indicators */}
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+              {PROMO_SLIDES.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => promoEmblaApi?.scrollTo(i)}
+                  aria-label={`Go to slide ${i + 1}`}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${
+                    promoIndex === i
+                      ? "w-8 bg-white"
+                      : "w-1.5 bg-white/40 hover:bg-white/60"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          4. SHOP BY BESTSELLERS — Editorial Product Carousel
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full bg-white border-b border-[var(--border)] py-12 md:py-16">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+
+          {/* ── Section header ── */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 md:mb-10">
+            <div className="max-w-[560px]">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="h-[1px] w-8 bg-[var(--accent)]" />
+                <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-[var(--accent)]">
+                  Bestsellers
+                </span>
+              </div>
+              <h2 className="font-serif text-[1.75rem] md:text-[2.25rem] leading-[1.1] tracking-tight text-[var(--text)]">
+                India&apos;s favourite{" "}
+                <em className="italic font-normal text-[var(--accent)]">gifting</em>{" "}
+                picks.
+              </h2>
+            </div>
+
+            {/* Right cluster: View All + arrows */}
+            <div className="flex items-center gap-5">
+              <Link
+                href="/category/all"
+                className="group hidden md:inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+              >
+                View All
+                <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => bestEmblaApi?.scrollPrev()}
+                  aria-label="Previous"
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <button
+                  onClick={() => bestEmblaApi?.scrollNext()}
+                  aria-label="Next"
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Embla Product Carousel ── */}
+          {productsLoading ? (
+            <div className="py-16 flex justify-center">
               <Loader2 className="animate-spin text-[var(--accent)]" size={28} />
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-              {collections.slice(0, 4).map((col: any) => (
-                <Link
-                  key={col._id}
-                  href={`/category/${col.slug}`}
-                  className="group flex flex-col"
-                >
-                  {/* Image */}
-                  <div className="relative w-full aspect-square rounded-[10px] overflow-hidden bg-[var(--bg-muted)] mb-4 parallax" data-speed="-0.03">
-                    {col.image ? (
-                      <img
-                        src={getImageUrl(col.image)}
-                        alt={col.name}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-[1.04]"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-[var(--text-faint)]">
-                        <Package size={40} strokeWidth={1.2} />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Text */}
-                  <div className="text-center px-1">
-                    <h3 className="text-[var(--text)] text-[15px] font-bold leading-[1.2] mb-1.5 group-hover:text-[var(--accent)] transition-colors duration-300">
-                      {col.name}
-                    </h3>
-                    <p className="text-[var(--text-faint)] text-[13px] leading-relaxed line-clamp-2">
-                      {col.description || "Handcrafted with care, shaped by skilled artisans using premium clay."}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ── BEST SELLERS — MINIMALIST GALLERY ── */}
-      <section id="products" className="w-full py-16 md:py-24 scroll-m-20 bg-white relative overflow-hidden">
-        
-        <div className="max-w-[1440px] mx-auto px-8 sm:px-12">
-          
-          {/* ── Unique Header (Centered Watermark Style) ── */}
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="relative mb-20 flex flex-col items-center justify-center text-center"
-          >
-
-            <div className="z-10 pt-6 md:pt-12">
-              <span className="text-[var(--accent)] text-[10px] font-bold tracking-[0.4em] uppercase mb-4 block">
-                 Curated Selection
-              </span>
-              <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-5">
-                 Best Selling Miniatures
-              </h2>
-              <p className="text-[var(--text-muted)] text-[15px] leading-relaxed max-w-md mx-auto">
-                 Our most loved creations, meticulously hand-crafted and cherished across the country.
-              </p>
-            </div>
-          </motion.div>
-
-          {/* ── 4-Card Minimalist Grid ── */}
-          {productsLoading ? (
-            <div className="py-20 flex justify-center">
-              <Loader2 className="animate-spin text-[var(--accent)]" size={36} />
-            </div>
-          ) : products.length === 0 ? (
-            <div className="py-20 text-center text-[var(--text-faint)] italic text-[16px]">
-              No products found in the vault yet.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-              {featuredProducts.map((product: Product, i: number) => {
-                const productSlug  = product.slug || product.id;
-                const productImage = (product as any).images?.[0] ?? null;
-                const productPrice = product.price;
-                const productMRP   = (product as any).mrp || (product as any).oldPrice;
-                const catTitle     = product.category;
-
-                return (
-                  <div key={(product as any)._id || product.id}>
-                    <ProductCard product={product as any} />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          
-          {/* Centered View All Link */}
-          <div className="mt-16 flex justify-center">
-             <Link
-                href="/category/all"
-                className="inline-flex items-center gap-3 text-[var(--accent)] text-[11px] font-bold tracking-[0.2em] uppercase group hover:text-[var(--text)] transition-colors duration-300"
-              >
-                View Complete Vault
-                <span className="inline-block group-hover:translate-x-1 transition-transform duration-300">→</span>
-             </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ── OUR HERITAGE (STORY SECTION) ── */}
-      <section className="w-full py-16 md:py-24 bg-white relative overflow-hidden group">
-        
-        {/* Animated Background Seal (Addon) */}
-        <div className="absolute -top-10 -right-20 md:top-10 md:right-10 w-96 h-96 lg:w-[500px] lg:h-[500px] animate-[spin_60s_linear_infinite] opacity-[0.02] pointer-events-none select-none z-0 parallax" data-speed="0.2">
-          <svg viewBox="0 0 100 100" className="w-full h-full fill-[var(--text)]">
-            <path id="heritageCircle" d="M 50, 50 m -40, 0 a 40,40 0 1,1 80,0 a 40,40 0 1,1 -80,0" fill="none" />
-            <text className="text-[9px] font-bold tracking-[0.25em] uppercase">
-              <textPath href="#heritageCircle" startOffset="0%">
-                Mythris Gleams • Handcrafted with love • Since 2018 • Mythris Gleams • Handcrafted with love • Since 2018 • 
-              </textPath>
-            </text>
-          </svg>
-        </div>
-
-        <div className="max-w-[1440px] mx-auto px-8 sm:px-12 relative z-10">
-          
-          <div className="flex items-center gap-4 mb-16 md:mb-24">
-            <span className="w-12 h-px bg-[var(--text-faint)]"></span>
-            <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-[var(--text-faint)]">Our Heritage</span>
-          </div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32"
-          >
-             {/* Left: The Vision */}
-             <div className="relative">
-                <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-[4rem] font-bold leading-[1.1] tracking-tight mb-10 max-w-xl relative parallax" data-speed="-0.05">
-                  From Chennai to <br />
-                  <span className="text-[var(--accent)] relative inline-block">
-                    across India.
-                    {/* Subtle underline animation */}
-                    <span className="absolute bottom-2 left-0 w-full h-[6px] bg-[var(--accent)] opacity-20 -z-10 group-hover:h-[60%] transition-all duration-700 ease-out"></span>
-                  </span>
-                </h2>
-                <div className="relative pl-8 md:pl-12 border-l border-[var(--border)]">
-                   <div className="absolute top-0 left-[-1.5px] w-[3px] h-16 bg-[var(--accent)]" />
-                   <p className="text-[var(--text-muted)] text-[16px] md:text-[18px] leading-relaxed max-w-lg mb-8">
-                     Founded by <strong className="text-[var(--text)] font-semibold">Uma Gayathri</strong> in 2018 with a simple vision: to capture fleeting memories and transform them into lasting miniature art. 
-                   </p>
-                   <p className="text-[var(--text-muted)] text-[15px] leading-relaxed max-w-lg">
-                     Today, our atelier has delivered thousands of hand-sculpted smiles, meticulously crafting stories into timeless physical forms.
-                   </p>
-                   
-                   <Link href="/about" className="inline-flex items-center gap-4 mt-12 group/btn">
-                     <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--text)] group-hover/btn:text-[var(--accent)] transition-colors duration-300">
-                       Read Full Story
-                     </span>
-                     <span className="w-12 h-px bg-[var(--text)] group-hover/btn:w-20 group-hover/btn:bg-[var(--accent)] transition-all duration-500"></span>
-                   </Link>
-                </div>
-             </div>
-
-             {/* Right: The Pillars */}
-             <div className="flex flex-col justify-center">
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-12">
-                  
-                  {/* Pillar 1 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     {/* Animated top border */}
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">01</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Hand Sculpted</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Every piece is shaped entirely by hand. No molds are used for our main designs, ensuring each creation is wholly unique.
-                     </p>
-                  </div>
-                  
-                  {/* Pillar 2 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">02</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Hand Painted</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Vibrant and delicate detailing is achieved using top quality colors and microscopic brushes for breathtaking precision.
-                     </p>
-                  </div>
-
-                  {/* Pillar 3 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">03</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Premium Clay</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Crafted using high-grade, resilient air-dry and polymer clay designed for lifelong durability and a smooth finish.
-                     </p>
-                  </div>
-
-                  {/* Pillar 4 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">04</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Personalized</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Themes, names, and concepts perfectly tailored to your memories. You dream it, we sculpt it.
-                     </p>
-                  </div>
-
-               </div>
-             </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ── BESPOKE COMMISSION (CUSTOM SECTION) ── */}
-      <section id="custom" className="w-full bg-white py-16 md:py-24 border-t border-[var(--border)]">
-        <div className="max-w-[1320px] mx-auto px-8 sm:px-12">
-          
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center"
-          >
-            
-            {/* Left side: Editorial Typography */}
-            <div className="flex flex-col order-2 lg:order-1">
-               <div className="inline-block px-4 py-1.5 rounded-full border border-[var(--accent)] text-[var(--accent)] text-[9px] font-bold tracking-[0.3em] uppercase w-max mb-8">
-                 Bespoke Service
-               </div>
-
-               <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-[4.5rem] font-bold leading-[1.05] tracking-tight mb-8">
-                 Your story,<br />
-                 <span className="text-[var(--text-faint)] italic font-serif font-light">miniaturized.</span>
-               </h2>
-
-               <p className="text-[var(--text-muted)] text-[16px] md:text-[18px] leading-[1.8] max-w-md mb-12">
-                 We transform your cherished memories, favorite foods, and beloved pets into everlasting miniature art. Share your vision, and we will sculpt it into reality.
-               </p>
-
-               <div className="grid grid-cols-2 gap-y-8 gap-x-12">
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">01</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Share Idea</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Send us your theme, concept, or reference photos.</p>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">02</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Sketch & Design</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">We finalize the layout before the clay is touched.</p>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">03</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Hand Sculpt</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Every detail is shaped and painted by artisan hands.</p>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">04</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Delivery</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Packaged securely and shipped right to your door.</p>
-                  </div>
-               </div>
-            </div>
-
-            {/* Right side: The Form */}
-            <div className="order-1 lg:order-2 bg-[var(--bg-subtle)] rounded-[2.5rem] p-10 md:p-14 relative overflow-hidden group border border-[var(--border)] shadow-sm">
-               {/* Decorative background shape */}
-               <div className="absolute -top-32 -right-32 w-80 h-80 bg-[var(--bg-muted)] rounded-full blur-3xl opacity-50 group-hover:bg-[var(--accent)] group-hover:opacity-10 transition-all duration-1000 parallax" data-speed="-0.15" />
-               
-               <div className="relative z-10">
-                 {inquirySuccess ? (
-                    <div className="py-20 text-center flex flex-col items-center gap-6">
-                      <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-sm">
-                        <CheckCircle2 size={32} className="text-[var(--accent)]" />
-                      </div>
-                      <h3 className="text-3xl font-bold text-[var(--text)] tracking-tight">Vision Captured.</h3>
-                      <p className="text-[var(--text-muted)] text-[15px] max-w-[280px] mx-auto leading-relaxed">Uma Gayathri will reach out via WhatsApp shortly to begin your bespoke collaboration.</p>
+            <div className="relative">
+              <div className="overflow-hidden" ref={bestEmblaRef}>
+                <div className="flex touch-pan-y -ml-4 md:-ml-5">
+                  {bestSellers.map((product) => (
+                    <div
+                      key={product._id || product.id}
+                      className="shrink-0 grow-0 pl-4 md:pl-5 basis-[calc(100%/1.6)] sm:basis-[calc(100%/2.4)] md:basis-[calc(100%/3.2)] lg:basis-[calc(100%/4.2)] xl:basis-[calc(100%/5)]"
+                    >
+                      <ProductCard product={product} />
                     </div>
-                 ) : (
-                    <form onSubmit={handleInquirySubmit} className="flex flex-col gap-8">
-                      <div>
-                        <h3 className="text-[var(--text)] text-[28px] font-bold tracking-tight mb-2">Initiate Narrative</h3>
-                        <p className="text-[var(--text-muted)] text-[14px]">We'll respond via WhatsApp within 24 hours.</p>
-                      </div>
+                  ))}
+                </div>
+              </div>
 
-                      <div className="flex flex-col gap-5 mt-2">
-                        <div className="relative">
-                          <input
-                            required
-                            value={inquiryData.name}
-                            onChange={(e) => setInquiryData({...inquiryData, name: e.target.value})}
-                            type="text"
-                            placeholder="Your Name"
-                            className="w-full bg-white h-14 rounded-xl px-5 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm"
-                          />
-                        </div>
-                        <div className="relative">
-                          <input
-                            required
-                            value={inquiryData.phone}
-                            onChange={(e) => setInquiryData({...inquiryData, phone: e.target.value})}
-                            type="tel"
-                            placeholder="WhatsApp Number"
-                            className="w-full bg-white h-14 rounded-xl px-5 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm"
-                          />
-                        </div>
-                        <div className="relative">
-                          <textarea
-                            required
-                            value={inquiryData.message}
-                            onChange={(e) => setInquiryData({...inquiryData, message: e.target.value})}
-                            rows={4}
-                            placeholder="Describe your vision..."
-                            className="w-full bg-white rounded-xl px-5 py-4 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm resize-none"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={inquiryLoading}
-                        className="w-full h-14 mt-4 rounded-xl bg-[var(--text)] text-white text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-[var(--accent)] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:translate-y-0 flex items-center justify-center gap-3 shadow-md"
-                      >
-                        {inquiryLoading && <Loader2 size={16} className="animate-spin" />}
-                        {inquiryLoading ? 'Sending...' : 'Submit Request'}
-                      </button>
-                    </form>
-                 )}
-               </div>
+              {/* Progress bar */}
+              <div className="mt-8 h-[2px] w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--accent)] transition-all duration-300"
+                  style={{ width: `${bestProgress}%` }}
+                />
+              </div>
             </div>
+          )}
 
-          </motion.div>
+          {/* Mobile: View All */}
+          <div className="mt-8 flex justify-center md:hidden">
+            <Link
+              href="/category/all"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[var(--border)] text-[11px] font-bold tracking-[0.15em] uppercase text-[var(--text-muted)]"
+            >
+              View All Bestsellers <ArrowRight size={12} />
+            </Link>
+          </div>
         </div>
       </section>
-      
-      {/* ── WHATSAPP CTA (SLEEK & ELEGANT) ── */}
-      <section id="bulk" className="w-full max-w-[1000px] mx-auto px-8 sm:px-12 py-16 md:py-24">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 30 }} 
-          whileInView={{ opacity: 1, scale: 1, y: 0 }} 
-          viewport={{ once: true, margin: "-50px" }} 
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="bg-white border border-[var(--border)] rounded-[2rem] md:rounded-full p-6 md:px-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm transition-all hover:shadow-md hover:border-[#25D366]/30 group"
-        >
-          
-          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 text-center md:text-left">
-            <div className="w-12 h-12 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center shrink-0 group-hover:bg-[#25D366]/10 transition-colors duration-500">
-               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-muted)] group-hover:text-[#25D366] transition-colors duration-500">
-                 <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-               </svg>
-            </div>
-            <div>
-              <h2 className="text-[var(--text)] text-[16px] font-bold tracking-tight mb-1">
-                Events & Corporate Gifting
-              </h2>
-              <p className="text-[var(--text-muted)] text-[13px]">
-                Special rates for bulk orders (25+ units). Custom designs & packaging available.
-              </p>
-            </div>
-          </div>
 
-          <a 
-            href="https://wa.me/918300034451" 
-            className="shrink-0 bg-white text-[var(--text)] border border-[var(--border)] group-hover:border-[#25D366] group-hover:text-[#25D366] group-hover:bg-[#25D366]/5 rounded-full px-8 py-3 text-[10px] tracking-[0.25em] uppercase font-bold transition-all duration-300"
-          >
-            Chat on WhatsApp
-          </a>
-        </motion.div>
+      {/* ══════════════════════════════════════════════════════════
+          5. CATEGORY COLLECTION BAND (Vibes strip)
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="w-full py-8 md:py-12 bg-[#e8eef5]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+          <SectionTitle title="Collections" />
+
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+            {VIBES_CATEGORIES.map((v, i) => (
+              <motion.div
+                key={v.slug}
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.35, delay: i * 0.05 }}
+              >
+                <Link
+                  href={`/category/${v.slug}`}
+                  className="group block"
+                >
+                  <div className="aspect-square rounded-2xl overflow-hidden bg-white mb-2">
+                    <img
+                      src={v.img}
+                      alt={v.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    />
+                  </div>
+                  <div className="bg-white rounded-full py-2 px-3 text-center border border-[var(--border)] group-hover:border-[var(--accent)] group-hover:bg-[var(--accent)] transition-all">
+                    <span className="text-[11px] md:text-[12px] font-bold text-[var(--text)] group-hover:text-white transition-colors">
+                      Order Now
+                    </span>
+                  </div>
+                  <p className="text-center text-[11px] font-semibold text-[var(--text)] mt-1.5">
+                    {v.name}
+                  </p>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </section>
+
+
     </div>
   );
 }

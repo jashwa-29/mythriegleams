@@ -7,9 +7,10 @@ import { useCart } from "@/hooks/useCart";
 import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2 } from "lucide-react";
 import { CartItem } from "@/redux/slices/cartSlice";
 import { getImageUrl } from '@/utils/getImageUrl';
+import { formatWeight } from '@/utils/formatWeight';
 
 export default function CartDrawer() {
-  const { items, isOpen, close, setQty, remove, totalPrice, totalItems, loading } = useCart();
+  const { items, isOpen, close, setQty, remove, totalPrice, totalWeight, totalItems, loading } = useCart();
 
   return (
     <AnimatePresence>
@@ -151,6 +152,12 @@ export default function CartDrawer() {
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-muted)]">Subtotal</span>
                   <span className="text-[var(--text)] text-xl md:text-2xl font-bold tracking-tight">₹{totalPrice.toLocaleString()}</span>
                 </div>
+                {totalWeight > 0 && (
+                  <div className="flex justify-between items-center text-[11px] text-[var(--text-faint)]">
+                    <span>Total Weight</span>
+                    <span className="font-semibold text-[var(--text-muted)]">{formatWeight(totalWeight)}</span>
+                  </div>
+                )}
                 <p className="text-[11px] text-[var(--text-faint)]">Shipping & taxes calculated at checkout.</p>
 
                 <Link

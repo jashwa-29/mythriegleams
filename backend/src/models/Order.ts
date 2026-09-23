@@ -7,6 +7,7 @@ export interface IOrder extends Document {
         qty: number;
         image: string;
         price: number;
+        weight?: number;
         product: mongoose.Types.ObjectId;
         selectedVariant?: string;
         selectedColor?: string;
@@ -41,6 +42,7 @@ const OrderSchema: Schema = new Schema({
         qty: { type: Number, required: true },
         image: { type: String, required: true },
         price: { type: Number, required: true },
+        weight: { type: Number, default: 0 },
         product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
         selectedVariant: { type: String, default: '' },
         selectedColor: { type: String, default: '' },

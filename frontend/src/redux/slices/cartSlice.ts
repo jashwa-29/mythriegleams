@@ -7,6 +7,7 @@ export interface CartItem {
     name: string;
     image: string;
     price: number;
+    weight?: number;
     quantity: number;
     selectedVariant?: string;
     selectedColor?: string;
@@ -40,7 +41,7 @@ export const fetchCart = createAsyncThunk('cart/fetch', async (_, thunkAPI) => {
 
 export const addItemToCart = createAsyncThunk(
     'cart/add',
-    async (payload: { productId: string; name: string; image: string; price: number; quantity?: number; selectedVariant?: string; selectedColor?: string; customerImage?: string }, thunkAPI) => {
+    async (payload: { productId: string; name: string; image: string; price: number; weight?: number; quantity?: number; selectedVariant?: string; selectedColor?: string; customerImage?: string }, thunkAPI) => {
         try {
             const { data } = await api.post('/cart', payload);
             return data.data as CartItem[];

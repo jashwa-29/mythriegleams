@@ -29,6 +29,7 @@ import Modal from '@/components/ui/Modal';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { getImageUrl } from '@/utils/getImageUrl';
+import { formatWeight } from '@/utils/formatWeight';
 
 const OrderManagement = () => {
     const dispatch = useAppDispatch();
@@ -78,8 +79,8 @@ const OrderManagement = () => {
 
     const exportToExcel = () => {
         if (orders.length === 0) return toast.error("No orders to export");
-        const headers = ["Order ID", "Customer", "Email", "Amount", "Paid", "Status", "Date"];
-        const rows = orders.map(o => [o._id, o.shippingAddress?.name, o.shippingAddress?.email, o.totalPrice, o.isPaid ? 'YES' : 'NO', o.status, new Date(o.createdAt).toISOString().split('T')[0]]);
+        const headers = ["Order ID", "Customer", "Email", "Amount", "Weight", "Paid", "Status", "Date"];
+        const rows = orders.map(o => [o._id, o.shippingAddress?.name, o.shippingAddress?.email, o.totalPrice, orderWeight(o), o.isPaid ? 'YES' : 'NO', o.status, new Date(o.createdAt).toISOString().split('T')[0]]);
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
@@ -89,6 +90,8 @@ const OrderManagement = () => {
     };
 
     const orderStatuses = ['Pending', 'Handcrafting', 'Quality Check', 'Dispatched', 'Delivered', 'Cancelled'];
+
+    const orderWeight = (o: { orderItems?: { weight?: number; qty?: number }[] }) => (o.orderItems || []).reduce((s: number, it: { weight?: number; qty?: number }) => s + (it.weight || 0) * (it.qty || 1), 0);
 
     const getStatusStyles = (status: string) => {
         switch(status) {
@@ -159,6 +162,7 @@ const OrderManagement = () => {
                                     <th className="px-6 py-4">Customer</th>
                                     <th className="px-6 py-4">Payment</th>
                                     <th className="px-6 py-4">Total</th>
+                                    <th className="px-6 py-4">Weight</th>
                                     <th className="px-6 py-4 text-right">Status</th>
                                 </tr>
                             </thead>
@@ -179,6 +183,9 @@ const OrderManagement = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-5 font-bold text-zinc-900 tabular-nums">₹{order.totalPrice.toLocaleString()}</td>
+                                        <td className="px-6 py-5">
+                                            <span className="text-[11px] font-bold text-zinc-700 tabular-nums">{formatWeight(orderWeight(order)) || "—"}</span>
+                                        </td>
                                         <td className="px-6 py-5 text-right"><span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase border ${getStatusStyles(order.status)}`}>{order.status}</span></td>
                                     </tr>
                                 ))}
@@ -231,7 +238,7 @@ const OrderManagement = () => {
                                             <div className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
                                                 <table className="w-full text-left text-[11px]">
                                                     <thead className="bg-zinc-50 border-b border-zinc-100 font-bold text-zinc-400 uppercase text-[8px]">
-                                                        <tr><th className="px-6 py-3">Item</th><th className="px-6 py-3 text-center">Qty</th><th className="px-6 py-3 text-right">Total</th></tr>
+                                                        <tr><th className="px-6 py-3">Item</th><th className="px-6 py-3 text-center">Qty</th><th className="px-6 py-3 text-right">Weight</th><th className="px-6 py-3 text-right">Total</th></tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-zinc-100">
                                                         {inspectedOrder.orderItems.map((item: any, i: number) => (
@@ -252,6 +259,7 @@ const OrderManagement = () => {
                                                                      </div>
                                                                  </td>
                                                                 <td className="px-6 py-4 text-center font-bold">x{item.qty}</td>
+                                                                <td className="px-6 py-4 text-right font-bold tabular-nums">{formatWeight((item.weight || 0) * item.qty) || "—"}</td>
                                                                 <td className="px-6 py-4 text-right font-bold">₹{(item.qty * item.price).toLocaleString()}</td>
                                                             </tr>
                                                         ))}
@@ -281,6 +289,10 @@ const OrderManagement = () => {
                                                 <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase border ${inspectedOrder.isPaid ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>{inspectedOrder.isPaid ? 'Paid' : 'Unpaid'}</span>
                                             </div>
                                             <div className="text-2xl font-bold">₹{inspectedOrder.totalPrice.toLocaleString()}</div>
+                                            <div className="pt-4 border-t border-white/10 flex justify-between items-center">
+                                                <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Total Weight</span>
+                                                <span className="text-[11px] font-bold text-zinc-200 tabular-nums">{formatWeight(orderWeight(inspectedOrder)) || "—"}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

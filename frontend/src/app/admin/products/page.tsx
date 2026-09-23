@@ -61,8 +61,8 @@ const ProductManagement = () => {
 
     const exportToExcel = () => {
         if (products.length === 0) return toast.error("No data available to export");
-        const headers = ["ID", "Name", "Slug", "Category", "Price", "Stock Status"];
-        const rows = products.map(p => [p._id, p.name, p.slug, p.category, p.price, p.stockStatus]);
+        const headers = ["ID", "Name", "Slug", "Category", "Subcategory", "Occasion", "Occasion Subcategory", "Price", "Weight (g)", "Stock Status"];
+        const rows = products.map(p => [p._id, p.name, p.slug, p.category, p.subcategory || '', p.occasion || '', p.occasionSub || '', p.price, p.weight || 0, p.stockStatus]);
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
@@ -81,7 +81,10 @@ const ProductManagement = () => {
 
     const filteredProducts = products.filter((p: any) => 
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchTerm.toLowerCase())
+        p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.subcategory || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.occasion || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.occasionSub || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleFormSubmit = (formData: FormData) => {
@@ -168,6 +171,15 @@ const ProductManagement = () => {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="px-2 py-0.5 rounded border border-zinc-200 text-[9px] font-bold uppercase text-zinc-500 bg-zinc-50">{product.category}</span>
+                                            {product.subcategory && (
+                                                <span className="ml-1.5 px-2 py-0.5 rounded border border-zinc-100 text-[9px] font-bold uppercase text-zinc-400 bg-white">{product.subcategory}</span>
+                                            )}
+                                            {product.occasion && (
+                                                <span className="ml-1.5 px-2 py-0.5 rounded border border-rose-100 text-[9px] font-bold uppercase text-rose-500 bg-rose-50">{product.occasion}</span>
+                                            )}
+                                            {product.occasionSub && (
+                                                <span className="ml-1.5 px-2 py-0.5 rounded border border-rose-50 text-[9px] font-bold uppercase text-rose-400 bg-white">{product.occasionSub}</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm ${
@@ -219,8 +231,24 @@ const ProductManagement = () => {
                                         <div className="text-lg font-bold text-zinc-900 tabular-nums">₹{inspectedProduct.price.toLocaleString()}</div>
                                     </div>
                                     <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Box size={10}/> Weight</div>
+                                        <div className="text-lg font-bold text-zinc-900 tabular-nums">{inspectedProduct.weight ? `${inspectedProduct.weight} g` : "—"}</div>
+                                    </div>
+                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Category</div>
                                         <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.category}</div>
+                                    </div>
+                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Subcategory</div>
+                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.subcategory || "—"}</div>
+                                    </div>
+                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Occasion</div>
+                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasion || "—"}</div>
+                                    </div>
+                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Occasion Subcategory</div>
+                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasionSub || "—"}</div>
                                     </div>
                                 </div>
                                 {(inspectedProduct.variants?.length > 0 || inspectedProduct.requiresImage) && (

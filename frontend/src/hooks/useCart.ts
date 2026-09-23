@@ -18,6 +18,7 @@ interface AddPayload {
   name: string;
   image: string;
   price: number;
+  weight?: number;
   quantity?: number;
   selectedVariant?: string;
   selectedColor?: string;
@@ -39,6 +40,7 @@ export function useCart() {
         name: payload.name,
         image: payload.image,
         price: payload.price,
+        weight: payload.weight ?? 0,
         quantity: payload.quantity ?? 1,
         selectedVariant: payload.selectedVariant ?? "",
         selectedColor: payload.selectedColor ?? "",
@@ -69,11 +71,12 @@ export function useCart() {
 
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
   const totalPrice = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const totalWeight = items.reduce((s, i) => s + (i.weight || 0) * i.quantity, 0);
 
   return {
     items, loading, isOpen, isAuth,
     addToCart, setQty, remove, clear,
-    totalItems, totalPrice,
+    totalItems, totalPrice, totalWeight,
     open:   () => dispatch(openCart()),
     close:  () => dispatch(closeCart()),
     toggle: () => dispatch(toggleCart()),

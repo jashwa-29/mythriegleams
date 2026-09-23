@@ -19,7 +19,7 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
  * @access Private
  */
 export const addToCart = asyncHandler(async (req: Request, res: Response) => {
-    const { productId, name, image, price, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
+    const { productId, name, image, price, weight = 0, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
 
     let cart = await Cart.findOne({ user: req.user._id });
 
@@ -38,7 +38,7 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
         cart.items[existingIndex].quantity += quantity;
         if (customerImage) cart.items[existingIndex].customerImage = customerImage;
     } else {
-        cart.items.push({ product: productId, name, image, price, quantity, selectedVariant, selectedColor, customerImage });
+        cart.items.push({ product: productId, name, image, price, weight, quantity, selectedVariant, selectedColor, customerImage });
     }
 
     await cart.save();

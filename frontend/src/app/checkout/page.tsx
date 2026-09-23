@@ -12,6 +12,7 @@ import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
 import { useCart } from "@/hooks/useCart";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
 import { getImageUrl } from '@/utils/getImageUrl';
+import { formatWeight } from '@/utils/formatWeight';
 import {
   MapPin, User, Mail, Phone, Home, Package,
   CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
@@ -49,7 +50,7 @@ export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const router   = useRouter();
 
-  const { items, totalPrice, isAuth, clear } = useCart();
+  const { items, totalPrice, totalWeight, isAuth, clear } = useCart();
   const userInfo = useAppSelector(s => s.auth.userInfo);
   const { loading, error, success, currentOrder } = useAppSelector(s => s.orders);
 
@@ -138,7 +139,7 @@ export default function CheckoutPage() {
     const orderData = {
       orderItems: items.map(i => ({
         name: i.name, qty: i.quantity, image: i.image,
-        price: i.price, product: i.product,
+        price: i.price, weight: i.weight || 0, product: i.product,
         selectedVariant: i.selectedVariant,
         selectedColor: i.selectedColor,
         customerImage: i.customerImage,
@@ -467,6 +468,12 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
                 <span>Shipping</span><span className="text-[#849b87] font-medium">Free</span>
               </div>
+              {totalWeight > 0 && (
+                <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
+                  <span>Total Weight</span>
+                  <span className="font-semibold text-[var(--text-muted)]">{formatWeight(totalWeight)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center pt-4 border-t border-[var(--border)]">
                 <span className=" text-[1rem] text-[var(--text)]">Total</span>
                 <span className=" text-2xl text-[var(--text)]">₹{totalPrice.toLocaleString()}</span>

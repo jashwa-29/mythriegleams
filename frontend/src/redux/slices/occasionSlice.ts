@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../utils/api';
 
-export interface CollectionItem {
+export interface OccasionItem {
     _id: string;
     name: string;
     slug: string;
@@ -14,61 +14,61 @@ export interface CollectionItem {
     updatedAt?: string;
 }
 
-interface CollectionState {
-    collections: CollectionItem[];
+interface OccasionState {
+    occasions: OccasionItem[];
     loading: boolean;
     error: string | null;
     success: boolean;
 }
 
-const initialState: CollectionState = {
-    collections: [],
+const initialState: OccasionState = {
+    occasions: [],
     loading: false,
     error: null,
     success: false
 };
 
-export const fetchCollections = createAsyncThunk(
-    'collections/fetchAll',
+export const fetchOccasions = createAsyncThunk(
+    'occasions/fetchAll',
     async (_, thunkAPI) => {
         try {
-            const { data } = await api.get('/collections');
-            return data.data as CollectionItem[];
+            const { data } = await api.get('/occasions');
+            return data.data as OccasionItem[];
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
     }
 );
 
-export const createCollection = createAsyncThunk(
-    'collections/create',
+export const createOccasion = createAsyncThunk(
+    'occasions/create',
     async (formData: FormData, thunkAPI) => {
         try {
-            const { data } = await api.post('/collections', formData);
-            return data.data as CollectionItem;
+            const { data } = await api.post('/occasions', formData);
+            return data.data as OccasionItem;
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
     }
 );
 
-export const updateCollection = createAsyncThunk(
-    'collections/update',
+export const updateOccasion = createAsyncThunk(
+    'occasions/update',
     async ({ id, formData }: { id: string; formData: FormData }, thunkAPI) => {
         try {
-            const { data } = await api.put(`/collections/${id}`, formData);
-            return data.data as CollectionItem;
+            const { data } = await api.put(`/occasions/${id}`, formData);
+            return data.data as OccasionItem;
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
     }
 );
 
-export const deleteCollection = createAsyncThunk(
-    'collections/delete',
+export const deleteOccasion = createAsyncThunk(
+    'occasions/delete',
     async (id: string, thunkAPI) => {
         try {
-            await api.delete(`/collections/${id}`);
+            await api.delete(`/occasions/${id}`);
             return id;
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
@@ -76,41 +76,41 @@ export const deleteCollection = createAsyncThunk(
     }
 );
 
-const collectionSlice = createSlice({
-    name: 'collections',
+const occasionSlice = createSlice({
+    name: 'occasions',
     initialState,
     reducers: {
-        resetCollectionState: (state) => {
+        resetOccasionState: (state) => {
             state.success = false;
             state.error = null;
         }
     },
     extraReducers: (builder) => {
         builder
-            .addCase(fetchCollections.pending, (state) => {
+            .addCase(fetchOccasions.pending, (state) => {
                 state.loading = true;
             })
-            .addCase(fetchCollections.fulfilled, (state, action) => {
-                state.collections = action.payload;
+            .addCase(fetchOccasions.fulfilled, (state, action) => {
+                state.occasions = action.payload;
                 state.loading = false;
             })
-            .addCase(fetchCollections.rejected, (state, action) => {
+            .addCase(fetchOccasions.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
             })
-            .addCase(createCollection.fulfilled, (state, action) => {
-                state.collections.unshift(action.payload);
+            .addCase(createOccasion.fulfilled, (state, action) => {
+                state.occasions.unshift(action.payload);
                 state.success = true;
             })
-            .addCase(updateCollection.fulfilled, (state, action) => {
-                state.collections = state.collections.map(c => c._id === action.payload._id ? action.payload : c);
+            .addCase(updateOccasion.fulfilled, (state, action) => {
+                state.occasions = state.occasions.map(o => o._id === action.payload._id ? action.payload : o);
                 state.success = true;
             })
-            .addCase(deleteCollection.fulfilled, (state, action) => {
-                state.collections = state.collections.filter(c => c._id !== action.payload && !(typeof c.parent === 'object' && c.parent && c.parent._id === action.payload));
+            .addCase(deleteOccasion.fulfilled, (state, action) => {
+                state.occasions = state.occasions.filter(o => o._id !== action.payload && !(typeof o.parent === 'object' && o.parent && o.parent._id === action.payload));
             });
     }
 });
 
-export const { resetCollectionState } = collectionSlice.actions;
-export default collectionSlice.reducer;
+export const { resetOccasionState } = occasionSlice.actions;
+export default occasionSlice.reducer;

@@ -355,6 +355,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                   name: p.name,
                   image: (p as any).images?.[0] || "",
                   price: p.price,
+                  weight: p.weight || 0,
                   quantity: qty,
                   selectedVariant,
                   selectedColor,

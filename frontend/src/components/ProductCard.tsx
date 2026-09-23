@@ -29,6 +29,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       name:      product.name,
       image:     productImage || "",
       price:     productPrice,
+      weight:    product.weight || 0,
       quantity:  1,
     });
   };
