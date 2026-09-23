@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CATEGORIES } from "@/data/categories";
 import { type Product } from "@/data/products";
 import { useCart } from "@/hooks/useCart";
-import { Plus } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import { getImageUrl } from '@/utils/getImageUrl';
 
 interface ProductCardProps {
@@ -33,65 +33,82 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     });
   };
 
+  const requiresImage = !!(product as any).requiresImage;
+
   return (
-    <Link
-      href={`/product/${productSlug}`}
-      className="group bg-white rounded-[2rem] overflow-hidden transition-all duration-700 hover:-translate-y-3 hover:shadow-xl hover:shadow-[#e8e4db]/50 relative flex flex-col border border-[#e8e4db]/40"
-    >
-      {/* Image */}
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#f8f6f3]">
+    <div className="group relative w-full rounded-xl bg-white overflow-hidden shadow-[0_1px_10px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_24px_-6px_rgba(0,0,0,0.08)] transition-all duration-500 ease-out border border-gray-100 flex flex-col">
+      <Link href={`/product/${productSlug}`} className="block relative w-full aspect-square overflow-hidden bg-[#faf9f8]">
+        {/* Image */}
         {productImage ? (
           <img
             src={getImageUrl(productImage)}
             alt={product.name}
-            className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105 group-hover:opacity-90"
+            className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-sm text-[#a1988c] font-light font-serif italic">
-            No Artifact Preview
+          <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 font-light font-serif italic">
+            No Image
           </div>
         )}
 
-        {/* Badge */}
+        {/* Overlay gradient on hover for contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
+
+        {/* Badges */}
         {((product as any).badge || (productMRP && productMRP > productPrice)) && (
-          <span className="absolute top-4 left-4 px-4 py-1.5 rounded-full text-[9px] tracking-[0.2em] uppercase bg-white/90 backdrop-blur-sm text-[#594a3c] shadow-sm font-medium border border-[#e8e4db]">
-            {(product as any).badge === "new" ? "New Arrival" : (product as any).badge === "hot" ? "Trending" : "Artisanal Selection"}
-          </span>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="p-6 flex-grow flex flex-col bg-white">
-        <div className="text-[10px] tracking-[0.2em] uppercase text-[#a69076] mb-2 font-medium">{catTitle}</div>
-        <h3 className="font-serif text-[1.15rem] text-[#3d332a] leading-tight mb-3 group-hover:text-[#a69076] transition-colors">
-          {product.name}
-        </h3>
-
-        <div className="flex items-center gap-2 mb-6">
-          <span className="text-[#a69076] text-[10px]">{"★".repeat(Math.floor(product.rating || 5))}</span>
-          <span className="text-[10px] text-[#a1988c]">
-            ({(product as any).reviews || (product as any).reviewCount || 0} Appraisals)
-          </span>
-        </div>
-
-        <div className="flex items-end justify-between mt-auto">
-          <div className="flex flex-col">
-            {productMRP && productMRP > productPrice && (
-              <span className="text-[10px] text-[#a1988c] line-through mb-0.5">₹{productMRP.toLocaleString()}</span>
-            )}
-            <span className="font-serif text-[1.35rem] text-[#594a3c] leading-none">₹{productPrice.toLocaleString()}</span>
+          <div className="absolute top-2 left-2 z-10 transition-transform duration-500 group-hover:translate-y-0.5">
+            <span className="px-2 py-1 rounded-full text-[8px] tracking-wider uppercase bg-white/90 backdrop-blur-sm text-gray-900 font-bold shadow-sm">
+              {(product as any).badge === "new" ? "New" : (product as any).badge === "hot" ? "Trending" : "Artisanal"}
+            </span>
           </div>
+        )}
 
+        {/* Hover Quick Add Button (Bottom slide-up) */}
+        {requiresImage ? (
+          <Link
+            href={`/product/${productSlug}`}
+            onClick={(e) => { e.stopPropagation(); }}
+            className="absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 flex items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
+          >
+            <ShoppingBag size={12} strokeWidth={2} /> Upload Photo
+          </Link>
+        ) : (
           <button
             onClick={handleAddToCart}
-            className="w-11 h-11 rounded-full bg-[#f8f6f3] text-[#594a3c] flex items-center justify-center group-hover:bg-[#3d332a] group-hover:text-white transition-all duration-500 border border-[#e8e4db] hover:scale-105"
-            aria-label="Add to cart"
+            className="absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 flex items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
           >
-            <Plus size={16} strokeWidth={1.5} />
+            <ShoppingBag size={12} strokeWidth={2} /> Quick Add
           </button>
+        )}
+      </Link>
+
+      {/* Details Section */}
+      <div className="p-3 flex flex-col flex-1 bg-white z-10 relative">
+        <div className="flex justify-between items-start gap-2 mb-1">
+          <Link href={`/product/${productSlug}`} className="flex-1">
+            <h3 className="text-[12px] font-bold text-[#2d2926] leading-snug line-clamp-2 group-hover:text-[#a69076] transition-colors duration-300">
+              {product.name}
+            </h3>
+          </Link>
+          <div className="flex flex-col items-end shrink-0 pt-0.5">
+            <span className="text-[12px] font-bold text-[#2d2926] leading-none">
+              ₹{productPrice.toLocaleString()}
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex justify-between items-end mt-auto pt-1">
+          <span className="text-[8px] uppercase tracking-[0.2em] font-semibold text-[#a69076]/90">
+            {catTitle}
+          </span>
+          {productMRP && productMRP > productPrice && (
+            <span className="text-[9px] text-gray-400 line-through font-medium">
+              ₹{productMRP.toLocaleString()}
+            </span>
+          )}
         </div>
       </div>
-    </Link>
+    </div>
   );
 };
 

@@ -15,6 +15,7 @@ export interface IProduct extends Document {
         options: string[];
     }[];
     stockStatus: string;
+    requiresImage: boolean;
     createdAt: Date;
 }
 
@@ -36,7 +37,8 @@ const ProductSchema: Schema = new Schema({
         type: String, 
         enum: ['in-stock', 'out-of-stock', 'made-to-order'], 
         default: 'made-to-order' 
-    }
+    },
+    requiresImage: { type: Boolean, default: false }
 }, {
     timestamps: true
 });

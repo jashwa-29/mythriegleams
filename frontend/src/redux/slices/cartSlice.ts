@@ -9,6 +9,8 @@ export interface CartItem {
     price: number;
     quantity: number;
     selectedVariant?: string;
+    selectedColor?: string;
+    customerImage?: string;
 }
 
 interface CartState {
@@ -38,7 +40,7 @@ export const fetchCart = createAsyncThunk('cart/fetch', async (_, thunkAPI) => {
 
 export const addItemToCart = createAsyncThunk(
     'cart/add',
-    async (payload: { productId: string; name: string; image: string; price: number; quantity?: number; selectedVariant?: string }, thunkAPI) => {
+    async (payload: { productId: string; name: string; image: string; price: number; quantity?: number; selectedVariant?: string; selectedColor?: string; customerImage?: string }, thunkAPI) => {
         try {
             const { data } = await api.post('/cart', payload);
             return data.data as CartItem[];
@@ -93,10 +95,13 @@ const cartSlice = createSlice({
         // Guest cart (no auth) – local only
         addGuestItem: (state, action: PayloadAction<Omit<CartItem, '_id'>>) => {
             const existing = state.items.find(
-                i => i.product === action.payload.product && i.selectedVariant === action.payload.selectedVariant
+                i => i.product === action.payload.product
+                    && i.selectedVariant === action.payload.selectedVariant
+                    && i.selectedColor === action.payload.selectedColor
             );
             if (existing) {
                 existing.quantity += action.payload.quantity;
+                if (action.payload.customerImage) existing.customerImage = action.payload.customerImage;
             } else {
                 state.items.push({ ...action.payload, _id: `guest_${Date.now()}` });
             }

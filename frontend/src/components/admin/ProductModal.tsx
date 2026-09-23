@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
     X, 
     Upload, 
     Save, 
@@ -14,7 +14,9 @@ import {
     Image as ImageIcon,
     Plus,
     Minus,
-    Trash2
+    Trash2,
+    Palette,
+    Camera
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -52,6 +54,26 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const { collections } = useAppSelector((state: RootState) => state.collections);
     const [mediaItems, setMediaItems] = useState<{ type: 'existing' | 'new', url: string, file?: File }[]>([]);
     const [variants, setVariants] = useState<string[]>(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
+    const [colors, setColors] = useState<string[]>([]);
+    const [requiresImage, setRequiresImage] = useState(false);
+
+    const COLOR_PALETTE = [
+        { name: 'Gold', hex: '#d4af37' },
+        { name: 'Red', hex: '#b33a3a' },
+        { name: 'Blue', hex: '#3a5ba0' },
+        { name: 'Green', hex: '#4a7c59' },
+        { name: 'Black', hex: '#1a1a1a' },
+        { name: 'White', hex: '#f5f5f5' },
+        { name: 'Brown', hex: '#8b5a2b' },
+        { name: 'Pink', hex: '#e8a0bf' },
+    ];
+
+    const resolveColorHex = (name: string) => {
+        const match = COLOR_PALETTE.find(c => c.name.toLowerCase() === name.toLowerCase());
+        if (match) return match.hex;
+        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(name)) return name;
+        return '#d4af37';
+    };
 
     const {
         register,
@@ -99,9 +121,17 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                 } else {
                     setMediaItems([]);
                 }
+                const sizeVariants = initialData.variants?.find((v: any) => v.type === 'Size')?.options || [];
+                const colorVariants = initialData.variants?.find((v: any) => v.type === 'Color')?.options || [];
+                setVariants(Array.isArray(sizeVariants) && sizeVariants.length > 0 ? sizeVariants : []);
+                setColors(Array.isArray(colorVariants) ? colorVariants : []);
+                setRequiresImage(!!initialData.requiresImage);
             } else {
                 reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', price: 0, mrp: 0, story: '', details: '', metaDescription: '' });
                 setMediaItems([]);
+                setVariants(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
+                setColors([]);
+                setRequiresImage(false);
             }
         }
     }, [isOpen, initialData, reset, dispatch]);
@@ -135,8 +165,11 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         });
         
         // Add variants
-        const variantPayload = [{ type: 'Size', options: variants }];
+        const variantPayload: { type: string; options: string[] }[] = [];
+        if (variants.length > 0) variantPayload.push({ type: 'Size', options: variants });
+        if (colors.length > 0) variantPayload.push({ type: 'Color', options: colors });
         formData.append('variants', JSON.stringify(variantPayload));
+        formData.append('requiresImage', String(requiresImage));
 
         // Add kept existing images
         const existingImagesToKeep = mediaItems.filter(m => m.type === 'existing').map(m => m.url);
@@ -333,6 +366,119 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                                     ))}
                                                 </AnimatePresence>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Color Section */}
+                                    <div className="space-y-6 pt-6">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-300 flex items-center gap-2">
+                                                <Palette size={14} /> Colour Palette
+                                            </label>
+                                            <span className="text-[10px] font-medium text-zinc-400 italic">Select or Create</span>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            {/* Predefined Suggestions */}
+                                            <div className="flex flex-wrap gap-2">
+                                                {COLOR_PALETTE.map(suggestion => (
+                                                    <button
+                                                        key={suggestion.name}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (!colors.includes(suggestion.name)) {
+                                                                setColors(prev => [...prev, suggestion.name]);
+                                                            }
+                                                        }}
+                                                        className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-zinc-100 bg-zinc-50 hover:border-gold hover:text-gold hover:bg-gold/5 transition-all text-zinc-400 flex items-center gap-1.5"
+                                                    >
+                                                        <span className="w-2.5 h-2.5 rounded-full border border-zinc-200" style={{ backgroundColor: suggestion.hex }} />
+                                                        + {suggestion.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* Custom Input */}
+                                            <div className="flex gap-2 items-center">
+                                                <input 
+                                                    id="custom-color-input"
+                                                    placeholder="Enter custom colour (name or #hex)..."
+                                                    className="flex-1 bg-zinc-50 border-none rounded-xl px-4 py-3 text-xs font-medium focus:ring-1 focus:ring-gold/20 outline-none transition-all"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            const val = (e.target as HTMLInputElement).value.trim();
+                                                            if (val && !colors.includes(val)) {
+                                                                setColors(prev => [...prev, val]);
+                                                                (e.target as HTMLInputElement).value = '';
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const input = document.getElementById('custom-color-input') as HTMLInputElement;
+                                                        const val = input.value.trim();
+                                                        if (val && !colors.includes(val)) {
+                                                            setColors(prev => [...prev, val]);
+                                                            input.value = '';
+                                                        }
+                                                    }}
+                                                    className="bg-gold/10 text-gold p-3 rounded-xl hover:bg-gold hover:text-white transition-all active:scale-95"
+                                                >
+                                                    <Plus size={18} />
+                                                </button>
+                                            </div>
+
+                                            {/* Active Colors List */}
+                                            <div className="grid grid-cols-1 gap-2 pt-2">
+                                                <AnimatePresence>
+                                                    {colors.map((c) => (
+                                                        <motion.div 
+                                                            key={c}
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                            exit={{ opacity: 0, x: 10 }}
+                                                            className="flex items-center justify-between p-4 bg-white rounded-2xl border border-zinc-100 font-bold text-xs text-zinc-700 shadow-sm group"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="w-4 h-4 rounded-full border border-zinc-200" style={{ backgroundColor: resolveColorHex(c) }} />
+                                                                {c}
+                                                            </div>
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => setColors(prev => prev.filter(item => item !== c))}
+                                                                className="p-1 px-2.5 rounded-lg hover:bg-rose-50 text-zinc-200 hover:text-rose-500 transition-all font-black text-[10px] uppercase tracking-widest"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </motion.div>
+                                                    ))}
+                                                </AnimatePresence>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Customer Image Intake Toggle */}
+                                    <div className="space-y-6 pt-6">
+                                        <div className="p-8 bg-zinc-50 rounded-[2rem] border border-zinc-100 flex items-center justify-between gap-6">
+                                            <div className="flex items-start gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center">
+                                                    <Camera size={18} className="text-gold" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 block">Collect Customer Image</label>
+                                                    <p className="text-[11px] font-medium text-zinc-400 italic mt-1 max-w-[260px]">Require the buyer to upload a personal image (photo / reference) with this product.</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRequiresImage(prev => !prev)}
+                                                className={`w-16 h-8 rounded-full transition-all flex items-center px-1 ${requiresImage ? 'bg-gold justify-end' : 'bg-zinc-300 justify-start'}`}
+                                            >
+                                                <span className="w-6 h-6 rounded-full bg-white shadow-md transition-all" />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

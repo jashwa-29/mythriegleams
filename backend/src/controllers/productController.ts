@@ -53,6 +53,7 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         details, 
         metaDescription,
         stockStatus,
+        requiresImage,
         variants // JSON string because it's FormData
     } = req.body;
     
@@ -65,7 +66,8 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         story,
         details,
         metaDescription,
-        stockStatus: stockStatus || 'made-to-order'
+        stockStatus: stockStatus || 'made-to-order',
+        requiresImage: requiresImage === true || requiresImage === 'true'
     };
 
     // Parse variants if provided as string
@@ -108,7 +110,7 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
         return next(new ErrorResponse('Product for revision not found.', 404));
     }
 
-    const { name, slug, category, price, mrp, story, details, metaDescription, stockStatus, variants, existingImages } = req.body;
+    const { name, slug, category, price, mrp, story, details, metaDescription, stockStatus, requiresImage, variants, existingImages } = req.body;
     
     product.name = name || product.name;
     product.slug = slug || product.slug;
@@ -119,6 +121,7 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
     product.details = details || product.details;
     product.metaDescription = metaDescription || product.metaDescription;
     product.stockStatus = stockStatus || product.stockStatus;
+    product.requiresImage = requiresImage === true || requiresImage === 'true';
 
     if (variants) {
         try {

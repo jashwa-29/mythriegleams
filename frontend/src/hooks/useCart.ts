@@ -20,6 +20,8 @@ interface AddPayload {
   price: number;
   quantity?: number;
   selectedVariant?: string;
+  selectedColor?: string;
+  customerImage?: string;
 }
 
 export function useCart() {
@@ -39,6 +41,8 @@ export function useCart() {
         price: payload.price,
         quantity: payload.quantity ?? 1,
         selectedVariant: payload.selectedVariant ?? "",
+        selectedColor: payload.selectedColor ?? "",
+        customerImage: payload.customerImage ?? "",
       }));
     }
     dispatch(openCart());

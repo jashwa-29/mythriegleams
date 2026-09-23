@@ -1,6 +1,6 @@
 "use client";
 
-import { Cormorant_Garamond, DM_Sans, Playfair_Display } from "next/font/google";
+import { Cormorant_Garamond, DM_Sans, Playfair_Display, Quicksand } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -25,6 +25,12 @@ const playfair = Playfair_Display({
   subsets: ["latin"],
   weight: ["400", "700"],
   variable: "--font-playfair",
+});
+
+const quicksand = Quicksand({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-quicksand",
 });
 
 import { Toaster } from "react-hot-toast";
@@ -54,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${cormorant.variable} ${dmSans.variable} ${playfair.variable} h-full antialiased`}
+      className={`${cormorant.variable} ${dmSans.variable} ${playfair.variable} ${quicksand.variable} h-full antialiased`}
     >
       <head>
         <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
@@ -62,7 +68,6 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         <ReduxProvider>
           <Toaster position="top-right" />
-          {!isAdmin && <AnnouncementBar />}
           {!isAdmin && <Navbar />}
           <main className="flex-grow">
             {children}

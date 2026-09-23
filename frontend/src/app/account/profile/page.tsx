@@ -33,6 +33,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (!userInfo) {
@@ -125,7 +130,7 @@ export default function ProfilePage() {
     "Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Delhi","Puducherry"
   ];
 
-  if (!userInfo) return null;
+  if (!hydrated || !userInfo) return null;
 
   return (
     <div className="min-h-screen bg-[#fdfdfb]">

@@ -223,6 +223,20 @@ const ProductManagement = () => {
                                         <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.category}</div>
                                     </div>
                                 </div>
+                                {(inspectedProduct.variants?.length > 0 || inspectedProduct.requiresImage) && (
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                        {inspectedProduct.variants?.map((vg: any) => (
+                                            <span key={vg.type} className="px-2.5 py-1 rounded-lg border border-zinc-200 bg-zinc-50 text-[9px] font-bold text-zinc-500">
+                                                {vg.type}: {vg.options.join(", ")}
+                                            </span>
+                                        ))}
+                                        {inspectedProduct.requiresImage && (
+                                            <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[9px] font-bold text-amber-600 uppercase">
+                                                Requires Customer Photo
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                              <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between">
                                 <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setDeleteModalOpen(true); }} className="flex items-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all"><Trash2 size={16}/> Delete Product</button>

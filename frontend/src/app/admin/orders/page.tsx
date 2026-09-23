@@ -236,10 +236,21 @@ const OrderManagement = () => {
                                                     <tbody className="divide-y divide-zinc-100">
                                                         {inspectedOrder.orderItems.map((item: any, i: number) => (
                                                             <tr key={i}>
-                                                                <td className="px-6 py-4 flex items-center gap-4">
-                                                                    <div className="w-8 h-8 bg-zinc-50 rounded border border-zinc-100 overflow-hidden"><img src={getImageUrl(item.image)} className="w-full h-full object-cover" /></div>
-                                                                    <div className="font-bold text-zinc-900">{item.name}</div>
-                                                                </td>
+<td className="px-6 py-4 flex items-center gap-4">
+                                                                     <div className="w-8 h-8 bg-zinc-50 rounded border border-zinc-100 overflow-hidden"><img src={getImageUrl(item.image)} className="w-full h-full object-cover" /></div>
+                                                                     <div>
+                                                                         <div className="font-bold text-zinc-900">{item.name}</div>
+                                                                         {[item.selectedVariant, item.selectedColor].filter(Boolean).length > 0 && (
+                                                                             <div className="text-[9px] text-zinc-400 uppercase tracking-wide font-bold mt-0.5">{[item.selectedVariant, item.selectedColor].filter(Boolean).join(" · ")}</div>
+                                                                         )}
+                                                                         {item.customerImage && (
+                                                                             <div className="flex items-center gap-1.5 mt-1">
+                                                                                 <img src={item.customerImage} alt="Customer photo" className="w-5 h-5 rounded border border-zinc-200 object-cover" />
+                                                                                 <span className="text-[9px] text-zinc-400">Customer Photo</span>
+                                                                             </div>
+                                                                         )}
+                                                                     </div>
+                                                                 </td>
                                                                 <td className="px-6 py-4 text-center font-bold">x{item.qty}</td>
                                                                 <td className="px-6 py-4 text-right font-bold">₹{(item.qty * item.price).toLocaleString()}</td>
                                                             </tr>

@@ -3,16 +3,42 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import SectionHeader from "@/components/SectionHeader";
-import ProductCard from "@/components/ProductCard";
 import Hero from "@/components/Hero";
+import ProductCard from "@/components/ProductCard";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProducts } from "@/redux/slices/productSlice";
 import { fetchCollections } from "@/redux/slices/collectionSlice";
 import { createInquiry } from "@/redux/slices/inquirySlice";
 import { RootState } from "@/redux/store";
-import { Sparkles, Loader2, Package, CheckCircle2 } from "lucide-react";
+import { Loader2, Package, CheckCircle2, Plus } from "lucide-react";
+import { motion } from "framer-motion";
 import { Product } from "@/data/products";
 import { getImageUrl } from '@/utils/getImageUrl';
+import { useCart } from '@/hooks/useCart';
+
+/* ── Inline add-to-cart button — needs hook so must be its own component ── */
+function BestSellerAddBtn({ product, className, showText }: { product: Product, className?: string, showText?: boolean }) {
+  const { addToCart } = useCart();
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        addToCart({
+          productId: (product as any)._id || String(product.id),
+          name:      product.name,
+          image:     (product as any).images?.[0] || '',
+          price:     product.price,
+          quantity:  1,
+        });
+      }}
+      aria-label="Add to cart"
+      className={className || "w-9 h-9 rounded-full bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shrink-0"}
+    >
+      {showText ? "Add to Cart" : <Plus size={14} strokeWidth={2} />}
+    </button>
+  );
+}
 
 export default function Home() {
   const dispatch = useAppDispatch();
@@ -37,7 +63,27 @@ export default function Home() {
     }, observerOptions);
 
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-    return () => observer.disconnect();
+    // Parallax Animation logic
+    const handleScroll = () => {
+      document.querySelectorAll('.parallax').forEach(el => {
+        const rect = el.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        // Only animate if in or near viewport
+        if (rect.top < viewportHeight && rect.bottom > 0) {
+          const speed = parseFloat(el.getAttribute('data-speed') || '0.1');
+          const yOffset = (rect.top - viewportHeight / 2) * speed;
+          (el as HTMLElement).style.transform = `translate3d(0, ${yOffset}px, 0)`;
+        }
+      });
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    // Trigger once on load
+    handleScroll();
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, [dispatch]);
 
   const handleInquirySubmit = (e: React.FormEvent) => {
@@ -56,234 +102,432 @@ export default function Home() {
   const featuredProducts = (products as Product[]).slice(0, 4);
 
   return (
-    <div className="flex flex-col gap-24 font-sans">
+    <div className="flex flex-col font-sans">
       <Hero />
 
-      {/* MARQUEE SECTION */}
-      <section className="bg-brown overflow-hidden py-4 border-y border-border">
-        <div className="flex gap-12 whitespace-nowrap animate-marquee">
-          {[1,2,3,4,5].map((i) => (
-            <div key={i} className="flex items-center gap-8 text-gold-light text-[0.78rem] tracking-[0.14em] uppercase font-sans font-medium">
-              <span>✦ Hand-Crafted with Soul</span>
-              <span>✦ Perfect for Gifting</span>
-              <span>✦ Miniatures That Wow</span>
-              <span>✦ Pan-India Shipping</span>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {/* COLLECTIONS / GALLERIES SECTION */}
-      <section className="max-w-[1320px] mx-auto px-8 w-full reveal">
-        <SectionHeader 
-          eyebrow="Curated Galleries"
-          title="Explore Our Artisanal Collections"
-          subtitle="Discover miniatures categorized by theme, from traditional food replicas to modern lifestyle clocks."
-        />
-        
-        {collectionsLoading ? (
-            <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-gold" /></div>
-        ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {collections.map((col: any) => (
-                    <Link 
-                        key={col._id} 
-                        href={`/category/${col.slug}`}
-                        className="group relative h-[300px] rounded-[2.5rem] overflow-hidden border border-border shadow-sm hover:border-gold transition-all"
-                    >
-                        {col.image ? (
-                            <img src={getImageUrl(col.image)} alt={col.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                        ) : (
-                            <div className="w-full h-full bg-zinc-50 flex items-center justify-center text-zinc-200"><Package size={48} /></div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                        <div className="absolute bottom-8 left-8 text-white">
-                            <h3 className="text-xl font-bold font-serif italic">{col.name}</h3>
-                            <p className="text-[10px] uppercase font-black tracking-widest text-white/70 mt-1">Explore Collection →</p>
-                        </div>
-                    </Link>
-                ))}
-            </div>
-        )}
-      </section>
+      {/* ── CURATED GALLERIES — POTTERY EDITORIAL LAYOUT ── */}
+      <section className="w-full py-16 md:py-24">
+        <div className="max-w-[1440px] mx-auto px-8 sm:px-12">
 
-      {/* BEST SELLERS SECTION */}
-      <section id="products" className="max-w-[1320px] mx-auto px-8 w-full scroll-m-20 reveal">
-        <SectionHeader
-          eyebrow="Top picks"
-          title="Best Selling Miniatures"
-          subtitle="Our most loved creations that have stolen hearts across the country. Hand-picked for you."
-          btnLabel="View All"
-          btnHref="/category/all"
-        />
-        
-        {productsLoading ? (
-            <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-gold" /></div>
-        ) : products.length === 0 ? (
-            <div className="py-20 text-center text-zinc-400 font-medium italic">No products found in the vault yet.</div>
-        ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {featuredProducts.map((product: Product) => (
-                    <ProductCard key={product._id || (product as any).id} product={product} />
-                ))}
-            </div>
-        )}
-      </section>
+          {/* ── TOP HEADER ROW ── */}
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }} 
+            whileInView={{ opacity: 1, y: 0 }} 
+            viewport={{ once: true, margin: "-50px" }} 
+            transition={{ duration: 0.8 }}
+            className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 items-start mb-14 md:mb-16"
+          >
 
-      {/* STORY SECTION */}
-      <section className="max-w-[1320px] mx-auto px-8 py-24 bg-white rounded-[2.5rem] mt-8 shadow-sm reveal">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-          <div className="relative aspect-[4/5] rounded-[24px] overflow-hidden bg-gradient-to-br from-blush via-bisque to-blush flex items-center justify-center text-[8rem] group">
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[rgba(92,58,46,0.15)] transition-opacity duration-300 group-hover:opacity-60" />
-            🏺
-            <div className="absolute -bottom-5 -right-5 w-30 h-30 bg-gold rounded-full flex flex-col items-center justify-center font-serif text-white text-center leading-none text-[0.85rem] font-semibold shadow-[0_8px_30px_rgba(212,175,55,0.4)]">
-              Since <span>2018</span>
+            {/* Left: eyebrow + large heading */}
+            <div>
+              <span className="text-[var(--text-faint)] text-[10px] font-bold tracking-[0.25em] uppercase mb-4 block">
+                Our Product
+              </span>
+              <h2 className="text-[var(--text)] text-3xl md:text-4xl lg:text-5xl font-bold leading-[1.2] tracking-tight">
+                Explore Our<br /> Artisanal Collections
+              </h2>
             </div>
-          </div>
-          <div className="flex flex-col gap-8">
-            <SectionHeader
-              eyebrow="Our story"
-              title="A Hand-Made Craft From Chennai To All Over India"
-              subtitle="Uma Gayathri founded Mythris Gleams with a simple vision: to turn memories into lasting miniature art. Today, we've delivered thousands of smiles across the country."
-            />
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { emoji: "👐", title: "Hand sculpted", text: "Every part is shaped by hand, no molds used for main designs." },
-                { emoji: "🖌️", title: "Hand painted", text: "Vibrant and delicate detailing using top quality colors." },
-                { emoji: "🎁", title: "Personalized", text: "Themes, names, and concepts tailored to your story." },
-                { emoji: "💎", title: "Premium clay", text: "High grade air-dry and polymer clay for durability." },
-              ].map((feature, i) => (
-                <div key={i} className="bg-bg p-5 rounded-[16px] border border-border group hover:border-gold hover:translate-x-1 transition-all duration-300">
-                  <span className="text-2xl mb-1 block">{feature.emoji}</span>
-                  <h4 className="font-serif text-base font-semibold text-brown mb-1">{feature.title}</h4>
-                  <p className="text-[0.78rem] text-txt-muted leading-relaxed font-sans">{feature.text}</p>
-                </div>
+
+            {/* Right: body text + CTA */}
+            <div className="flex flex-col items-start justify-center gap-6 pt-0 md:pt-10">
+              <p className="text-[var(--text-muted)] text-[15px] leading-relaxed">
+                Each piece in our collection is handcrafted by skilled artisans using 
+                premium clay — shaped, fired, and finished with care. From functional 
+                tableware to sculptural centerpieces, explore a world of texture, warmth, 
+                and timeless artisanal beauty.
+              </p>
+              <Link
+                href="/category/all"
+                className="inline-block bg-[var(--bg-muted)] hover:bg-[var(--accent)] text-[var(--text)] hover:text-white text-[11px] font-bold tracking-[0.2em] uppercase px-7 py-3 rounded-full transition-colors duration-300"
+              >
+                All Products
+              </Link>
+            </div>
+          </motion.div>
+
+          {/* ── BOTTOM: 4-CARD GRID ── */}
+          {collectionsLoading ? (
+            <div className="py-20 flex justify-center">
+              <Loader2 className="animate-spin text-[var(--accent)]" size={28} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+              {collections.slice(0, 4).map((col: any) => (
+                <Link
+                  key={col._id}
+                  href={`/category/${col.slug}`}
+                  className="group flex flex-col"
+                >
+                  {/* Image */}
+                  <div className="relative w-full aspect-square rounded-[10px] overflow-hidden bg-[var(--bg-muted)] mb-4 parallax" data-speed="-0.03">
+                    {col.image ? (
+                      <img
+                        src={getImageUrl(col.image)}
+                        alt={col.name}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-[1.04]"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-[var(--text-faint)]">
+                        <Package size={40} strokeWidth={1.2} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Text */}
+                  <div className="text-center px-1">
+                    <h3 className="text-[var(--text)] text-[15px] font-bold leading-[1.2] mb-1.5 group-hover:text-[var(--accent)] transition-colors duration-300">
+                      {col.name}
+                    </h3>
+                    <p className="text-[var(--text-faint)] text-[13px] leading-relaxed line-clamp-2">
+                      {col.description || "Handcrafted with care, shaped by skilled artisans using premium clay."}
+                    </p>
+                  </div>
+                </Link>
               ))}
             </div>
-            
-            <Link 
-              href="/about" 
-              className="mt-4 bg-brown text-white w-max px-8 py-3 rounded-full text-[0.85rem] tracking-wider uppercase hover:bg-gold transition-colors font-medium"
-            >
-              Learn More
-            </Link>
+          )}
+        </div>
+      </section>
+
+      {/* ── BEST SELLERS — MINIMALIST GALLERY ── */}
+      <section id="products" className="w-full py-16 md:py-24 scroll-m-20 bg-white relative overflow-hidden">
+        
+        <div className="max-w-[1440px] mx-auto px-8 sm:px-12">
+          
+          {/* ── Unique Header (Centered Watermark Style) ── */}
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }} 
+            whileInView={{ opacity: 1, y: 0 }} 
+            viewport={{ once: true, margin: "-50px" }} 
+            transition={{ duration: 0.8 }}
+            className="relative mb-20 flex flex-col items-center justify-center text-center"
+          >
+
+            <div className="z-10 pt-6 md:pt-12">
+              <span className="text-[var(--accent)] text-[10px] font-bold tracking-[0.4em] uppercase mb-4 block">
+                 Curated Selection
+              </span>
+              <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-5">
+                 Best Selling Miniatures
+              </h2>
+              <p className="text-[var(--text-muted)] text-[15px] leading-relaxed max-w-md mx-auto">
+                 Our most loved creations, meticulously hand-crafted and cherished across the country.
+              </p>
+            </div>
+          </motion.div>
+
+          {/* ── 4-Card Minimalist Grid ── */}
+          {productsLoading ? (
+            <div className="py-20 flex justify-center">
+              <Loader2 className="animate-spin text-[var(--accent)]" size={36} />
+            </div>
+          ) : products.length === 0 ? (
+            <div className="py-20 text-center text-[var(--text-faint)] italic text-[16px]">
+              No products found in the vault yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+              {featuredProducts.map((product: Product, i: number) => {
+                const productSlug  = product.slug || product.id;
+                const productImage = (product as any).images?.[0] ?? null;
+                const productPrice = product.price;
+                const productMRP   = (product as any).mrp || (product as any).oldPrice;
+                const catTitle     = product.category;
+
+                return (
+                  <div key={(product as any)._id || product.id}>
+                    <ProductCard product={product as any} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          
+          {/* Centered View All Link */}
+          <div className="mt-16 flex justify-center">
+             <Link
+                href="/category/all"
+                className="inline-flex items-center gap-3 text-[var(--accent)] text-[11px] font-bold tracking-[0.2em] uppercase group hover:text-[var(--text)] transition-colors duration-300"
+              >
+                View Complete Vault
+                <span className="inline-block group-hover:translate-x-1 transition-transform duration-300">→</span>
+             </Link>
           </div>
         </div>
       </section>
 
-      {/* CUSTOM SECTION */}
-      <section id="custom" className="bg-brown-light/10 py-24 rounded-[3rem] max-w-[1400px] mx-auto px-8 relative overflow-hidden group">
-        <div className="absolute inset-0 bg-gradient-to-br from-brown/5 via-gold/5 to-brown/5 opacity-50 pointer-events-none" />
-        <div className="max-w-[1320px] mx-auto relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div className="flex flex-col gap-10">
-              <SectionHeader
-                eyebrow="Made for you"
-                title="Your Story, Scaled Down to Miniature"
-                subtitle="Want something truly unique? We create fully custom miniatures based on your favorite food, pets, hobbies or memories."
-              />
-              
-              <div className="flex flex-col gap-6">
-                {[
-                  { step: "1", title: "Idea sharing", text: "Tell us your theme, concept or send photos." },
-                  { step: "2", title: "Sketch & Design", text: "We finalize the layout and miniature details." },
-                  { step: "3", title: "Hand Sculpting", text: "We carefully shape and paint your piece." },
-                  { step: "4", title: "Doorstep Delivery", text: "Shipped securely to your home." },
-                ].map((s, i) => (
-                  <div key={i} className="flex gap-4 items-start">
-                    <div className="w-9 h-9 rounded-full border-1.5 border-gold flex items-center justify-center font-serif text-gold shrink-0 text-base">
-                      {s.step}
-                    </div>
-                    <div>
-                      <h4 className="font-serif text-[1.05rem] font-semibold text-brown mb-0.5">{s.title}</h4>
-                      <p className="text-[0.78rem] text-txt-muted font-sans font-light">{s.text}</p>
-                    </div>
+      {/* ── OUR HERITAGE (STORY SECTION) ── */}
+      <section className="w-full py-16 md:py-24 bg-white relative overflow-hidden group">
+        
+        {/* Animated Background Seal (Addon) */}
+        <div className="absolute -top-10 -right-20 md:top-10 md:right-10 w-96 h-96 lg:w-[500px] lg:h-[500px] animate-[spin_60s_linear_infinite] opacity-[0.02] pointer-events-none select-none z-0 parallax" data-speed="0.2">
+          <svg viewBox="0 0 100 100" className="w-full h-full fill-[var(--text)]">
+            <path id="heritageCircle" d="M 50, 50 m -40, 0 a 40,40 0 1,1 80,0 a 40,40 0 1,1 -80,0" fill="none" />
+            <text className="text-[9px] font-bold tracking-[0.25em] uppercase">
+              <textPath href="#heritageCircle" startOffset="0%">
+                Mythris Gleams • Handcrafted with love • Since 2018 • Mythris Gleams • Handcrafted with love • Since 2018 • 
+              </textPath>
+            </text>
+          </svg>
+        </div>
+
+        <div className="max-w-[1440px] mx-auto px-8 sm:px-12 relative z-10">
+          
+          <div className="flex items-center gap-4 mb-16 md:mb-24">
+            <span className="w-12 h-px bg-[var(--text-faint)]"></span>
+            <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-[var(--text-faint)]">Our Heritage</span>
+          </div>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }} 
+            whileInView={{ opacity: 1, y: 0 }} 
+            viewport={{ once: true, margin: "-50px" }} 
+            transition={{ duration: 0.8 }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32"
+          >
+             {/* Left: The Vision */}
+             <div className="relative">
+                <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-[4rem] font-bold leading-[1.1] tracking-tight mb-10 max-w-xl relative parallax" data-speed="-0.05">
+                  From Chennai to <br />
+                  <span className="text-[var(--accent)] relative inline-block">
+                    across India.
+                    {/* Subtle underline animation */}
+                    <span className="absolute bottom-2 left-0 w-full h-[6px] bg-[var(--accent)] opacity-20 -z-10 group-hover:h-[60%] transition-all duration-700 ease-out"></span>
+                  </span>
+                </h2>
+                <div className="relative pl-8 md:pl-12 border-l border-[var(--border)]">
+                   <div className="absolute top-0 left-[-1.5px] w-[3px] h-16 bg-[var(--accent)]" />
+                   <p className="text-[var(--text-muted)] text-[16px] md:text-[18px] leading-relaxed max-w-lg mb-8">
+                     Founded by <strong className="text-[var(--text)] font-semibold">Uma Gayathri</strong> in 2018 with a simple vision: to capture fleeting memories and transform them into lasting miniature art. 
+                   </p>
+                   <p className="text-[var(--text-muted)] text-[15px] leading-relaxed max-w-lg">
+                     Today, our atelier has delivered thousands of hand-sculpted smiles, meticulously crafting stories into timeless physical forms.
+                   </p>
+                   
+                   <Link href="/about" className="inline-flex items-center gap-4 mt-12 group/btn">
+                     <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--text)] group-hover/btn:text-[var(--accent)] transition-colors duration-300">
+                       Read Full Story
+                     </span>
+                     <span className="w-12 h-px bg-[var(--text)] group-hover/btn:w-20 group-hover/btn:bg-[var(--accent)] transition-all duration-500"></span>
+                   </Link>
+                </div>
+             </div>
+
+             {/* Right: The Pillars */}
+             <div className="flex flex-col justify-center">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-12">
+                  
+                  {/* Pillar 1 */}
+                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
+                     {/* Animated top border */}
+                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
+                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
+                     
+                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">01</span>
+                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Hand Sculpted</h4>
+                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
+                       Every piece is shaped entirely by hand. No molds are used for our main designs, ensuring each creation is wholly unique.
+                     </p>
                   </div>
-                ))}
-              </div>
+                  
+                  {/* Pillar 2 */}
+                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
+                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
+                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
+                     
+                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">02</span>
+                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Hand Painted</h4>
+                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
+                       Vibrant and delicate detailing is achieved using top quality colors and microscopic brushes for breathtaking precision.
+                     </p>
+                  </div>
+
+                  {/* Pillar 3 */}
+                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
+                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
+                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
+                     
+                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">03</span>
+                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Premium Clay</h4>
+                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
+                       Crafted using high-grade, resilient air-dry and polymer clay designed for lifelong durability and a smooth finish.
+                     </p>
+                  </div>
+
+                  {/* Pillar 4 */}
+                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
+                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
+                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
+                     
+                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">04</span>
+                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Personalized</h4>
+                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
+                       Themes, names, and concepts perfectly tailored to your memories. You dream it, we sculpt it.
+                     </p>
+                  </div>
+
+               </div>
+             </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── BESPOKE COMMISSION (CUSTOM SECTION) ── */}
+      <section id="custom" className="w-full bg-white py-16 md:py-24 border-t border-[var(--border)]">
+        <div className="max-w-[1320px] mx-auto px-8 sm:px-12">
+          
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }} 
+            whileInView={{ opacity: 1, y: 0 }} 
+            viewport={{ once: true, margin: "-50px" }} 
+            transition={{ duration: 0.8 }}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center"
+          >
+            
+            {/* Left side: Editorial Typography */}
+            <div className="flex flex-col order-2 lg:order-1">
+               <div className="inline-block px-4 py-1.5 rounded-full border border-[var(--accent)] text-[var(--accent)] text-[9px] font-bold tracking-[0.3em] uppercase w-max mb-8">
+                 Bespoke Service
+               </div>
+
+               <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-[4.5rem] font-bold leading-[1.05] tracking-tight mb-8">
+                 Your story,<br />
+                 <span className="text-[var(--text-faint)] italic font-serif font-light">miniaturized.</span>
+               </h2>
+
+               <p className="text-[var(--text-muted)] text-[16px] md:text-[18px] leading-[1.8] max-w-md mb-12">
+                 We transform your cherished memories, favorite foods, and beloved pets into everlasting miniature art. Share your vision, and we will sculpt it into reality.
+               </p>
+
+               <div className="grid grid-cols-2 gap-y-8 gap-x-12">
+                  <div>
+                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">01</div>
+                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Share Idea</h4>
+                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Send us your theme, concept, or reference photos.</p>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">02</div>
+                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Sketch & Design</h4>
+                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">We finalize the layout before the clay is touched.</p>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">03</div>
+                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Hand Sculpt</h4>
+                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Every detail is shaped and painted by artisan hands.</p>
+                  </div>
+                  <div>
+                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">04</div>
+                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Delivery</h4>
+                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Packaged securely and shipped right to your door.</p>
+                  </div>
+               </div>
             </div>
 
-            <div className="bg-white/40 backdrop-blur-md rounded-[2.5rem] border border-border p-10 shadow-lg group-hover:border-gold/50 transition-all duration-500">
-               {inquirySuccess ? (
-                  <div className="py-20 text-center flex flex-col items-center gap-6">
-                    <CheckCircle2 size={64} className="text-emerald-500" />
-                    <h3 className="font-serif text-3xl font-black text-brown italic leading-tight">Vision Captured!</h3>
-                    <p className="text-txt-muted text-sm max-w-[300px]">Uma Gayathri will reach out to you via WhatsApp shortly to begin the collaboration.</p>
-                  </div>
-               ) : (
-                  <form onSubmit={handleInquirySubmit} className="flex flex-col gap-5">
-                    <h3 className="font-serif text-2xl font-semibold text-brown mb-8 text-center italic">Initiate Custom Narrative</h3>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[0.75rem] tracking-wider uppercase text-txt-muted font-medium ml-1">Your Identity</label>
-                      <input 
-                        required
-                        value={inquiryData.name}
-                        onChange={(e) => setInquiryData({...inquiryData, name: e.target.value})}
-                        type="text" 
-                        placeholder="e.g. Master Chef John" 
-                        className="bg-white w-full h-12 rounded-xl px-4 border border-border focus:border-gold outline-none transition-all font-sans text-sm" 
-                      />
+            {/* Right side: The Form */}
+            <div className="order-1 lg:order-2 bg-[var(--bg-subtle)] rounded-[2.5rem] p-10 md:p-14 relative overflow-hidden group border border-[var(--border)] shadow-sm">
+               {/* Decorative background shape */}
+               <div className="absolute -top-32 -right-32 w-80 h-80 bg-[var(--bg-muted)] rounded-full blur-3xl opacity-50 group-hover:bg-[var(--accent)] group-hover:opacity-10 transition-all duration-1000 parallax" data-speed="-0.15" />
+               
+               <div className="relative z-10">
+                 {inquirySuccess ? (
+                    <div className="py-20 text-center flex flex-col items-center gap-6">
+                      <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-sm">
+                        <CheckCircle2 size={32} className="text-[var(--accent)]" />
+                      </div>
+                      <h3 className="text-3xl font-bold text-[var(--text)] tracking-tight">Vision Captured.</h3>
+                      <p className="text-[var(--text-muted)] text-[15px] max-w-[280px] mx-auto leading-relaxed">Uma Gayathri will reach out via WhatsApp shortly to begin your bespoke collaboration.</p>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[0.75rem] tracking-wider uppercase text-txt-muted font-medium ml-1">WhatsApp Narrative Hub</label>
-                      <input 
-                        required
-                        value={inquiryData.phone}
-                        onChange={(e) => setInquiryData({...inquiryData, phone: e.target.value})}
-                        type="tel" 
-                        placeholder="e.g. 98765 43210" 
-                        className="bg-white w-full h-12 rounded-xl px-4 border border-border focus:border-gold outline-none transition-all font-sans text-sm" 
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[0.75rem] tracking-wider uppercase text-txt-muted font-medium ml-1">The Artisanal Vision</label>
-                      <textarea 
-                        required
-                        value={inquiryData.message}
-                        onChange={(e) => setInquiryData({...inquiryData, message: e.target.value})}
-                        rows={3} 
-                        placeholder="Describe your dream artisanal miniature..." 
-                        className="bg-white w-full rounded-xl px-4 py-3 border border-border focus:border-gold outline-none transition-all font-sans text-sm resize-none"
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      disabled={inquiryLoading}
-                      className="bg-brown text-white h-12 rounded-full uppercase tracking-widest text-[0.8rem] font-black hover:bg-gold transition-all mt-2 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
-                    >
-                      {inquiryLoading && <Loader2 size={16} className="animate-spin" />}
-                      <span>{inquiryLoading ? 'Disseminating...' : 'Submit Vision 💬'}</span>
-                    </button>
-                  </form>
-               )}
+                 ) : (
+                    <form onSubmit={handleInquirySubmit} className="flex flex-col gap-8">
+                      <div>
+                        <h3 className="text-[var(--text)] text-[28px] font-bold tracking-tight mb-2">Initiate Narrative</h3>
+                        <p className="text-[var(--text-muted)] text-[14px]">We'll respond via WhatsApp within 24 hours.</p>
+                      </div>
+
+                      <div className="flex flex-col gap-5 mt-2">
+                        <div className="relative">
+                          <input
+                            required
+                            value={inquiryData.name}
+                            onChange={(e) => setInquiryData({...inquiryData, name: e.target.value})}
+                            type="text"
+                            placeholder="Your Name"
+                            className="w-full bg-white h-14 rounded-xl px-5 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm"
+                          />
+                        </div>
+                        <div className="relative">
+                          <input
+                            required
+                            value={inquiryData.phone}
+                            onChange={(e) => setInquiryData({...inquiryData, phone: e.target.value})}
+                            type="tel"
+                            placeholder="WhatsApp Number"
+                            className="w-full bg-white h-14 rounded-xl px-5 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm"
+                          />
+                        </div>
+                        <div className="relative">
+                          <textarea
+                            required
+                            value={inquiryData.message}
+                            onChange={(e) => setInquiryData({...inquiryData, message: e.target.value})}
+                            rows={4}
+                            placeholder="Describe your vision..."
+                            className="w-full bg-white rounded-xl px-5 py-4 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={inquiryLoading}
+                        className="w-full h-14 mt-4 rounded-xl bg-[var(--text)] text-white text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-[var(--accent)] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:translate-y-0 flex items-center justify-center gap-3 shadow-md"
+                      >
+                        {inquiryLoading && <Loader2 size={16} className="animate-spin" />}
+                        {inquiryLoading ? 'Sending...' : 'Submit Request'}
+                      </button>
+                    </form>
+                 )}
+               </div>
             </div>
-          </div>
+
+          </motion.div>
         </div>
       </section>
       
-      {/* WHATSAPP CTA */}
-      <section id="bulk" className="max-w-[1320px] mx-auto px-8 mb-16">
-        <div className="bg-brown rounded-[2.5rem] overflow-hidden relative group">
-          <div className="absolute inset-0 bg-[#25D366] translate-y-[102%] group-hover:translate-y-0 transition-transform duration-700 ease-in-out -z-1" />
-          <div className="px-10 py-16 text-center flex flex-col items-center gap-6 z-10 relative">
-            <div className="text-gold group-hover:text-white transition-colors duration-500 font-serif italic text-xl">
-              Planning for a wedding, birthday or event?
+      {/* ── WHATSAPP CTA (SLEEK & ELEGANT) ── */}
+      <section id="bulk" className="w-full max-w-[1000px] mx-auto px-8 sm:px-12 py-16 md:py-24">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 30 }} 
+          whileInView={{ opacity: 1, scale: 1, y: 0 }} 
+          viewport={{ once: true, margin: "-50px" }} 
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="bg-white border border-[var(--border)] rounded-[2rem] md:rounded-full p-6 md:px-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm transition-all hover:shadow-md hover:border-[#25D366]/30 group"
+        >
+          
+          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 text-center md:text-left">
+            <div className="w-12 h-12 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center shrink-0 group-hover:bg-[#25D366]/10 transition-colors duration-500">
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-muted)] group-hover:text-[#25D366] transition-colors duration-500">
+                 <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+               </svg>
             </div>
-            <h2 className="text-white text-[clamp(2rem,4vw,3.5rem)] font-serif font-semibold leading-tight max-w-[800px]">
-              Bulk Orders & Corporate Gifting Available India-Wide
-            </h2>
-            <p className="text-white/70 group-hover:text-white text-base leading-relaxed max-w-[600px] transition-colors duration-500">
-               Special rates for bulk orders (25+ units). Custom designs and packaging to suit your occasion. Let's make it memorable together.
-            </p>
-            <a 
-              href="https://wa.me/918300034451" 
-              className="bg-white text-brown group-hover:bg-brown group-hover:text-white rounded-full px-10 py-4 text-[0.88rem] tracking-widest uppercase font-sans font-bold shadow-lg transition-all transform hover:scale-110 active:scale-95"
-            >
-              Chat on WhatsApp 💬
-            </a>
+            <div>
+              <h2 className="text-[var(--text)] text-[16px] font-bold tracking-tight mb-1">
+                Events & Corporate Gifting
+              </h2>
+              <p className="text-[var(--text-muted)] text-[13px]">
+                Special rates for bulk orders (25+ units). Custom designs & packaging available.
+              </p>
+            </div>
           </div>
-        </div>
+
+          <a 
+            href="https://wa.me/918300034451" 
+            className="shrink-0 bg-white text-[var(--text)] border border-[var(--border)] group-hover:border-[#25D366] group-hover:text-[#25D366] group-hover:bg-[#25D366]/5 rounded-full px-8 py-3 text-[10px] tracking-[0.25em] uppercase font-bold transition-all duration-300"
+          >
+            Chat on WhatsApp
+          </a>
+        </motion.div>
       </section>
     </div>
   );

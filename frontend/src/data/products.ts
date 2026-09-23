@@ -19,6 +19,7 @@ export interface Product {
   details?: string; // Technical details
   metaDescription?: string; // SEO summary
   stockStatus?: 'in-stock' | 'out-of-stock' | 'made-to-order';
+  requiresImage?: boolean;
   images?: string[]; // Dynamic image array
   sizes: string[];
   variants?: any[]; // Dynamic variations
