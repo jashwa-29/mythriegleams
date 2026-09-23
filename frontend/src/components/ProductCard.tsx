@@ -38,33 +38,35 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   return (
     <div className="group relative w-full rounded-xl bg-white overflow-hidden shadow-[0_1px_10px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_24px_-6px_rgba(0,0,0,0.08)] transition-all duration-500 ease-out border border-gray-100 flex flex-col">
-      <Link href={`/product/${productSlug}`} className="block relative w-full aspect-square overflow-hidden bg-[#faf9f8]">
-        {/* Image */}
-        {productImage ? (
-          <img
-            src={getImageUrl(productImage)}
-            alt={product.name}
-            className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-105"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 font-light font-serif italic">
-            No Image
-          </div>
-        )}
+      <div className="relative w-full aspect-square overflow-hidden bg-[#faf9f8]">
+        <Link href={`/product/${productSlug}`} className="block absolute inset-0">
+          {/* Image */}
+          {productImage ? (
+            <img
+              src={getImageUrl(productImage)}
+              alt={product.name}
+              className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 font-light font-serif italic">
+              No Image
+            </div>
+          )}
 
-        {/* Overlay gradient on hover for contrast */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
+          {/* Overlay gradient on hover for contrast */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
 
-        {/* Badges */}
-        {((product as any).badge || (productMRP && productMRP > productPrice)) && (
-          <div className="absolute top-2 left-2 z-10 transition-transform duration-500 group-hover:translate-y-0.5">
-            <span className="px-2 py-1 rounded-full text-[8px] tracking-wider uppercase bg-white/90 backdrop-blur-sm text-gray-900 font-bold shadow-sm">
-              {(product as any).badge === "new" ? "New" : (product as any).badge === "hot" ? "Trending" : "Artisanal"}
-            </span>
-          </div>
-        )}
+          {/* Badges */}
+          {((product as any).badge || (productMRP && productMRP > productPrice)) && (
+            <div className="absolute top-2 left-2 z-10 transition-transform duration-500 group-hover:translate-y-0.5">
+              <span className="px-2 py-1 rounded-full text-[8px] tracking-wider uppercase bg-white/90 backdrop-blur-sm text-gray-900 font-bold shadow-sm">
+                {(product as any).badge === "new" ? "New" : (product as any).badge === "hot" ? "Trending" : "Artisanal"}
+              </span>
+            </div>
+          )}
+        </Link>
 
-        {/* Hover Quick Add Button (Bottom slide-up) */}
+        {/* Hover Quick Add Button (Bottom slide-up) — sibling of the image Link, never nested */}
         {requiresImage ? (
           <Link
             href={`/product/${productSlug}`}
@@ -81,7 +83,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <ShoppingBag size={12} strokeWidth={2} /> Quick Add
           </button>
         )}
-      </Link>
+      </div>
 
       {/* Details Section */}
       <div className="p-3 flex flex-col flex-1 bg-white z-10 relative">
