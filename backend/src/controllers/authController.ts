@@ -11,6 +11,9 @@ import ErrorResponse from '../utils/errorResponse';
  * @access  Private
  */
 export const getMe = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired.' });
+    }
     const user = await User.findById(req.user._id);
     if (user) {
         res.status(200).json({
@@ -83,6 +86,9 @@ export const loginUser = asyncHandler(async (req: Request, res: Response, next: 
  * @access  Private
  */
 export const updateUserProfile = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired.' });
+    }
     const user = await User.findById(req.user._id);
 
     if (user) {

@@ -1,12 +1,13 @@
 "use client";
 
-import React, { use, useState, useEffect } from "react";
+import React, { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import { useCart } from "@/hooks/useCart";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProductBySlug, fetchProducts } from "@/redux/slices/productSlice";
 import { Product } from "@/data/products";
+import { EXCEL_PRODUCTS } from "@/data/excelProducts";
 import { motion, AnimatePresence } from "framer-motion";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { compressImageFile } from '@/utils/compressImage';
@@ -22,7 +23,30 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
   const { selectedProduct, loading, products } = useAppSelector((state: any) => state.products);
   const { addToCart } = useCart();
 
-  const p = selectedProduct as Product | null;
+  // Excel catalog fallback if not yet in database
+  const excelFallback = useMemo(() => {
+    const item = EXCEL_PRODUCTS.find((ep) => ep.slug === slug);
+    if (!item) return null;
+    return {
+      _id: item.sku,
+      id: item.sku,
+      name: item.name,
+      slug: item.slug,
+      category: item.category,
+      price: item.price,
+      mrp: item.mrp,
+      story: item.shortDesc,
+      details: item.shortDesc,
+      images: [item.image],
+      variants: [],
+      stockStatus: 'made-to-order',
+      requiresImage: false,
+      rating: item.rating,
+      reviewCount: item.reviewsCount,
+    } as any;
+  }, [slug]);
+
+  const p = (selectedProduct || excelFallback) as Product | null;
   const [activeImage, setActiveImage] = useState(0);
   const [qty, setQty] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState("");
@@ -127,32 +151,32 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/10" />
         <div className="absolute inset-0 bg-[var(--accent)]/10 mix-blend-multiply" />
 
-        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-8 sm:px-12 pb-8 md:pb-12 flex flex-col gap-4">
+        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 pb-6 md:pb-12 flex flex-col gap-3 sm:gap-4">
           {/* Breadcrumb */}
           <motion.nav
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             aria-label="Breadcrumb"
-            className="flex items-center gap-2 flex-wrap"
+            className="flex items-center gap-1.5 sm:gap-2 flex-wrap"
           >
-            <Link href="/" className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300">
-              <Home size={14} />
+            <Link href="/" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300">
+              <Home size={13} />
             </Link>
-            <ChevronRight size={14} className="text-white/30" />
-            <Link href="/category/all" className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
-              All Products
+            <ChevronRight size={13} className="text-white/30" />
+            <Link href="/category/all" className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
+              All
             </Link>
             {p.category && (
               <>
-                <ChevronRight size={14} className="text-white/30" />
-                <Link href={`/category/${categorySlug}`} className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
+                <ChevronRight size={13} className="text-white/30" />
+                <Link href={`/category/${categorySlug}`} className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all max-w-[140px] truncate">
                   {p.category}
                 </Link>
               </>
             )}
-            <ChevronRight size={14} className="text-white/30" />
-            <span className="px-4 py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-[10px] font-bold tracking-[0.2em] uppercase max-w-[200px] truncate">
+            <ChevronRight size={13} className="text-white/30" />
+            <span className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase max-w-[120px] sm:max-w-[200px] truncate">
               {p.name}
             </span>
           </motion.nav>
@@ -163,10 +187,10 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.15 }}
           >
-            <span className="text-white/70 text-[10px] font-bold tracking-[0.25em] uppercase mb-3 block">
+            <span className="text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.25em] uppercase mb-1.5 sm:mb-3 block">
               {p.category}
             </span>
-            <h1 className="text-white text-2xl md:text-3xl lg:text-4xl font-bold leading-[1.2] tracking-tight max-w-2xl line-clamp-2">
+            <h1 className="text-white text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold leading-[1.2] tracking-tight max-w-2xl line-clamp-2">
               {p.name}
             </h1>
           </motion.div>
@@ -174,7 +198,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
       </section>
 
       {/* ── PRODUCT DETAIL ── */}
-      <section className="max-w-[1440px] mx-auto px-8 sm:px-12 pt-10 pb-16 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start w-full">
+      <section className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-16 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 items-start w-full">
 
         {/* LEFT: Gallery */}
         <motion.div
@@ -183,7 +207,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col gap-4 lg:sticky lg:top-[100px]"
         >
-          <div className="aspect-square w-full max-h-[65vh] rounded-[2rem] bg-[var(--bg-subtle)] overflow-hidden relative group border border-[var(--border)]">
+          <div className="aspect-square w-full max-h-[50vh] sm:max-h-[65vh] rounded-2xl sm:rounded-[2rem] bg-[var(--bg-subtle)] overflow-hidden relative group border border-[var(--border)]">
             <AnimatePresence mode="wait">
               {p.images && p.images.length > 0 ? (
                 <motion.img
@@ -353,7 +377,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                 onClick={() => addToCart({
                   productId: (p as any)._id || String(p.id),
                   name: p.name,
-                  image: (p as any).images?.[0] || "",
+                  image: (p as any).images?.[0] || (p as any).image || "",
                   price: p.price,
                   weight: p.weight || 0,
                   quantity: qty,
@@ -427,23 +451,23 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
 
       {/* ── RELATED PRODUCTS ── */}
       {relatedProducts.length > 0 && (
-        <section className="max-w-[1440px] mx-auto px-8 sm:px-12 py-12 border-t border-[var(--border)] w-full mb-8">
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-10 sm:py-12 border-t border-[var(--border)] w-full mb-16 lg:mb-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-50px" }}
             transition={{ duration: 0.8 }}
           >
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-10">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-5 mb-6 sm:mb-10">
               <div className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[var(--accent)] block">Discover More</span>
-                <h2 className="text-[var(--text)] text-2xl md:text-3xl font-bold tracking-tight">You May Also Love</h2>
+                <h2 className="text-[var(--text)] text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">You May Also Love</h2>
               </div>
               <Link href="/category/all" className="group flex items-center gap-2 text-[11px] font-bold tracking-[0.15em] uppercase text-[var(--text-faint)] hover:text-[var(--accent)] transition-colors">
                 View All <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
               {relatedProducts.map((rp: Product, i: number) => (
                 <motion.div
                   key={(rp as any)._id || rp.id}
@@ -459,6 +483,36 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           </motion.div>
         </section>
       )}
+
+      {/* ── STICKY MOBILE BOTTOM BAR ── */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[var(--border)] px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3">
+        <div className="flex flex-col">
+          <span className="text-[9px] uppercase tracking-wider text-[var(--text-faint)] font-bold">Total ({qty})</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-base sm:text-lg font-bold text-[var(--text)]">₹{(p.price * qty).toLocaleString()}</span>
+            {p.mrp && p.mrp > p.price && (
+              <span className="text-[11px] text-[var(--text-faint)] line-through">₹{(p.mrp * qty).toLocaleString()}</span>
+            )}
+          </div>
+        </div>
+        <button
+          className="flex-1 max-w-[210px] h-11 bg-[var(--text)] text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.15em] hover:bg-[var(--accent)] transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-40"
+          disabled={requiresImage && !customerImage}
+          onClick={() => addToCart({
+            productId: (p as any)._id || String(p.id),
+            name: p.name,
+            image: (p as any).images?.[0] || (p as any).image || "",
+            price: p.price,
+            weight: p.weight || 0,
+            quantity: qty,
+            selectedVariant,
+            selectedColor,
+            customerImage,
+          })}
+        >
+          {requiresImage && !customerImage ? "Upload Photo" : "Add to Cart"}
+        </button>
+      </div>
     </div>
   );
 }

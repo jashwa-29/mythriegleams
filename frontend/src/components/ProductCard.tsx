@@ -17,7 +17,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const productSlug  = product.slug || product.id;
   const productId    = (product as any)._id || String(product.id);
-  const productImage = (product as any).images?.[0] ?? null;
+  const productImage = (product as any).images?.[0] ?? (product as any).image ?? null;
   const productPrice = product.price;
   const productMRP   = (product as any).mrp || (product as any).oldPrice;
 
@@ -60,25 +60,25 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           {((product as any).badge || (productMRP && productMRP > productPrice)) && (
             <div className="absolute top-2 left-2 z-10 transition-transform duration-500 group-hover:translate-y-0.5">
               <span className="px-2 py-1 rounded-full text-[8px] tracking-wider uppercase bg-white/90 backdrop-blur-sm text-gray-900 font-bold shadow-sm">
-                {(product as any).badge === "new" ? "New" : (product as any).badge === "hot" ? "Trending" : "Artisanal"}
+                {(product as any).badge || "Artisanal"}
               </span>
             </div>
           )}
         </Link>
 
-        {/* Hover Quick Add Button (Bottom slide-up) — sibling of the image Link, never nested */}
+        {/* Desktop Hover Quick Add Button (Bottom slide-up) */}
         {requiresImage ? (
           <Link
             href={`/product/${productSlug}`}
             onClick={(e) => { e.stopPropagation(); }}
-            className="absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 flex items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
+            className="hidden md:flex absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
           >
             <ShoppingBag size={12} strokeWidth={2} /> Upload Photo
           </Link>
         ) : (
           <button
             onClick={handleAddToCart}
-            className="absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 flex items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
+            className="hidden md:flex absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
           >
             <ShoppingBag size={12} strokeWidth={2} /> Quick Add
           </button>
@@ -86,29 +86,49 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       </div>
 
       {/* Details Section */}
-      <div className="p-3 flex flex-col flex-1 bg-white z-10 relative">
-        <div className="flex justify-between items-start gap-2 mb-1">
+      <div className="p-2.5 sm:p-3 flex flex-col flex-1 bg-white z-10 relative">
+        <div className="flex justify-between items-start gap-1.5 sm:gap-2 mb-1">
           <Link href={`/product/${productSlug}`} className="flex-1">
-            <h3 className="text-[12px] font-bold text-[#2d2926] leading-snug line-clamp-2 group-hover:text-[#a69076] transition-colors duration-300">
+            <h3 className="text-[11px] sm:text-[12px] font-bold text-[#2d2926] leading-snug line-clamp-2 group-hover:text-[var(--accent)] transition-colors duration-300">
               {product.name}
             </h3>
           </Link>
           <div className="flex flex-col items-end shrink-0 pt-0.5">
-            <span className="text-[12px] font-bold text-[#2d2926] leading-none">
+            <span className="text-[12px] sm:text-[13px] font-bold text-[#2d2926] leading-none">
               ₹{productPrice.toLocaleString()}
             </span>
+            {productMRP && productMRP > productPrice && (
+              <span className="text-[9px] text-gray-400 line-through font-medium mt-0.5">
+                ₹{productMRP.toLocaleString()}
+              </span>
+            )}
           </div>
         </div>
         
-        <div className="flex justify-between items-end mt-auto pt-1">
-          <span className="text-[8px] uppercase tracking-[0.2em] font-semibold text-[#a69076]/90">
+        <div className="flex justify-between items-center mt-auto pt-2 border-t border-gray-50">
+          <span className="text-[8px] uppercase tracking-[0.15em] font-semibold text-[#a69076]/90 line-clamp-1">
             {catTitle}
           </span>
-          {productMRP && productMRP > productPrice && (
-            <span className="text-[9px] text-gray-400 line-through font-medium">
-              ₹{productMRP.toLocaleString()}
-            </span>
-          )}
+          {/* Mobile Direct Action Button */}
+          <div className="md:hidden">
+            {requiresImage ? (
+              <Link
+                href={`/product/${productSlug}`}
+                onClick={(e) => { e.stopPropagation(); }}
+                className="inline-flex items-center gap-1 bg-[var(--bg-subtle)] text-[var(--accent)] px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border border-[var(--border)] active:scale-95"
+              >
+                <ShoppingBag size={10} /> Photo
+              </Link>
+            ) : (
+              <button
+                onClick={handleAddToCart}
+                className="inline-flex items-center gap-1 bg-[var(--accent)] text-white px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider active:scale-95 shadow-sm"
+                aria-label={`Add ${product.name} to cart`}
+              >
+                <ShoppingBag size={10} /> Add
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

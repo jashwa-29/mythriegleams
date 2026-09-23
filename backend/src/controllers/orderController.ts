@@ -109,6 +109,9 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
  * @access  Private
  */
 export const getMyOrders = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired.' });
+    }
     const orders = await Order.find({ user: req.user._id, isPaid: true }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: orders });
 });

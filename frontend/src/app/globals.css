@@ -2,27 +2,31 @@
 
 @layer base {
   :root {
-    /* ─── Warm Terracotta & Rust Palette ───────────────────────────── */
-    /* Backgrounds — warm ivory/linen */
-    --bg:           #faf7f3; /* Rich warm ivory */
-    --bg-subtle:    #f3ebe0; /* Aged linen */
-    --bg-muted:     #e8d9c8; /* Warm sand */
+    /* ─── Artisanal Palette (Extracted from Brand Logo) ────────── */
+    /* Backgrounds — warm ivory & parchment */
+    --bg:           #fffdf9; /* Luminous soft ivory */
+    --bg-subtle:    #f8f2e8; /* Warm parchment linen */
+    --bg-muted:     #eedfcb; /* Soft biscuit sand */
 
-    /* Text — deep charcoal-brown */
-    --text:         #2a1f18; /* Espresso dark */
-    --text-muted:   #6b5444; /* Warm mahogany mid-tone */
-    --text-faint:   #a8896e; /* Soft caramel */
+    /* Text — deep espresso clay & warm mocha */
+    --text:         #2d1810; /* Deep espresso dark */
+    --text-muted:   #785d4d; /* Artisanal warm mocha */
+    --text-faint:   #ad9584; /* Soft clay tone */
 
-    /* Accents — terracotta & rust */
-    --accent:       #b85c3a; /* Rich terracotta */
-    --accent-light: #e07c52; /* Burnt rust/orange */
-    --accent-glow:  #d4855a; /* Warm amber glow */
+    /* Accents — Terracotta Coral, Honey Amber, Craft Teal */
+    --accent:            #c84b31; /* Vibrant terracotta coral */
+    --accent-light:      #e06d53; /* Warm coral highlight */
+    --accent-glow:       #f58e65; /* Terracotta glow */
+    --accent-gold:       #f5a623; /* Honey amber gold from logo letters */
+    --accent-gold-light: #fdbe4e; /* Bright golden gleam */
+    --accent-teal:       #2a9d8f; /* Ceramic tool mug teal */
+    --accent-teal-dark:  #1d7066; /* Deep studio teal */
 
-    --border:       #ddd0c0; /* Warm linen border */
+    --border:       #e8dac8; /* Soft warm border */
 
     /* Shadows */
-    --shadow-soft:  0 8px 30px rgba(42, 31, 24, 0.06);
-    --shadow-float: 0 20px 50px rgba(184, 92, 58, 0.14);
+    --shadow-soft:  0 8px 30px rgba(45, 24, 16, 0.06);
+    --shadow-float: 0 20px 50px rgba(200, 75, 49, 0.15);
   }
 
   html {
@@ -56,9 +60,13 @@
   --color-txt:          var(--text);
   --color-txt-muted:    var(--text-muted);
   
-  --color-border:       var(--border);
-  --color-accent:       var(--accent);
-  --color-accent-light: var(--accent-light);
+  --color-border:            var(--border);
+  --color-accent:            var(--accent);
+  --color-accent-light:      var(--accent-light);
+  --color-accent-gold:       var(--accent-gold);
+  --color-accent-gold-light: var(--accent-gold-light);
+  --color-accent-teal:       var(--accent-teal);
+  --color-accent-teal-dark:  var(--accent-teal-dark);
 
   --font-serif:    var(--font-playfair), serif;
   --font-sans:     var(--font-quicksand), system-ui, sans-serif;
@@ -89,12 +97,18 @@
 }
 
 @layer utilities {
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
 }
 
 /* Rounded Scrollbar */
-::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--bg-muted); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }

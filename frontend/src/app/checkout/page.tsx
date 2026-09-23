@@ -156,19 +156,47 @@ export default function CheckoutPage() {
     });
   };
 
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window !== "undefined" && (window as any).Razorpay) {
+        return resolve(true);
+      }
+      const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(true));
+        existing.addEventListener('error', () => resolve(false));
+        // Check if already ready
+        if ((window as any).Razorpay) return resolve(true);
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleRazorpay = async (orderId: string, amount: number) => {
     try {
       setIsProcessingPayment(true);
       
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        setIsProcessingPayment(false);
+        alert("Payment gateway could not be initialized. Please check your network connection and try again.");
+        return;
+      }
+
       const { data: createData } = await api.post('/payments/razorpay/create', { orderId });
       const { id: rzpOrderId, key } = createData.data;
 
       const options = {
         key: key,
-        amount: amount * 100,
+        amount: Math.round(amount * 100),
         currency: "INR",
         name: "Mythris Gleams",
-        description: "Artisan Selection",
+        description: "Handcrafted Artisan Order",
         order_id: rzpOrderId,
         handler: async function (response: any) {
           try {
@@ -197,7 +225,7 @@ export default function CheckoutPage() {
           contact: form.phone
         },
         theme: {
-          color: "#b85c3a"
+          color: "#c84b31"
         },
         modal: {
           ondismiss: function () {
@@ -248,17 +276,17 @@ export default function CheckoutPage() {
           <p className="text-[12px] text-[var(--text-faint)] mb-10">A confirmation has been sent to <strong>{currentOrder.shippingAddress?.email}</strong></p>
 
           {/* Status tracker */}
-          <div className="flex items-center justify-center gap-0 mb-12 overflow-x-auto max-w-[600px] mx-auto pb-2">
+          <div className="flex items-center justify-start sm:justify-center gap-0 mb-10 overflow-x-auto no-scrollbar touch-scroll w-full max-w-[600px] mx-auto pb-4 px-2">
             {STATUS_STEPS.map((step, i) => (
               <React.Fragment key={step}>
                 <div className="flex flex-col items-center gap-2 shrink-0">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-medium transition-all ${i <= stepIdx ? "bg-[var(--text)] text-white" : "bg-[var(--bg-muted)] text-[var(--text-faint)] border border-[var(--border)]"}`}>
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] sm:text-[11px] font-medium transition-all ${i <= stepIdx ? "bg-[var(--text)] text-white" : "bg-[var(--bg-muted)] text-[var(--text-faint)] border border-[var(--border)]"}`}>
                     {i < stepIdx ? "✓" : i + 1}
                   </div>
-                  <span className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] max-w-[60px] text-center leading-tight">{step}</span>
+                  <span className="text-[8px] sm:text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] max-w-[55px] sm:max-w-[60px] text-center leading-tight">{step}</span>
                 </div>
                 {i < STATUS_STEPS.length - 1 && (
-                  <div className={`h-[1px] w-10 sm:w-16 shrink-0 mb-6 ${i < stepIdx ? "bg-[var(--text)]" : "bg-[var(--border)]"}`} />
+                  <div className={`h-[1px] w-6 sm:w-16 shrink-0 mb-5 sm:mb-6 ${i < stepIdx ? "bg-[var(--text)]" : "bg-[var(--border)]"}`} />
                 )}
               </React.Fragment>
             ))}
@@ -295,24 +323,24 @@ export default function CheckoutPage() {
         title="Checkout"
       />
 
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-12 py-12 lg:py-20 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-start">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-start">
 
         {/* ─── LEFT: Form ─── */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-7 flex flex-col gap-8">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-7 flex flex-col gap-6 sm:gap-8">
 
           <div>
-            <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]">Step 1 of 1</span>
-            <h1 className="text-3xl  text-[var(--text)] mt-2">Delivery Details</h1>
+            <span className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]">Step 1 of 1</span>
+            <h1 className="text-2xl sm:text-3xl text-[var(--text)] mt-1.5 sm:mt-2">Delivery Details</h1>
           </div>
 
           <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
             <fieldset disabled={loading || isProcessingPayment} className={`flex flex-col gap-6 border-none p-0 m-0 min-w-0 transition-all duration-300 ${loading || isProcessingPayment ? 'opacity-60 pointer-events-none' : ''}`}>
-            <div className="bg-white rounded-[2rem] border border-[var(--border)] p-8 flex flex-col gap-6">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="bg-white rounded-2xl sm:rounded-[2rem] border border-[var(--border)] p-5 sm:p-8 flex flex-col gap-5 sm:gap-6">
+              <div className="flex items-center gap-3 mb-1 sm:mb-2">
                 <div className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center">
                   <User size={15} className="text-[var(--accent)]" strokeWidth={1.5} />
                 </div>
-                <h3 className=" text-lg text-[var(--text)]">Contact Information</h3>
+                <h3 className="text-base sm:text-lg text-[var(--text)]">Contact Information</h3>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -335,23 +363,23 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] border border-[var(--border)] p-8 flex flex-col gap-6">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="bg-white rounded-2xl sm:rounded-[2rem] border border-[var(--border)] p-5 sm:p-8 flex flex-col gap-5 sm:gap-6">
+              <div className="flex items-center gap-3 mb-1 sm:mb-2">
                 <div className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center">
                   <MapPin size={15} className="text-[var(--accent)]" strokeWidth={1.5} />
                 </div>
-                <h3 className=" text-lg text-[var(--text)]">Delivery Address</h3>
+                <h3 className="text-base sm:text-lg text-[var(--text)]">Delivery Address</h3>
               </div>
 
-              <div className="flex flex-col gap-2 mb-2">
+              <div className="flex flex-col gap-2 mb-1 sm:mb-2">
                 <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Destination Type</label>
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3 flex-wrap">
                   {["Home", "Work", "Other"].map(type => (
                     <button 
                       key={type}
                       type="button"
                       onClick={() => setForm(p => ({ ...p, label: type }))}
-                      className={`px-4 py-2 rounded-xl text-[12px] font-medium border transition-all ${form.label === type ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
+                      className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-[12px] font-medium border transition-all ${form.label === type ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
                     >
                       {type}
                     </button>
@@ -360,15 +388,15 @@ export default function CheckoutPage() {
               </div>
 
               {isAuth && userAddresses.length > 1 && (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:gap-3">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">Select Stored Address</label>
-                  <div className="flex gap-3 overflow-x-auto pb-2">
+                  <div className="flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar touch-scroll pb-2">
                     {userAddresses.map((addr, idx) => (
                       <button 
                         key={idx}
                         type="button" 
                         onClick={() => selectAddress(addr)}
-                        className={`px-6 py-3 rounded-xl border text-[12px] font-medium whitespace-nowrap transition-all ${form.street === addr.street ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
+                        className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl border text-[11px] sm:text-[12px] font-medium whitespace-nowrap transition-all ${form.street === addr.street ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
                       >
                         {addr.label}
                       </button>
@@ -383,7 +411,7 @@ export default function CheckoutPage() {
                 <FieldError field="street" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">City</label>
                   <input name="city" value={form.city} onChange={handleChange} onBlur={() => touch("city")} placeholder="City / District" className={inputClass("city")} />
@@ -408,7 +436,7 @@ export default function CheckoutPage() {
             </div>
 
             {/* Payment note */}
-            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-5 flex gap-4 items-start">
+            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-4 sm:p-5 flex gap-3 sm:gap-4 items-start">
               <Package size={20} className="text-[var(--accent)] shrink-0 mt-0.5" strokeWidth={1.5} />
               <div>
                 <p className="text-[13px] font-medium text-[var(--text)]">Secure Online Payment</p>
@@ -422,7 +450,7 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            <button type="submit" disabled={loading || isProcessingPayment} className="h-16 bg-[var(--text)] text-white rounded-2xl text-[13px] font-medium tracking-[0.15em] uppercase hover:bg-[var(--text-muted)] transition-all disabled:opacity-60 flex items-center justify-center gap-3 shadow-lg shadow-[var(--text)]/10">
+            <button type="submit" disabled={loading || isProcessingPayment} className="h-14 sm:h-16 bg-[var(--text)] text-white rounded-xl sm:rounded-2xl text-[12px] sm:text-[13px] font-medium tracking-[0.15em] uppercase hover:bg-[var(--text-muted)] transition-all disabled:opacity-60 flex items-center justify-center gap-3 shadow-lg shadow-[var(--text)]/10">
               {loading || isProcessingPayment ? <><Loader2 size={18} className="animate-spin" /> {isProcessingPayment ? "Processing Payment..." : "Preparing Order..."}</> : <><CheckCircle2 size={18} strokeWidth={1.5} /> Proceed to Pay — ₹{totalPrice.toLocaleString()}</>}
             </button>
             </fieldset>
@@ -431,14 +459,14 @@ export default function CheckoutPage() {
 
         {/* ─── RIGHT: Order Summary ─── */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-5 sticky top-[100px]">
-          <div className="bg-white rounded-[2rem] border border-[var(--border)] overflow-hidden">
-            <div className="px-8 py-6 border-b border-[var(--border)] flex items-center gap-3">
+          <div className="bg-white rounded-2xl sm:rounded-[2rem] border border-[var(--border)] overflow-hidden">
+            <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-[var(--border)] flex items-center gap-3">
               <ShoppingBag size={18} className="text-[var(--accent)]" strokeWidth={1.5} />
-              <h2 className=" text-[1.1rem] text-[var(--text)]">Order Summary</h2>
+              <h2 className="text-[1rem] sm:text-[1.1rem] text-[var(--text)]">Order Summary</h2>
               <span className="ml-auto text-[11px] text-[var(--text-faint)] tracking-wide">{items.length} {items.length === 1 ? "item" : "items"}</span>
             </div>
 
-            <div className="px-8 py-6 flex flex-col gap-5 max-h-[380px] overflow-y-auto">
+            <div className="px-5 sm:px-8 py-4 sm:py-6 flex flex-col gap-4 sm:gap-5 max-h-[380px] overflow-y-auto">
               {items.map(item => (
                 <div key={item._id} className="flex gap-4 items-start">
                   <div className="w-16 h-16 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border)] overflow-hidden shrink-0">
@@ -461,7 +489,7 @@ export default function CheckoutPage() {
               ))}
             </div>
 
-            <div className="px-8 py-6 border-t border-[var(--border)] space-y-4 bg-[var(--bg-subtle)]/50">
+            <div className="px-5 sm:px-8 py-4 sm:py-6 border-t border-[var(--border)] space-y-3 sm:space-y-4 bg-[var(--bg-subtle)]/50">
               <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
                 <span>Subtotal</span><span>₹{totalPrice.toLocaleString()}</span>
               </div>

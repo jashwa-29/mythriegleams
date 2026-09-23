@@ -20,15 +20,55 @@ type CategorySeed = {
 
 const categorySeed: CategorySeed[] = [
     {
+        name: 'Navaratri Miniature Shops',
+        slug: 'miniature-shops',
+        description: 'Traditional South Indian street stalls and culinary shops sculpted by hand in polymer clay and wood.',
+        metaDescription: 'Shop handcrafted Navaratri miniature shops and heritage stalls.',
+        image: '/Miniature shops/jigardhanda.png',
+        subcategories: [
+            { name: 'Miniature Shops', slug: 'miniature-shops-sub', image: '/Miniature shops/idlykadai.png' }
+        ]
+    },
+    {
+        name: 'Miniature Fruit Baskets',
+        slug: 'fruit-baskets',
+        description: 'Exquisite hand-sculpted clay fruit baskets in woven hampers. Perfect for Golu market scenes and collectors.',
+        metaDescription: 'Shop miniature fruit baskets in clay.',
+        image: '/Fruit baskets/apple.png',
+        subcategories: [
+            { name: 'Handcrafted Fruit Baskets', slug: 'fruit-baskets-sub', image: '/Fruit baskets/Banana.png' }
+        ]
+    },
+    {
+        name: 'Miniature Vegetable Crates',
+        slug: 'vegetable-crates',
+        description: 'Realistic South Indian farm vegetables in miniature pine wood crates. Handcrafted with love at â‚¹199 each.',
+        metaDescription: 'Shop miniature vegetable crates.',
+        image: '/Vegetable Baskets/carrot.png',
+        subcategories: [
+            { name: 'Handcrafted Vegetable Crates', slug: 'vegetable-crates-sub', image: '/Vegetable Baskets/potato.png' }
+        ]
+    },
+    {
+        name: 'Navaratri Thamboolam Collections',
+        slug: 'navaratri-thamboolam',
+        description: 'Auspicious miniature return gifts featuring betel leaves, supari, and coconuts in decorative trays.',
+        metaDescription: 'Shop Navaratri Thamboolam miniature return gifts.',
+        image: '/Navarathri Thamboolam/Navaratri Thamboolam 1.png',
+        subcategories: [
+            { name: 'Navaratri Thamboolam Gifts', slug: 'thamboolam-gifts-sub', image: '/Navarathri Thamboolam/Navaratri Thamboolam 2.png' }
+        ]
+    },
+    {
         name: 'Custom Miniature Wall Clocks',
         slug: 'wall-clocks',
         description: 'Bespoke sculptural timepieces capturing heritage and culinary art. Sabi food-themed clocks, custom scenes and personalized name clocks.',
         metaDescription: 'Shop handcrafted custom miniature wall clocks.',
-        image: 'https://images.unsplash.com/photo-1563861826-1efe393625ef?auto=format&fit=crop&q=80&w=800',
+        image: '/chef-damu-clock.jpg',
         subcategories: [
-            { name: 'Personalized Food-Themed Clocks', slug: 'food-themed-clocks', image: 'https://images.unsplash.com/photo-1563861826-1efe393625ef?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Custom Miniature Scenes', slug: 'custom-scenes', image: 'https://images.unsplash.com/photo-1494783367193-149034c05e8f?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Name / Personalized Clocks', slug: 'name-clocks', image: 'https://images.unsplash.com/photo-1546776310-eef45dd6d63c?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Personalized Food-Themed Clocks', slug: 'food-themed-clocks', image: '/chef-damu-clock.jpg' },
+            { name: 'Custom Miniature Scenes', slug: 'custom-scenes', image: '/Miniature shops/dosashop.png' },
+            { name: 'Name / Personalized Clocks', slug: 'name-clocks', image: '/chef-damu-clock.jpg' },
         ]
     },
     {
@@ -36,43 +76,44 @@ const categorySeed: CategorySeed[] = [
         slug: 'wall-decor',
         description: 'Miniature art pieces and wall décor crafted with air-dry clay — spatulas, kitchen themes and decorative miniatures.',
         metaDescription: 'Shop miniature wall décor and art.',
-        image: 'https://images.unsplash.com/photo-1575995872537-3793d29d972c?auto=format&fit=crop&q=80&w=800',
+        image: '/souvenirs/Karnataka yakshagana and oota.png',
         subcategories: [
-            { name: 'Miniature Wall Décor', slug: 'mini-wall-decor', image: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Miniature Spatulas', slug: 'mini-spatulas', image: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Kitchen-Themed Miniatures', slug: 'kitchen-miniatures', image: 'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Other Decorative Miniatures', slug: 'decorative-miniatures', image: 'https://images.unsplash.com/photo-1513604902203-11a9156481b4?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Miniature Wall Décor', slug: 'mini-wall-decor', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+            { name: 'Miniature Spatulas', slug: 'mini-spatulas', image: '/souvenirs/Kerala Sadya.png' },
+            { name: 'Kitchen-Themed Miniatures', slug: 'kitchen-miniatures', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'Other Decorative Miniatures', slug: 'decorative-miniatures', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
+            { name: 'Cultural Souvenirs', slug: 'cultural-souvenirs', image: '/souvenirs/Karnataka yakshagana and oota.png' },
         ]
     },
     {
         name: 'Miniature Shops & Scenes',
         slug: 'shops-scenes',
-        description: 'Lifelike standalone miniature shops and street scenes — saree shops, flower shops, food stalls and festival setups.',
+        description: 'Lifelike standalone miniature shops and street scenes â€” saree shops, flower shops, food stalls and festival setups.',
         metaDescription: 'Shop miniature shops and street scenes.',
-        image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800',
+        image: '/Miniature shops/sungudi.png',
         subcategories: [
-            { name: 'Individual Miniature Shops', slug: 'individual-shops', image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Sungudi Saree Shop', slug: 'sungudi-saree-shop', image: 'https://images.unsplash.com/photo-1583391733956-6c78276477e8?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Flower Shop', slug: 'flower-shop', image: 'https://images.unsplash.com/photo-1522748906645-95d8adfd52c7?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Food Shops', slug: 'food-shops', image: 'https://images.unsplash.com/photo-1529059997568-3d847b1154f0?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Festival Stalls', slug: 'festival-stalls', image: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Other Standalone Miniature Setups', slug: 'standalone-setups', image: 'https://images.unsplash.com/photo-1555126634-323283e090fa?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Individual Miniature Shops', slug: 'individual-shops', image: '/Miniature shops/jigardhanda.png' },
+            { name: 'Sungudi Saree Shop', slug: 'sungudi-saree-shop', image: '/Miniature shops/sungudi.png' },
+            { name: 'Flower Shop', slug: 'flower-shop', image: '/Miniature shops/Malligaipoo.png' },
+            { name: 'Food Shops', slug: 'food-shops', image: '/Miniature shops/dosashop.png' },
+            { name: 'Festival Stalls', slug: 'festival-stalls', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Other Standalone Miniature Setups', slug: 'standalone-setups', image: '/Miniature shops/tendercoconut.png' },
         ]
     },
     {
         name: 'Golu & Navaratri Collections',
         slug: 'golu-navaratri',
-        description: 'Navaratri Thamboolam gifts and Golu themes — Sai Baba sets, Madurai Nagaram, village and temple festival themes, custom Golu scenes.',
+        description: 'Navaratri Thamboolam gifts and Golu themes â€” Sai Baba sets, Madurai Nagaram, village and temple festival themes, custom Golu scenes.',
         metaDescription: 'Shop Golu and Navaratri themed miniatures.',
-        image: 'https://images.unsplash.com/photo-1523167508699-c34fd042260d?auto=format&fit=crop&q=80&w=800',
+        image: '/Navarathri Thamboolam/Navaratri Thamboolam 13.png',
         subcategories: [
-            { name: 'Navaratri Thamboolam Gifts', slug: 'navaratri-thamboolam', image: 'https://images.unsplash.com/photo-1523167508699-c34fd042260d?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Golu Themes', slug: 'golu-themes', image: 'https://images.unsplash.com/photo-1598654893244-cd46a1b817b6?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Sai Baba Set', slug: 'sai-baba-set', image: 'https://images.unsplash.com/photo-1544851026-5a85d554c5df?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Madurai Nagaram', slug: 'madurai-nagaram', image: 'https://images.unsplash.com/photo-1547036967-23d11aacaee0?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Village Theme', slug: 'village-theme', image: 'https://images.unsplash.com/photo-1535905557558-afc4877a26fc?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Temple Festival Theme', slug: 'temple-festival-theme', image: 'https://images.unsplash.com/photo-1605600659908-0ef719419d41?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Custom Golu Scenes', slug: 'custom-golu-scenes', image: 'https://images.unsplash.com/photo-1574428585190-dbbbbdd3d1cd?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Golu Thamboolam Sets', slug: 'golu-thamboolam-sets', image: '/Navarathri Thamboolam/Navaratri Thamboolam 13.png' },
+            { name: 'Golu Themes', slug: 'golu-themes', image: '/Navarathri Thamboolam/Navaratri Thamboolam 2.png' },
+            { name: 'Sai Baba Set', slug: 'sai-baba-set', image: '/Miniature shops/idlykadai.png' },
+            { name: 'Madurai Nagaram', slug: 'madurai-nagaram', image: '/Miniature shops/jigardhanda.png' },
+            { name: 'Village Theme', slug: 'village-theme', image: '/Miniature shops/Sugarcane.png' },
+            { name: 'Temple Festival Theme', slug: 'temple-festival-theme', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Custom Golu Scenes', slug: 'custom-golu-scenes', image: '/Miniature shops/Paanipoori.png' },
         ]
     },
     {
@@ -80,36 +121,36 @@ const categorySeed: CategorySeed[] = [
         slug: 'dolls-figures',
         description: 'Acrylic dolls, miniature characters and festival and cultural figures hand-finished for your Golu and displays.',
         metaDescription: 'Shop miniature dolls and figures.',
-        image: 'https://images.unsplash.com/photo-1605281317010-fe5ffe798166?auto=format&fit=crop&q=80&w=800',
+        image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png',
         subcategories: [
-            { name: 'Acrylic Dolls', slug: 'acrylic-dolls', image: 'https://images.unsplash.com/photo-1605281317010-fe5ffe798166?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Miniature Characters', slug: 'mini-characters', image: 'https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Festival and Cultural Figures', slug: 'cultural-figures', image: 'https://images.unsplash.com/photo-1518563228349-0dfa13a938c7?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Acrylic Dolls', slug: 'acrylic-dolls', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
+            { name: 'Miniature Characters', slug: 'mini-characters', image: '/Miniature shops/tendercoconut.png' },
+            { name: 'Festival and Cultural Figures', slug: 'cultural-figures', image: '/souvenirs/Karnataka yakshagana and oota.png' },
         ]
     },
     {
         name: 'Fridge Magnets',
         slug: 'fridge-magnets',
-        description: 'Tiny detailed magnetic art for your fridge — miniature food magnets, customized magnets and theme-based magnets.',
+        description: 'Tiny detailed magnetic art for your fridge â€” miniature food magnets, customized magnets and theme-based magnets.',
         metaDescription: 'Shop handcrafted clay fridge magnets.',
-        image: 'https://images.unsplash.com/photo-1628157588553-5eeea00af15c?auto=format&fit=crop&q=80&w=800',
+        image: '/Fridge Magnets/Banana leaf thali with mdf base.png',
         subcategories: [
-            { name: 'Miniature Food Magnets', slug: 'food-magnets', image: 'https://images.unsplash.com/photo-1628157588553-5eeea00af15c?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Customized Magnets', slug: 'custom-magnets', image: 'https://images.unsplash.com/photo-1547721064-da6cfb341d50?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Theme-Based Magnets', slug: 'theme-magnets', image: 'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Miniature Food Magnets', slug: 'food-magnets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'Customized Magnets', slug: 'custom-magnets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'Theme-Based Magnets', slug: 'theme-magnets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
         ]
     },
     {
         name: 'Clay & Miniature-Making Supplies',
         slug: 'supplies',
-        description: 'Everything for miniature making — air-dry clay, miniature-making materials, tools and accessories.',
+        description: 'Everything for miniature making â€” air-dry clay, miniature-making materials, tools and accessories.',
         metaDescription: 'Shop clay and miniature-making supplies.',
-        image: 'https://images.unsplash.com/photo-1567879542765-5b7853296a67?auto=format&fit=crop&q=80&w=800',
+        image: '/Miniature shops/tiffen.png',
         subcategories: [
-            { name: 'Clay', slug: 'clay', image: 'https://images.unsplash.com/photo-1567879542765-5b7853296a67?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Miniature-Making Materials', slug: 'materials', image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Tools', slug: 'tools', image: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Accessories', slug: 'accessories', image: 'https://images.unsplash.com/photo-1544776193-352d25ca82cd?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Clay', slug: 'clay', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Miniature-Making Materials', slug: 'materials', image: '/Miniature shops/Limesoda.png' },
+            { name: 'Tools', slug: 'tools', image: '/Miniature shops/Sugarcane.png' },
+            { name: 'Accessories', slug: 'accessories', image: '/Miniature shops/Malligaipoo.png' },
         ]
     },
 ];
@@ -127,25 +168,25 @@ const occasionSeed: OccasionSeed[] = [
     {
         name: 'Birthday',
         slug: 'birthday',
-        description: 'Handcrafted miniatures that make birthdays personal — themed scenes, kids\' parties and custom birthday gifts.',
+        description: 'Handcrafted miniatures that make birthdays personal â€” themed scenes, kids\' parties and custom birthday gifts.',
         metaDescription: 'Shop miniature birthday gifts and themed scenes.',
-        image: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?auto=format&fit=crop&q=80&w=800',
+        image: '/Miniature shops/sweetcorn.png',
         subcategories: [
-            { name: 'Theme-Based Birthday Scenes', slug: 'theme-birthday-scenes', image: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Kids\' Birthday Themes', slug: 'kids-birthday', image: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Custom Birthday Gifts', slug: 'custom-birthday-gifts', image: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Theme-Based Birthday Scenes', slug: 'theme-birthday-scenes', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Kids\' Birthday Themes', slug: 'kids-birthday', image: '/Miniature shops/Paanipoori.png' },
+            { name: 'Custom Birthday Gifts', slug: 'custom-birthday-gifts', image: '/chef-damu-clock.jpg' },
         ]
     },
     {
         name: 'Wedding',
         slug: 'wedding',
-        description: 'Wedding-day miniatures and keepsakes — couple figurines, decor and traditional Tamil wedding themes.',
+        description: 'Wedding-day miniatures and keepsakes â€” couple figurines, decor and traditional Tamil wedding themes.',
         metaDescription: 'Shop miniature wedding decor and keepsakes.',
-        image: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=800',
+        image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png',
         subcategories: [
-            { name: 'Couple Miniatures', slug: 'couple-miniatures', image: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Wedding Day Décor', slug: 'wedding-day-decor', image: 'https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Traditional Tamil Wedding Themes', slug: 'tamil-wedding-themes', image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Couple Miniatures', slug: 'couple-miniatures', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
+            { name: 'Wedding Day DÃ©cor', slug: 'wedding-day-decor', image: '/souvenirs/Kerala Sadya.png' },
+            { name: 'Traditional Tamil Wedding Themes', slug: 'tamil-wedding-themes', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
         ]
     },
     {
@@ -153,10 +194,10 @@ const occasionSeed: OccasionSeed[] = [
         slug: 'anniversary',
         description: 'Celebrate milestones with personalised couple themes and anniversary keepsakes.',
         metaDescription: 'Shop miniature anniversary gifts.',
-        image: 'https://images.unsplash.com/photo-1516585427167-9f4af9627e6c?auto=format&fit=crop&q=80&w=800',
+        image: '/chef-damu-clock.jpg',
         subcategories: [
-            { name: 'Couple Celebration Themes', slug: 'couple-anniversary-themes', image: 'https://images.unsplash.com/photo-1516585427167-9f4af9627e6c?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Milestone Year Gifts', slug: 'milestone-year-gifts', image: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Couple Celebration Themes', slug: 'couple-anniversary-themes', image: '/chef-damu-clock.jpg' },
+            { name: 'Milestone Year Gifts', slug: 'milestone-year-gifts', image: '/souvenirs/Karnataka yakshagana and oota.png' },
         ]
     },
     {
@@ -164,36 +205,36 @@ const occasionSeed: OccasionSeed[] = [
         slug: 'festivals',
         description: 'Festive miniatures for Navaratri, Diwali, Christmas, Pongal and temple and cultural celebrations.',
         metaDescription: 'Shop festival themed miniature decor and gifts.',
-        image: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80&w=800',
+        image: '/Navarathri Thamboolam/Navaratri Thamboolam 1.png',
         subcategories: [
-            { name: 'Navaratri / Golu', slug: 'navaratri-golu', image: 'https://images.unsplash.com/photo-1598654893244-cd46a1b817b6?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Diwali', slug: 'diwali', image: 'https://images.unsplash.com/photo-1605991452273-51a182ef8a50?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Christmas', slug: 'christmas', image: 'https://images.unsplash.com/photo-1512909006721-3d6018887383?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Pongal & Harvest', slug: 'pongal', image: 'https://images.unsplash.com/photo-1464278533981-50106e6176b1?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Temple & Cultural Events', slug: 'temple-cultural-events', image: 'https://images.unsplash.com/photo-1605600659908-0ef719419d41?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Navaratri / Golu', slug: 'navaratri-golu', image: '/Navarathri Thamboolam/Navaratri Thamboolam 1.png' },
+            { name: 'Diwali', slug: 'diwali', image: '/Navarathri Thamboolam/Navaratri Thamboolam 2.png' },
+            { name: 'Christmas', slug: 'christmas', image: '/Fruit baskets/apple.png' },
+            { name: 'Pongal & Harvest', slug: 'pongal', image: '/Vegetable Baskets/banana stem.png' },
+            { name: 'Temple & Cultural Events', slug: 'temple-cultural-events', image: '/souvenirs/Karnataka yakshagana and oota.png' },
         ]
     },
     {
         name: 'Housewarming',
         slug: 'housewarming',
-        description: 'Griha Pravesham and new home miniatures — auspicious themes, home décor and gift sets.',
-        metaDescription: 'Shop miniature housewarming gifts and décor.',
-        image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800',
+        description: 'Griha Pravesham and new home miniatures â€” auspicious themes, home dÃ©cor and gift sets.',
+        metaDescription: 'Shop miniature housewarming gifts and dÃ©cor.',
+        image: '/Fridge Magnets/Banana leaf thali with mdf base.png',
         subcategories: [
-            { name: 'Griha Pravesham Themes', slug: 'griha-pravesham', image: 'https://images.unsplash.com/photo-1522661067900-ab829854a57f?auto=format&fit=crop&q=80&w=800' },
-            { name: 'New Home Décor', slug: 'new-home-decor', image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Housewarming Gift Sets', slug: 'housewarming-gift-sets', image: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Griha Pravesham Themes', slug: 'griha-pravesham', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'New Home DÃ©cor', slug: 'new-home-decor', image: '/chef-damu-clock.jpg' },
+            { name: 'Housewarming Gift Sets', slug: 'housewarming-gift-sets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
         ]
     },
     {
         name: 'Naming Ceremony',
         slug: 'naming-ceremony',
-        description: 'Traditional naming ceremony miniatures — lamps, décor and baby celebration themes.',
-        metaDescription: 'Shop naming ceremony miniature décor.',
-        image: 'https://images.unsplash.com/photo-1533613220915-609158661114?auto=format&fit=crop&q=80&w=800',
+        description: 'Traditional naming ceremony miniatures â€” lamps, dÃ©cor and baby celebration themes.',
+        metaDescription: 'Shop naming ceremony miniature dÃ©cor.',
+        image: '/Fruit baskets/Banana.png',
         subcategories: [
-            { name: 'Traditional Lamp & Décor', slug: 'naming-decor', image: 'https://images.unsplash.com/photo-1533613220915-609158661114?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Baby Celebration Themes', slug: 'naming-baby-themes', image: 'https://images.unsplash.com/photo-1544126592-807ade215a0b?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Traditional Lamp & DÃ©cor', slug: 'naming-decor', image: '/Navarathri Thamboolam/Navaratri Thamboolam 13.png' },
+            { name: 'Baby Celebration Themes', slug: 'naming-baby-themes', image: '/Fruit baskets/strawberry.png' },
         ]
     },
     {
@@ -201,10 +242,10 @@ const occasionSeed: OccasionSeed[] = [
         slug: 'baby-shower',
         description: 'Cute and pastel miniatures for baby showers and new beginnings.',
         metaDescription: 'Shop baby shower themed miniatures.',
-        image: 'https://images.unsplash.com/photo-1544126592-807ade215a0b?auto=format&fit=crop&q=80&w=800',
+        image: '/Fruit baskets/strawberry.png',
         subcategories: [
-            { name: 'Cute Baby Themes', slug: 'cute-baby-themes', image: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Pastel Miniatures', slug: 'pastel-miniatures', image: 'https://images.unsplash.com/photo-1544126592-807ade215a0b?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Cute Baby Themes', slug: 'cute-baby-themes', image: '/Fruit baskets/strawberry.png' },
+            { name: 'Pastel Miniatures', slug: 'pastel-miniatures', image: '/Fruit baskets/papaya.png' },
         ]
     },
     {
@@ -212,141 +253,959 @@ const occasionSeed: OccasionSeed[] = [
         slug: 'congratulations',
         description: 'Graduation and achievement themed miniatures to celebrate every milestone.',
         metaDescription: 'Shop graduation and achievement miniature gifts.',
-        image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=800',
+        image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png',
         subcategories: [
-            { name: 'Graduation Gifts', slug: 'graduation-gifts', image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=800' },
-            { name: 'Achievement Themes', slug: 'achievement-themes', image: 'https://images.unsplash.com/photo-1544776193-352d25ca82cd?auto=format&fit=crop&q=80&w=800' },
+            { name: 'Graduation Gifts', slug: 'graduation-gifts', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+            { name: 'Achievement Themes', slug: 'achievement-themes', image: '/chef-damu-clock.jpg' },
         ]
     },
 ];
 
 const products = [
     {
-        name: 'Traditional Samosa Miniature Clock',
-        slug: 'traditional-samosa-miniature-clock',
-        category: 'Custom Miniature Wall Clocks',
-        subcategory: 'Personalized Food-Themed Clocks',
-        occasion: 'Birthday',
-        occasionSub: 'Custom Birthday Gifts',
+        name: 'Traditional Jigarthanda Shop Miniature',
+        slug: 'traditional-jigarthanda-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
         price: 2499,
-        mrp: 3200,
-        weight: 850,
-        story: 'Inspired by the vibrant streets of Mumbai, this clock captures the essence of a warm chai and samosa evening.',
-        details: 'Hand sculpted with premium polymer clay. Mounted on a 10-inch wooden base. Silent sweep mechanism.',
-        metaDescription: 'Buy handcrafted samosa and chai miniature wall clock.',
+        mrp: 4499,
+        weight: 650,
+        story: 'A handcrafted miniature Jigarthanda shop inspired by traditional Tamil Nadu drink stalls, created for Golu and Navaratri displays.',
+        details: 'Bring the charm of a traditional Tamil Nadu Jigarthanda shop to your Golu display with this detailed handmade miniature scene. The shop features a rustic tiled roof, wooden-style counter, miniature storage containers, serving vessels and a shopkeeper serving the drink. A customer figure adds life and storytelling to the scene. Display it as a standalone Golu decoration or combine it with other Mythris Gleams miniature shops to create a traditional street or Madurai-themed scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade Jigarthanda shop miniature for Golu and Navaratri. Add a traditional Tamil Nadu street-shop feel to your miniature display.',
         images: [
-            'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&q=80&w=800',
-            'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?auto=format&fit=crop&q=80&w=800'
+            '/Miniature shops/jigardhanda.png'
         ],
-        variants: [{ type: 'Size', options: ['Small (8 inch)', 'Large (10 inch)'] }],
+        variants: [],
         stockStatus: 'made-to-order',
-        rating: 4.8,
-        reviewCount: 12
+        rating: 4.9,
+        reviewCount: 33
     },
     {
-        name: 'South Indian Filter Coffee Magnet',
-        slug: 'south-indian-filter-coffee-magnet',
+        name: 'Traditional Idly Shop Miniature',
+        slug: 'traditional-idly-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A detailed handmade miniature Idly shop with traditional vessels, food, customers and a shopkeeper, perfect for Golu and Navaratri displays.',
+        details: 'Create a nostalgic South Indian food-stall scene with this handmade miniature Idly shop. The scene includes a traditional shop structure, miniature cooking and serving vessels, idlis, accompaniments, a shopkeeper and seated customers enjoying their food. Every small element helps recreate the familiar feeling of a local Tamil Nadu tiffin shop. Use it as a standalone Golu piece or place it alongside other miniature shops to build a lively traditional street scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade South Indian Idly shop miniature with tiny food, vessels and figures. Perfect for Golu, Navaratri displays and miniature collections.',
+        images: [
+            '/Miniature shops/idlykadai.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Traditional Dosa Shop Miniature',
+        slug: 'traditional-dosa-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A handcrafted miniature Dosa shop inspired by a traditional South Indian tiffin stall, made for Golu, Navaratri and miniature street displays.',
+        details: 'Recreate the warmth of a traditional South Indian tiffin shop with this detailed handmade Dosa shop miniature. The scene features a miniature dosa on the cooking surface, serving vessels, food accessories, a shopkeeper and a customer seated at the stall. The rustic shop structure and tiny details make it a beautiful storytelling piece for Golu displays. Pair it with other Mythris Gleams miniature shops to create a complete Tamil Nadu food-street or village-style scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade Dosa shop miniature inspired by a traditional South Indian tiffin stall. Ideal for Golu, Navaratri and miniature street displays.',
+        images: [
+            '/Miniature shops/dosashop.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Traditional Sungudi Saree Shop Miniature',
+        slug: 'traditional-sungudi-saree-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A colourful handmade miniature Sungudi saree shop featuring tiny sarees, a shopkeeper and customers, inspired by traditional textile shopping streets of Tamil Nadu.',
+        details: 'Add the colour and charm of a traditional Tamil Nadu textile shop to your Golu display with this handmade Sungudi saree shop miniature. The scene features miniature sarees displayed across the shop, folded sarees on the counter, a seated shopkeeper and customers browsing the collection. The bright fabrics and detailed arrangement make this a beautiful cultural miniature for a traditional street, Madurai or Tamil Nadu-themed Golu setup. Material: Clay, miniature modelling materials, fabric-like miniature elements and decorative materials Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Colourful handmade Sungudi saree shop miniature with tiny sarees and figures. Perfect for Golu, Navaratri and Tamil Nadu themed displays.',
+        images: [
+            '/Miniature shops/sungudi.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 15
+    },
+    {
+        name: 'Traditional Malligai Poo Shop Miniature',
+        slug: 'traditional-malligai-poo-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A beautiful handmade Malligai Poo shop miniature with flower garlands, baskets, flower sellers and a customer, perfect for a traditional Golu display.',
+        details: 'Bring the beauty of a traditional Tamil Nadu flower market into your Golu display with this detailed Malligai Poo shop miniature. The scene shows a flower stall filled with tiny jasmine and colourful flower garlands, baskets of flowers, a seated flower seller preparing flowers and a customer buying them. The layered baskets, garlands and figures create a lively everyday-market scene that can be displayed on its own or combined with other miniature shops to build a complete traditional street. Material: Clay, miniature modelling materials and decorative flower elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade Malligai Poo flower shop miniature with jasmine garlands, baskets and figures. Perfect for Golu, Navaratri and traditional displays.',
+        images: [
+            '/Miniature shops/Malligaipoo.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 34
+    },
+    {
+        name: 'Traditional Sugarcane Juice Cart Miniature',
+        slug: 'traditional-sugarcane-juice-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1699,
+        mrp: 4199,
+        weight: 650,
+        story: 'A handmade miniature sugarcane juice cart with a traditional juicing machine and vendor, perfect for a Tamil Nadu village, street or Golu display.',
+        details: 'Recreate the familiar sight of a traditional sugarcane juice cart with this detailed handmade miniature. The scene features a wheeled wooden-style cart, a miniature sugarcane juice machine, sugarcane pieces and a vendor operating the setup. It is a charming standalone piece for Navaratri Golu and works beautifully when placed alongside other food carts and miniature shops to create a lively South Indian street scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade sugarcane juice cart miniature with vendor and traditional juicing machine. Perfect for Golu, Navaratri and Tamil Nadu street scenes.',
+        images: [
+            '/Miniature shops/Sugarcane.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 17
+    },
+    {
+        name: 'Traditional Lemon Soda Cart Miniature',
+        slug: 'traditional-lemon-soda-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1799,
+        mrp: 4499,
+        weight: 650,
+        story: 'A colourful handmade lemon soda cart miniature with bottles, lemons, a vendor and customer, inspired by traditional roadside drink carts.',
+        details: 'Add a fun roadside drink-stall scene to your Golu display with this handmade lemon soda cart miniature. The colourful wheeled cart is arranged with miniature bottles, lemons, a drink machine and a vendor serving a customer. Its bright details and everyday street-market feel make it a great standalone Golu piece or a perfect addition to a larger Tamil Nadu village, market or festival scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Colourful handmade lemon soda cart miniature with bottles, vendor and customer. Ideal for Golu, Navaratri and traditional street scenes.',
+        images: [
+            '/Miniature shops/Limesoda.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 32
+    },
+    {
+        name: 'Traditional Tender Coconut Seller Bicycle Miniature',
+        slug: 'tender-coconut-seller-bicycle-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1299,
+        mrp: 3799,
+        weight: 650,
+        story: 'A handmade miniature tender coconut seller with a bicycle, coconuts and a traditional roadside-selling scene for Golu displays.',
+        details: 'Capture the charm of a traditional roadside tender coconut seller with this detailed miniature scene. The miniature features a bicycle loaded with tender coconuts and a seller holding a coconut ready to serve. This compact cultural piece brings an everyday Tamil Nadu street moment into your Golu display and pairs beautifully with other miniature carts, shops and village-market scenes. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade tender coconut seller miniature with bicycle and coconuts. A charming Tamil Nadu street scene for Golu and Navaratri displays.',
+        images: [
+            '/Miniature shops/tendercoconut.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Traditional South Indian Tiffin Stall Miniature',
+        slug: 'traditional-south-indian-tiffin-stall-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1999,
+        mrp: 4299,
+        weight: 650,
+        story: 'A detailed handmade South Indian tiffin stall miniature with idlis, vadas, chutneys, banana leaves, cooking vessels and a woman serving food.',
+        details: 'Bring a traditional South Indian breakfast scene to your Golu display with this detailed handmade tiffin stall miniature. The scene features idlis, vadas, chutneys, banana leaves, serving vessels and a woman holding a plate of food. Every tiny food element is arranged to recreate the warmth of a local breakfast stall. Display it independently or combine it with other Mythris Gleams miniature shops and carts for a complete food-street scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade South Indian tiffin stall miniature with idli, vada, chutney and banana leaves. Perfect for Golu and Navaratri displays.',
+        images: [
+            '/Miniature shops/tiffen.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 22
+    },
+    {
+        name: 'Traditional Street Sweet Corn Cart Miniature',
+        slug: 'traditional-street-vegetable-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1999,
+        mrp: 4499,
+        weight: 650,
+        story: 'A colourful handmade miniature street sweet corn cart with a vendor and fresh produce, perfect for traditional Golu and village-market scenes.',
+        details: 'Add the charm of a traditional roadside sweet corn cart to your Golu display with this handmade miniature. The wheeled red cart is arranged with miniature sweet corn and a vendor standing behind the cart, creating a simple and familiar everyday-market scene. It works beautifully as a standalone miniature or as part of a larger Tamil Nadu village, market or festival-themed Golu setup. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade street vegetable cart miniature with vendor and colourful vegetables. Perfect for Golu, Navaratri and Tamil Nadu village scenes.',
+        images: [
+            '/Miniature shops/sweetcorn.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 19
+    },
+    {
+        name: 'Miniature Apple Fruit Basket',
+        slug: 'miniature-apple-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature apple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Apple Fruit Basket from Mythris Gleams. The basket is carefully created with tiny apple miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature apple fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/apple.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Banana Fruit Basket',
+        slug: 'miniature-banana-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature banana basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Banana Fruit Basket from Mythris Gleams. The basket is carefully created with tiny banana miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature banana fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/Banana.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 24
+    },
+    {
+        name: 'Miniature Mango Fruit Basket',
+        slug: 'miniature-mango-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature mango basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Mango Fruit Basket from Mythris Gleams. The basket is carefully created with tiny mango miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature mango fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/mango.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Papaya Fruit Basket',
+        slug: 'miniature-papaya-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature papaya basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Papaya Fruit Basket from Mythris Gleams. The basket is carefully created with tiny papaya miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature papaya fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/papaya.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 24
+    },
+    {
+        name: 'Miniature Strawberry Fruit Basket',
+        slug: 'miniature-strawberry-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature strawberry basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Strawberry Fruit Basket from Mythris Gleams. The basket is carefully created with tiny strawberry miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature strawberry fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/strawberry.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+    {
+        name: 'Miniature Pineapple Fruit Basket',
+        slug: 'miniature-pineapple-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature pineapple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Pineapple Fruit Basket from Mythris Gleams. The basket is carefully created with tiny pineapple miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature pineapple fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/Orange.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Pomegranate Fruit Basket',
+        slug: 'miniature-pomegranate-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature pomegranate basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Pomegranate Fruit Basket from Mythris Gleams. The basket is carefully created with tiny pomegranate miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature pomegranate fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/strawberry.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 29
+    },
+    {
+        name: 'Miniature Pear Fruit Basket',
+        slug: 'miniature-pear-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature pear basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Pear Fruit Basket from Mythris Gleams. The basket is carefully created with tiny pear miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature pear fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/pears.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 22
+    },
+    {
+        name: 'Miniature Watermelon Fruit Basket',
+        slug: 'miniature-watermelon-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature watermelon basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Watermelon Fruit Basket from Mythris Gleams. The basket is carefully created with tiny watermelon miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature watermelon fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/watermelon.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+    {
+        name: 'Miniature Jamun Fruit Basket',
+        slug: 'miniature-jamun-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature jamun basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Jamun Fruit Basket from Mythris Gleams. The basket is carefully created with tiny jamun miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature jamun fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/pears.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Custard Apple Fruit Basket',
+        slug: 'miniature-custard-apple-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature custard apple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Custard Apple Fruit Basket from Mythris Gleams. The basket is carefully created with tiny custard apple miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature custard apple fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/apple.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 31
+    },
+    {
+        name: 'Miniature Guava Fruit Basket',
+        slug: 'miniature-guava-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature guava basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Guava Fruit Basket from Mythris Gleams. The basket is carefully created with tiny guava miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature guava fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/apple.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Muskmelon Fruit Basket',
+        slug: 'miniature-muskmelon-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature muskmelon basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Muskmelon Fruit Basket from Mythris Gleams. The basket is carefully created with tiny muskmelon miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature muskmelon fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/watermelon.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Dragon Fruit Fruit Basket',
+        slug: 'miniature-dragon-fruit-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature dragon fruit basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Dragon Fruit Fruit Basket from Mythris Gleams. The basket is carefully created with tiny dragon fruit miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature dragon fruit fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/strawberry.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 30
+    },
+    {
+        name: 'Miniature Jackfruit Fruit Basket',
+        slug: 'miniature-jackfruit-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature jackfruit basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Jackfruit Fruit Basket from Mythris Gleams. The basket is carefully created with tiny jackfruit miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature jackfruit fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/papaya.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Tomato Vegetable Crate',
+        slug: 'miniature-tomato-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature tomato crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Tomato Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny tomato miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature tomato vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/carrot.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Potato Vegetable Crate',
+        slug: 'miniature-potato-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature potato crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Potato Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny potato miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature potato vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/potato.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Brinjal Vegetable Crate',
+        slug: 'miniature-brinjal-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature brinjal crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Brinjal Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny brinjal miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature brinjal vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/brinjal.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+    {
+        name: 'Miniature Onion Vegetable Crate',
+        slug: 'miniature-onion-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature onion crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Onion Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny onion miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature onion vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/beetroot.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Miniature Drumstick Vegetable Crate',
+        slug: 'miniature-drumstick-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature drumstick crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Drumstick Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny drumstick miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature drumstick vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/drumstick.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 30
+    },
+    {
+        name: 'Miniature Banana Stem Vegetable Crate',
+        slug: 'miniature-banana-stem-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature banana stem crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Banana Stem Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny banana stem miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature banana stem vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/banana stem.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 32
+    },
+    {
+        name: 'Miniature Carrot Vegetable Crate',
+        slug: 'miniature-carrot-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature carrot crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Carrot Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny carrot miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature carrot vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/carrot.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Radish Vegetable Crate',
+        slug: 'miniature-radish-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature radish crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Radish Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny radish miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature radish vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/raddish.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Beetroot Vegetable Crate',
+        slug: 'miniature-beetroot-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature beetroot crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Beetroot Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny beetroot miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature beetroot vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/beetroot.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 29
+    },
+    {
+        name: 'Miniature Lemon Vegetable Crate',
+        slug: 'miniature-lemon-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature lemon crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Lemon Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny lemon miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature lemon vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/lemon.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Miniature Pumpkin Vegetable Crate',
+        slug: 'miniature-pumpkin-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature pumpkin crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Pumpkin Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny pumpkin miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature pumpkin vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/pumkin.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+    {
+        name: 'Miniature Bottle Gourd Vegetable Crate',
+        slug: 'miniature-bottle-gourd-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature bottle gourd crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Bottle Gourd Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny bottle gourd miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature bottle gourd vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/cucumber.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 33
+    },
+    {
+        name: 'Navaratri Miniature Thamboolam – Real Cloth Edition',
+        slug: 'navaratri-miniature-thamboolam-real-cloth',
+        category: 'Navaratri Thamboolam Collections',
+        subcategory: 'Navaratri Thamboolam Gifts',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 350,
+        mrp: 700,
+        weight: 180,
+        story: 'A beautifully handcrafted Navaratri Thamboolam gift set featuring a real miniature cloth, traditional festive essentials and a decorative gold-toned tray.',
+        details: 'Celebrate the tradition of Navaratri Thamboolam with this beautifully handcrafted miniature return-gift set from Mythris Gleams. This edition features a real miniature cloth, carefully arranged with traditional festive elements on a decorative tray. The miniature set includes traditional Thamboolam-inspired details such as fruits, betel leaf and festive items, presented as a charming keepsake. A thoughtful choice for Navaratri return gifts, Golu gatherings, festive décor and miniature collectors. Material: Miniature craft materials, real fabric cloth and decorative tray Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the miniature cloth and small decorative elements carefully.',
+        metaDescription: 'Handcrafted Navaratri miniature Thamboolam with real miniature cloth and traditional festive details. A unique Golu and return gift idea.',
+        images: [
+            '/Navarathri Thamboolam/Navaratri Thamboolam 13.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Navaratri Miniature Thamboolam – Clay Cloth Tray Edition',
+        slug: 'navaratri-miniature-thamboolam-clay-cloth-tray',
+        category: 'Navaratri Thamboolam Collections',
+        subcategory: 'Navaratri Thamboolam Gifts',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 250,
+        mrp: 350,
+        weight: 180,
+        story: 'A handcrafted Navaratri miniature Thamboolam arranged on a decorative tray, featuring a miniature cloth recreated in clay and traditional festive elements.',
+        details: 'Add a unique miniature touch to your Navaratri celebrations with this handcrafted Thamboolam set from Mythris Gleams. This edition features a decorative tray with a miniature cloth recreated in clay, along with traditional festive elements arranged in a beautiful Thamboolam-style presentation. The clay-made details make this a lasting miniature keepsake that can be displayed as part of a Golu setup or treasured as a festive collectible. It is designed to capture the beauty of traditional South Indian festive gifting in miniature form. Material: Clay, miniature modelling materials and decorative tray Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the miniature cloth and small decorative elements carefully.',
+        metaDescription: 'Handmade Navaratri miniature Thamboolam with a clay-made miniature cloth and festive details. Perfect for Golu and traditional décor.',
+        images: [
+            '/Navarathri Thamboolam/Navaratri Thamboolam 2.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 31
+    },
+    {
+        name: 'Navaratri Miniature Thamboolam – Ornate Clay Cloth Edition',
+        slug: 'navaratri-miniature-thamboolam-ornate-clay-cloth',
+        category: 'Navaratri Thamboolam Collections',
+        subcategory: 'Navaratri Thamboolam Gifts',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 250,
+        mrp: 350,
+        weight: 180,
+        story: 'A traditional-style Navaratri miniature Thamboolam with an ornate decorative base, clay-made miniature cloth and festive return-gift elements.',
+        details: 'This handcrafted Navaratri Miniature Thamboolam combines traditional festive gifting with detailed miniature art. The set features an ornate decorative base, a miniature cloth recreated in clay and carefully arranged festive elements including fruits, betel leaf and other traditional Thamboolam details. Designed as a beautiful Navaratri keepsake, it can be used for Golu décor, festive gifting or as part of a miniature collection. Its ornate presentation makes it a special choice for festive display and traditional gifting. Material: Clay, miniature modelling materials and decorative tray Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the miniature cloth and small decorative elements carefully.',
+        metaDescription: 'Handcrafted ornate Navaratri miniature Thamboolam with clay-made miniature cloth and traditional festive details for Golu and gifting.',
+        images: [
+            '/Navarathri Thamboolam/Navaratri Thamboolam 1.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 33
+    },
+    {
+        name: 'Traditional Pani Puri Cart Miniature',
+        slug: 'traditional-pani-puri-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1799,
+        mrp: 3499,
+        weight: 650,
+        story: 'A colourful handmade miniature Pani Puri and chaat cart with tiny puris, flavoured water pots, vendor and customer for Golu and street displays.',
+        details: 'Handcrafted in clay and wood. Includes clay chaat pots, miniature puris, vendor figurine and decorative stall structure. Keep dry and dust with a soft cloth.',
+        metaDescription: 'Buy handcrafted traditional Pani Puri chaat cart miniature for Golu by Mythris Gleams.',
+        images: [
+            '/Miniature shops/Paanipoori.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 24
+    },
+    {
+        name: 'South Indian Banana Leaf Thali Fridge Magnet',
+        slug: 'south-indian-banana-leaf-thali-fridge-magnet',
         category: 'Fridge Magnets',
         subcategory: 'Miniature Food Magnets',
         occasion: 'Housewarming',
         occasionSub: 'Housewarming Gift Sets',
         price: 499,
-        mrp: 650,
+        mrp: 699,
         weight: 120,
-        story: 'A miniature tribute to the quintessential morning ritual of South India. Complete with a tiny brass dabarah set.',
-        details: 'Air-dry clay base with acrylic detailing. High-grade neodymium magnet attached.',
-        metaDescription: 'Handcrafted South Indian Filter Coffee Fridge Magnet.',
+        story: 'A delicious South Indian feast miniature mounted on an MDF base with a strong neodymium magnet.',
+        details: 'Air-dry polymer clay, hand-painted details with rice, sambar, rasam, kootu, poriyal, payasam and appalam. Neodymium magnet on back.',
+        metaDescription: 'Buy South Indian Banana Leaf Thali fridge magnet handcrafted in clay.',
         images: [
-            'https://images.unsplash.com/photo-1611162458324-aae1eb4129a4?auto=format&fit=crop&q=80&w=800'
+            '/Fridge Magnets/Banana leaf thali with mdf base.png'
         ],
-        variants: [{ type: 'Size', options: ['Standard'] }],
+        variants: [],
         stockStatus: 'in-stock',
-        rating: 5.0,
-        reviewCount: 45
+        rating: 4.9,
+        reviewCount: 38
     },
     {
-        name: 'Biryani Handi Miniature',
-        slug: 'biryani-handi-miniature',
-        category: 'Miniature Art & Wall Décor',
-        subcategory: 'Kitchen-Themed Miniatures',
+        name: 'Karnataka Yakshagana & Oota Heritage Souvenir',
+        slug: 'karnataka-yakshagana-and-oota-heritage-souvenir',
+        category: 'Miniature Art & Wall DÃ©cor',
+        subcategory: 'Cultural Souvenirs',
         occasion: 'Festivals & Religious Events',
         occasionSub: 'Diwali',
-        price: 1899,
-        mrp: 2500,
-        weight: 640,
-        story: 'A hyper-realistic clay sculpture of Hyderabadi Dum Biryani, complete with individual rice grains and a traditional copper handi.',
-        details: 'Meticulously shaped using dental tools for precision. Set in resin broth.',
-        metaDescription: 'Realistic clay miniature of Biryani in a copper handi.',
+        price: 1499,
+        mrp: 2499,
+        weight: 350,
+        story: 'A magnificent South Indian cultural souvenir capturing Karnataka\'s iconic Yakshagana performer and traditional meal platter in handcrafted clay.',
+        details: 'Handcrafted polymer clay art mounted on a polished display plaque. Ideal for cultural gifting, living rooms and office showcases.',
+        metaDescription: 'Buy handcrafted Karnataka Yakshagana & Oota Heritage Souvenir by Mythris Gleams.',
         images: [
-            'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=800'
+            '/souvenirs/Karnataka yakshagana and oota.png'
         ],
-        variants: [{ type: 'Scale', options: ['1:12 Scale', '1:6 Scale'] }],
+        variants: [],
         stockStatus: 'made-to-order',
         rating: 4.9,
-        reviewCount: 8
+        reviewCount: 29
     },
     {
-        name: 'Masala Dosa Platter Miniature',
-        slug: 'masala-dosa-platter-miniature',
-        category: 'Miniature Art & Wall Décor',
-        subcategory: 'Miniature Spatulas',
-        occasion: 'Housewarming',
-        occasionSub: 'Housewarming Gift Sets',
-        price: 1299,
-        mrp: 1800,
-        weight: 420,
-        story: 'The quintessential South Indian breakfast platter, featuring crispy dosa, three types of chutney, and sambar on a banana leaf.',
-        details: 'Hand-painted banana leaf made from polymer clay. Sambar crafted with colored resin.',
-        metaDescription: 'Handmade Masala Dosa Platter miniature art.',
+        name: 'Kerala Onam Sadya Miniature Souvenir',
+        slug: 'kerala-onam-sadya-miniature-souvenir',
+        category: 'Miniature Art & Wall DÃ©cor',
+        subcategory: 'Cultural Souvenirs',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Diwali',
+        price: 1499,
+        mrp: 2499,
+        weight: 350,
+        story: 'An artisanal miniature tribute to Kerala\'s celebrated Grand Sadya feast with traditional side dishes on a banana leaf.',
+        details: 'Handcrafted polymer clay art mounted on a polished display plaque. Ideal for cultural gifting, living rooms and office showcases.',
+        metaDescription: 'Buy handcrafted Kerala Onam Sadya Miniature Souvenir by Mythris Gleams.',
         images: [
-            'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?auto=format&fit=crop&q=80&w=800'
+            '/souvenirs/Kerala Sadya.png'
         ],
-        variants: [{ type: 'Base', options: ['Banana Leaf', 'Silver Plate'] }],
-        stockStatus: 'in-stock',
-        rating: 4.7,
-        reviewCount: 22
-    },
-    {
-        name: 'Vintage Camera Miniature Desk Art',
-        slug: 'vintage-camera-miniature-desk-art',
-        category: 'Miniature Art & Wall Décor',
-        subcategory: 'Other Decorative Miniatures',
-        occasion: 'Congratulations',
-        occasionSub: 'Graduation Gifts',
-        price: 3499,
-        mrp: 4200,
-        weight: 780,
-        story: 'For the photography enthusiast. A nostalgic ode to vintage twin-lens reflex cameras.',
-        details: 'Crafted with black polymer clay and brushed metallic accents. Perfect for office desks.',
-        metaDescription: 'Vintage Camera miniature sculpture for desk decor.',
-        images: [
-            'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=800'
-        ],
-        variants: [{ type: 'Style', options: ['Black & Silver', 'Vintage Brown'] }],
+        variants: [],
         stockStatus: 'made-to-order',
-        rating: 5.0,
-        reviewCount: 15
+        rating: 4.9,
+        reviewCount: 29
     },
     {
-        name: 'Idli Sambar Wall Clock',
-        slug: 'idli-sambar-wall-clock',
-        category: 'Custom Miniature Wall Clocks',
-        subcategory: 'Personalized Food-Themed Clocks',
-        occasion: 'Birthday',
-        occasionSub: 'Theme-Based Birthday Scenes',
-        price: 2899,
-        mrp: 3500,
-        weight: 920,
-        story: 'Start your day on time and with an appetite! A delightful kitchen clock featuring South India\'s beloved breakfast.',
-        details: '12-inch diameter. Requires 1 AA battery. Vibrant non-fade acrylics.',
-        metaDescription: 'Idli Sambar themed handmade kitchen wall clock.',
+        name: 'Tamil Nadu Bharatanatyam & Vazhaillai Sapadu Souvenir',
+        slug: 'tamil-nadu-bharatanatyam-vazhaillai-sapadu-souvenir',
+        category: 'Miniature Art & Wall DÃ©cor',
+        subcategory: 'Cultural Souvenirs',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Diwali',
+        price: 1499,
+        mrp: 2499,
+        weight: 350,
+        story: 'A celebration of Tamil culture depicting a classical Bharatanatyam dancer alongside an authentic Vazhaillai virundhu sapadu.',
+        details: 'Handcrafted polymer clay art mounted on a polished display plaque. Ideal for cultural gifting, living rooms and office showcases.',
+        metaDescription: 'Buy handcrafted Tamil Nadu Bharatanatyam & Vazhaillai Sapadu Souvenir by Mythris Gleams.',
         images: [
-            'https://images.unsplash.com/photo-1626082895617-2c6b4122d3d3?auto=format&fit=crop&q=80&w=800'
+            '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png'
         ],
-        variants: [{ type: 'Size', options: ['12 inch', '14 inch'] }],
-        stockStatus: 'in-stock',
-        rating: 4.6,
-        reviewCount: 30
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 29
     }
 ];
 
@@ -356,7 +1215,7 @@ const importData = async () => {
         await Occasion.deleteMany();
         await Product.deleteMany();
 
-        console.log('🧹 Cleared existing database records.');
+        console.log('ðŸ§¹ Cleared existing database records.');
 
         const createdCollections = await Collection.insertMany(categorySeed.map(c => ({
             name: c.name,
@@ -365,7 +1224,7 @@ const importData = async () => {
             metaDescription: c.metaDescription,
             image: c.image
         })));
-        console.log('✅ Top-level collections seeded: ', createdCollections.length);
+        console.log('âœ… Top-level collections seeded: ', createdCollections.length);
 
         // Seed subcategories with parent references
         let subcategoryCount = 0;
@@ -375,7 +1234,7 @@ const importData = async () => {
                 subcategoryDocs.push({
                     name: sc.name,
                     slug: sc.slug,
-                    description: `${sc.name} — a subcategory of ${cat.name}.`,
+                    description: sc.name + ' - a subcategory of ' + cat.name,
                     image: sc.image,
                     parent: createdCollections[i]._id
                 });
@@ -383,7 +1242,7 @@ const importData = async () => {
             });
         });
         await Collection.insertMany(subcategoryDocs);
-        console.log('✅ Subcategories seeded: ', subcategoryCount);
+        console.log('âœ… Subcategories seeded: ', subcategoryCount);
 
         const createdOccasions = await Occasion.insertMany(occasionSeed.map(o => ({
             name: o.name,
@@ -392,7 +1251,7 @@ const importData = async () => {
             metaDescription: o.metaDescription,
             image: o.image
         })));
-        console.log('✅ Top-level occasions seeded: ', createdOccasions.length);
+        console.log('âœ… Top-level occasions seeded: ', createdOccasions.length);
 
         // Seed occasion subcategories with parent references
         let occasionSubCount = 0;
@@ -402,7 +1261,7 @@ const importData = async () => {
                 occasionSubDocs.push({
                     name: sc.name,
                     slug: sc.slug,
-                    description: `${sc.name} — a subcategory of ${occ.name}.`,
+                    description: sc.name + ' - a subcategory of ' + occ.name,
                     image: sc.image,
                     parent: createdOccasions[i]._id
                 });
@@ -410,15 +1269,15 @@ const importData = async () => {
             });
         });
         await Occasion.insertMany(occasionSubDocs);
-        console.log('✅ Occasion subcategories seeded: ', occasionSubCount);
+        console.log('âœ… Occasion subcategories seeded: ', occasionSubCount);
 
         const createdProducts = await Product.insertMany(products);
-        console.log('✅ Products Seeded: ', createdProducts.length);
+        console.log('âœ… Products Seeded: ', createdProducts.length);
 
-        console.log('🎉 Data Import Successful!');
+        console.log('ðŸŽ‰ Data Import Successful!');
         process.exit();
     } catch (error) {
-        console.error('❌ Error during seeding: ', error);
+        console.error('âŒ Error during seeding: ', error);
         process.exit(1);
     }
 };
@@ -429,10 +1288,10 @@ const destroyData = async () => {
         await Occasion.deleteMany();
         await Product.deleteMany();
 
-        console.log('💥 Data Destroyed!');
+        console.log('ðŸ’¥ Data Destroyed!');
         process.exit();
     } catch (error) {
-        console.error('❌ Error during destruction: ', error);
+        console.error('âŒ Error during destruction: ', error);
         process.exit(1);
     }
 };

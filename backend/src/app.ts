@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 
 // Load Env
 dotenv.config();
-
+ 
 const app: Application = express();
 
 // Middlewares

@@ -42,11 +42,11 @@ export default function MyOrdersPage() {
     <div className="min-h-screen bg-[#fdfdfb]">
       <Breadcrumb items={[{ label: "Account", href: "/account" }, { label: "My Orders" }]} />
 
-      <div className="max-w-[1000px] mx-auto px-6 py-12 lg:py-20">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#e8e4db] pb-6 mb-10">
+      <div className="max-w-[1000px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#e8e4db] pb-6 mb-8 sm:mb-10">
           <div>
-            <h1 className="text-3xl font-serif text-[#3d332a]">Order History</h1>
-            <p className="text-[13px] text-[#8c8273] mt-2 font-light tracking-wide">
+            <h1 className="text-2xl sm:text-3xl font-serif text-[#3d332a]">Order History</h1>
+            <p className="text-[12px] sm:text-[13px] text-[#8c8273] mt-1.5 sm:mt-2 font-light tracking-wide">
               Track and manage your artisan pieces
             </p>
           </div>

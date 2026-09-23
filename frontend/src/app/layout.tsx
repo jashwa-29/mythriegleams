@@ -63,13 +63,20 @@ export default function RootLayout({
       className={`${cormorant.variable} ${dmSans.variable} ${playfair.variable} ${quicksand.variable} h-full antialiased`}
     >
       <head>
+        <title>Mythris Gleams | Handcrafted Clay Miniatures &amp; South Indian Heritage Art</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+        <meta
+          name="description"
+          content="Shop handcrafted clay miniatures, traditional Tamil Nadu street shops, miniature fruit baskets, vegetable crates, and Navaratri Thamboolam return gifts by Mythris Gleams."
+        />
+        <link rel="icon" href="/logo.png" />
         <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
       </head>
-      <body className="min-h-full flex flex-col font-sans">
+      <body className="min-h-full flex flex-col font-sans overflow-x-hidden w-full relative">
         <ReduxProvider>
           <Toaster position="top-right" />
           {!isAdmin && <Navbar />}
-          <main className="flex-grow">
+          <main className="flex-grow w-full overflow-x-hidden">
             {children}
           </main>
           {!isAdmin && <Footer />}

@@ -12,6 +12,9 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
             
             // Add user info to request (excluding password)
             req.user = await User.findById(decoded.id).select('-password');
+            if (!req.user) {
+                return res.status(401).json({ success: false, error: 'User session expired or user no longer exists. Please log in again.' });
+            }
             return next();
         } catch (error) {
             return res.status(401).json({ success: false, error: 'Authorization signature mismatch or artifact expired.' });

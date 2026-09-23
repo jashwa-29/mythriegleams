@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -14,7 +15,6 @@ import {
   X,
   Truck,
   Sparkles,
-  Hexagon,
 } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
@@ -246,34 +246,41 @@ export default function Navbar() {
 
         {/* ─── TIER 2: MAIN BAR (logo + search + actions) ─── */}
         <div className="bg-[var(--accent)] text-white">
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-8 h-16 md:h-20 flex items-center gap-4 md:gap-8">
+          <div className="max-w-[1440px] mx-auto px-3 sm:px-6 md:px-8 h-16 md:h-20 flex items-center justify-between gap-2 sm:gap-4 md:gap-8 min-w-0">
 
-            {/* Mobile: hamburger */}
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
-              aria-label="Open menu"
-            >
-              <Menu size={20} />
-            </button>
+            {/* Mobile: hamburger + Logo group */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
+              {/* Mobile: hamburger */}
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors shrink-0"
+                aria-label="Open menu"
+              >
+                <Menu size={20} />
+              </button>
 
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-2 shrink-0">
-              <Hexagon
-                size={30}
-                fill="white"
-                strokeWidth={1}
-                className="hidden sm:block"
-              />
-              <div className="flex flex-col leading-none">
-                <span className="font-serif text-[20px] md:text-[24px] font-bold tracking-tight">
-                  Mythris
-                </span>
-                <span className="text-[9px] tracking-[0.35em] uppercase text-white/80 -mt-0.5">
-                  Gleams
-                </span>
-              </div>
-            </Link>
+              {/* Logo */}
+              <Link href="/" className="flex items-center gap-2 sm:gap-3 min-w-0 group">
+                <div className="relative w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-full overflow-hidden border-2 border-[var(--accent-gold)] shadow-md bg-black shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src="/logo.png"
+                    alt="Mythris Gleams"
+                    fill
+                    sizes="48px"
+                    className="object-cover"
+                    priority
+                  />
+                </div>
+                <div className="flex flex-col leading-none min-w-0">
+                  <span className="font-serif text-[16px] sm:text-[20px] md:text-[23px] font-bold tracking-tight text-white flex items-center gap-1 truncate">
+                    Mythris <span className="text-[var(--accent-gold)]">Gleams</span>
+                  </span>
+                  <span className="text-[7.5px] sm:text-[9px] tracking-[0.12em] sm:tracking-[0.25em] uppercase text-white/80 mt-0.5 font-medium truncate">
+                    Handcrafted Clay Art
+                  </span>
+                </div>
+              </Link>
+            </div>
 
 {/* Search bar (desktop) */}
             <form
@@ -398,20 +405,20 @@ export default function Navbar() {
             </ul>
 
             {/* Right actions */}
-            <div className="flex items-center gap-1 md:gap-2 ml-auto">
+            <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 ml-auto shrink-0">
               {/* Mobile: search toggle */}
               <button
                 onClick={() => setSearchOpen(!searchOpen)}
-                className="lg:hidden w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+                className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0"
                 aria-label="Search"
               >
-                <Search size={18} />
+                <Search size={17} />
               </button>
 
               {/* Account */}
               <Link
                 href="/account"
-                className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-white/10 transition-colors"
+                className="w-8 h-8 sm:w-9 sm:h-9 md:w-auto md:px-3 md:py-2 flex items-center justify-center gap-2 rounded-full hover:bg-white/10 transition-colors shrink-0"
               >
                 <User size={18} />
                 <span className="text-[12px] font-medium hidden md:inline">
@@ -422,7 +429,7 @@ export default function Navbar() {
               {/* Cart */}
               <button
                 onClick={open}
-                className="relative flex items-center gap-2 px-3 py-2 rounded-full hover:bg-white/10 transition-colors"
+                className="relative w-8 h-8 sm:w-9 sm:h-9 md:w-auto md:px-3 md:py-2 flex items-center justify-center gap-2 rounded-full hover:bg-white/10 transition-colors shrink-0"
                 aria-label="Cart"
               >
                 <ShoppingBag size={18} />
@@ -430,7 +437,7 @@ export default function Navbar() {
                   Cart
                 </span>
                 {totalItems > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 md:top-1 md:right-1 bg-white text-[var(--accent)] text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 md:top-1 md:right-1 bg-white text-[var(--accent)] text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-xs">
                     {totalItems}
                   </span>
                 )}
@@ -480,11 +487,24 @@ export default function Navbar() {
           >
             {/* Drawer header */}
             <div className="bg-[var(--accent)] text-white p-5 flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-2">
-                <Hexagon size={24} fill="white" strokeWidth={1} />
-                <span className="font-serif text-[18px] font-bold">
-                  Mythris Gleams
-                </span>
+              <Link href="/" className="flex items-center gap-2.5">
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border border-[var(--accent-gold)] bg-black shrink-0">
+                  <Image
+                    src="/logo.png"
+                    alt="Mythris Gleams"
+                    fill
+                    sizes="32px"
+                    className="object-cover"
+                  />
+                </div>
+                <div className="flex flex-col leading-none">
+                  <span className="font-serif text-[17px] font-bold text-white">
+                    Mythris <span className="text-[var(--accent-gold)]">Gleams</span>
+                  </span>
+                  <span className="text-[8px] tracking-[0.2em] uppercase text-white/75 mt-0.5">
+                    Handcrafted Clay Art
+                  </span>
+                </div>
               </Link>
               <button
                 onClick={() => setMobileOpen(false)}

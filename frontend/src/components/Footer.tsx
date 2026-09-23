@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useAppSelector } from "@/redux/hooks";
 import { RootState } from "@/redux/store";
 import { Mail, Phone, MapPin } from "lucide-react";
@@ -8,18 +9,20 @@ import { Mail, Phone, MapPin } from "lucide-react";
 export default function Footer() {
   const { collections } = useAppSelector((state: RootState) => state.collections);
 
-  // Fallback collections if none are fetched yet
+  // Fallback collections based on Excel catalogs
   const displayCollections = collections.length > 0 
-    ? collections.slice(0, 5) 
+    ? collections.slice(0, 6) 
     : [
-        { name: "Miniature Food Clocks", slug: "miniature-food-clocks" },
-        { name: "Kawaii Collections", slug: "kawaii-collections" },
-        { name: "Personalized Gifts", slug: "personalized-gifts" },
-        { name: "Jewellery", slug: "jewellery" },
+        { name: "Navaratri Miniature Shops", slug: "miniature-shops" },
+        { name: "Miniature Fruit Baskets", slug: "fruit-baskets" },
+        { name: "Miniature Vegetable Crates", slug: "vegetable-crates" },
+        { name: "Navaratri Thamboolam Sets", slug: "navaratri-thamboolam" },
+        { name: "Heritage Wall Clocks", slug: "wall-clocks" },
+        { name: "Clay Fridge Magnets", slug: "fridge-magnets" },
       ];
 
   return (
-    <footer className="bg-[var(--text)] text-white pt-20 md:pt-32 pb-8 border-t border-[var(--border)] relative overflow-hidden">
+    <footer className="bg-[var(--text)] text-white pt-16 md:pt-24 pb-8 border-t border-[var(--border)] relative overflow-hidden">
       
       {/* Massive Brand Watermark */}
       <div className="absolute top-0 left-0 w-full flex justify-center pointer-events-none select-none overflow-hidden opacity-5">
@@ -28,16 +31,29 @@ export default function Footer() {
         </h2>
       </div>
 
-      <div className="max-w-[1440px] mx-auto px-8 sm:px-12 relative z-10">
+      <div className="max-w-[1440px] mx-auto px-6 sm:px-12 relative z-10">
         
-        {/* Top Header Row */}
-        <div className="flex flex-col md:flex-row items-center justify-between w-full gap-10 border-b border-white/10 pb-16 mb-16">
-          <div className="text-center md:text-left flex flex-col gap-2">
-            <Link href="/" className="font-serif text-3xl md:text-4xl font-semibold tracking-wide text-white hover:text-[var(--accent-light)] transition-colors duration-300">
-              Mythris Gleams
-            </Link>
-            <span className="text-[10px] tracking-[0.3em] uppercase text-white/70">Handcrafted in Chennai, India</span>
-          </div>
+        {/* Top Header Row with Mascot Logo */}
+        <div className="flex flex-col md:flex-row items-center justify-between w-full gap-8 border-b border-white/10 pb-12 mb-14">
+          <Link href="/" className="flex items-center gap-4 text-center md:text-left group">
+            <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-[var(--accent-gold)] bg-black shadow-lg shrink-0 transition-transform group-hover:scale-105">
+              <Image
+                src="/logo.png"
+                alt="Mythris Gleams"
+                fill
+                sizes="56px"
+                className="object-cover"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif text-2xl md:text-3xl font-semibold tracking-tight text-white group-hover:text-[var(--accent-gold)] transition-colors">
+                Mythris <span className="text-[var(--accent-gold)]">Gleams</span>
+              </span>
+              <span className="text-[10px] tracking-[0.25em] uppercase text-white/70">
+                Handcrafted Clay Art • Chennai, India
+              </span>
+            </div>
+          </Link>
           
           {/* Social Icons */}
           <div className="flex gap-4">

@@ -136,15 +136,15 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-[#fdfdfb]">
       <Breadcrumb items={[{ label: "Account", href: "/account" }, { label: "Profile Settings" }]} />
       
-      <div className="max-w-[900px] mx-auto px-6 py-12 lg:py-16">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2.5rem] border border-[#e8e4db] shadow-xl shadow-[#3d332a]/5 overflow-hidden">
+      <div className="max-w-[900px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[#e8e4db] shadow-xl shadow-[#3d332a]/5 overflow-hidden">
           
-          <div className="p-10 border-b border-[#e8e4db] text-center bg-[#f8f6f3]/30">
-            <h1 className="text-3xl font-serif text-[#3d332a]">Manage Your Identity</h1>
-            <p className="text-[13px] text-[#8c8273] mt-2 font-light">Keep your profile current for faster checkout and exclusive artisan previews.</p>
+          <div className="p-6 sm:p-10 border-b border-[#e8e4db] text-center bg-[#f8f6f3]/30">
+            <h1 className="text-2xl sm:text-3xl font-serif text-[#3d332a]">Manage Your Identity</h1>
+            <p className="text-[12px] sm:text-[13px] text-[#8c8273] mt-1.5 sm:mt-2 font-light">Keep your profile current for faster checkout and exclusive artisan previews.</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-10 flex flex-col gap-10">
+          <form onSubmit={handleSubmit} className="p-6 sm:p-10 flex flex-col gap-8 sm:gap-10">
             {/* Core Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="flex flex-col gap-2">

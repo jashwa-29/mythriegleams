@@ -55,22 +55,22 @@ const AdminDashboard = () => {
     }
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-8 bg-white min-h-screen">
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 sm:space-y-8 bg-white min-h-screen rounded-2xl border border-zinc-200">
             {/* Header Area */}
-            <div className="flex justify-between items-center border-b border-zinc-200 pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 pb-5 sm:pb-6">
                 <div>
                     <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Admin Dashboard</h1>
                     <p className="text-xs text-zinc-500 font-medium">Monitor your store's performance and manage various sections.</p>
                 </div>
-                <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100 flex items-center gap-2">
+                <div className="self-start sm:self-auto text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-3.5 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-2">
                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div> System Active
                 </div>
             </div>
 
             {/* Performance Matrix */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {stats.map((stat) => (
-                    <div key={stat.name} className="p-6 bg-white rounded-xl border border-zinc-200 hover:border-zinc-900 transition-all shadow-sm">
+                    <div key={stat.name} className="p-5 sm:p-6 bg-white rounded-xl border border-zinc-200 hover:border-zinc-900 transition-all shadow-sm">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-center text-zinc-400">
                                 {stat.icon}
@@ -98,8 +98,9 @@ const AdminDashboard = () => {
                     </div>
                     
                     <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
-                        <table className="w-full text-left">
-                            <thead className="bg-zinc-50 border-b border-zinc-200">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left min-w-[500px]">
+                                <thead className="bg-zinc-50 border-b border-zinc-200">
                                 <tr className="text-[9px] font-bold uppercase text-zinc-500 tracking-widest">
                                     <th className="px-6 py-4">Order ID</th>
                                     <th className="px-6 py-4">Customer</th>
@@ -131,6 +132,7 @@ const AdminDashboard = () => {
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 </div>
 

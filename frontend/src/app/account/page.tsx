@@ -62,10 +62,12 @@ export default function AccountPage() {
   useEffect(() => {
     if (userInfo) {
       dispatch(fetchCart());
-      if (isNewRegistration) {
-        const searchParams = new URLSearchParams(window.location.search);
-        const redirect = searchParams.get('redirect');
-        router.replace(`/account/profile${redirect ? `?redirect=${redirect}` : ''}`);
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirect = searchParams.get('redirect');
+      if (redirect) {
+        router.replace(redirect);
+      } else if (isNewRegistration) {
+        router.replace('/account/profile');
       }
     }
   }, [userInfo, isNewRegistration, dispatch, router]);
@@ -122,18 +124,18 @@ export default function AccountPage() {
     return (
       <div className="min-h-screen bg-[var(--bg)]">
         <BreadcrumbHero items={[{ label: "Account" }]} eyebrow="Member Area" title="My Account" />
-        <div className="max-w-[1200px] mx-auto px-6 py-12 lg:py-20">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16">
           
-          <div className="flex flex-col md:flex-row gap-12">
+          <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
             {/* Sidebar / User Info */}
-            <div className="md:w-[350px] shrink-0">
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="bg-white rounded-[2.5rem] border border-[var(--border)] p-10 shadow-xl shadow-[var(--text)]/5 sticky top-24">
+            <div className="md:w-[320px] lg:w-[350px] shrink-0">
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[var(--border)] p-6 sm:p-10 shadow-xl shadow-[var(--text)]/5 md:sticky md:top-24">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-24 h-24 rounded-[2.5rem] bg-[var(--text)] text-white flex items-center justify-center text-3xl  mb-6 shadow-xl shadow-[var(--text)]/20">
-                    {userInfo.name?.[0] || <User size={40} />}
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-[2.5rem] bg-[var(--text)] text-white flex items-center justify-center text-2xl sm:text-3xl mb-4 sm:mb-6 shadow-xl shadow-[var(--text)]/20">
+                    {userInfo.name?.[0] || <User size={36} />}
                   </div>
-                  <h1 className="text-2xl  text-[var(--text)] mb-1">{userInfo.name}</h1>
-                  <p className="text-[13px] text-[var(--text-muted)] font-light mb-8">{userInfo.email}</p>
+                  <h1 className="text-xl sm:text-2xl text-[var(--text)] mb-1">{userInfo.name}</h1>
+                  <p className="text-[13px] text-[var(--text-muted)] font-light mb-6 sm:mb-8">{userInfo.email}</p>
                   
                   <div className="w-full flex flex-col gap-3 pt-6 border-t border-[var(--bg-muted)]">
                     <Link href="/account/profile" className="flex items-center justify-between p-4 bg-[var(--bg-subtle)] rounded-2xl text-[13px] text-[var(--text-muted)] hover:bg-[var(--bg-muted)] transition-colors group">
@@ -155,49 +157,49 @@ export default function AccountPage() {
 
             {/* Main Content Area */}
             <div className="flex-grow flex flex-col gap-10">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                 <Link href="/account/orders" className="bg-[var(--text)] rounded-[2.5rem] p-10 text-white flex flex-col justify-between h-[280px] group shadow-xl shadow-[var(--text)]/10 hover:-translate-y-1 transition-all">
-                    <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center">
-                      <Package size={28} strokeWidth={1.5} />
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                 <Link href="/account/orders" className="bg-[var(--text)] rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-10 text-white flex flex-col justify-between min-h-[240px] sm:h-[280px] group shadow-xl shadow-[var(--text)]/10 hover:-translate-y-1 transition-all">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 flex items-center justify-center">
+                      <Package size={24} className="sm:w-7 sm:h-7" strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h2 className="text-2xl  mb-2">My Collective</h2>
-                      <p className="text-white/60 text-[13px] font-light leading-relaxed">Track your artisanal pieces through every stage of creation and delivery.</p>
-                      <div className="mt-6 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">
+                      <h2 className="text-xl sm:text-2xl mb-1.5 sm:mb-2">My Collective</h2>
+                      <p className="text-white/60 text-[12px] sm:text-[13px] font-light leading-relaxed">Track your artisanal pieces through every stage of creation and delivery.</p>
+                      <div className="mt-4 sm:mt-6 flex items-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">
                         View Order Details <ChevronRight size={14} />
                       </div>
                     </div>
                  </Link>
 
-                 <div className="bg-white rounded-[2.5rem] border border-[var(--border)] p-10 flex flex-col justify-between h-[280px] group shadow-sm hover:shadow-xl hover:shadow-[var(--text)]/5 transition-all">
-                    <div className="w-14 h-14 rounded-2xl bg-[var(--bg-subtle)] text-[var(--accent)] flex items-center justify-center">
-                      <ShoppingBag size={28} strokeWidth={1.5} />
+                 <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[var(--border)] p-6 sm:p-10 flex flex-col justify-between min-h-[240px] sm:h-[280px] group shadow-sm hover:shadow-xl hover:shadow-[var(--text)]/5 transition-all">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[var(--bg-subtle)] text-[var(--accent)] flex items-center justify-center">
+                      <ShoppingBag size={24} className="sm:w-7 sm:h-7" strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h2 className="text-2xl  text-[var(--text)] mb-2">Back to the Vault</h2>
-                      <p className="text-[var(--text-muted)] text-[13px] font-light leading-relaxed">Your journey has just begun. Explore the latest additions to our artifact collections.</p>
-                      <Link href="/category/all" className="mt-6 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[var(--accent)] group-hover:text-[var(--text-muted)] transition-colors">
+                      <h2 className="text-xl sm:text-2xl text-[var(--text)] mb-1.5 sm:mb-2">Back to the Vault</h2>
+                      <p className="text-[var(--text-muted)] text-[12px] sm:text-[13px] font-light leading-relaxed">Your journey has just begun. Explore the latest additions to our artifact collections.</p>
+                      <Link href="/category/all" className="mt-4 sm:mt-6 flex items-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-[var(--accent)] group-hover:text-[var(--text-muted)] transition-colors">
                         Explore Treasures <ChevronRight size={14} />
                       </Link>
                     </div>
                  </div>
               </motion.div>
 
-              <div className="bg-white rounded-[2.5rem] border border-[var(--border)] p-8 md:p-12">
-                <div className="flex items-center gap-3 mb-8">
+              <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[var(--border)] p-6 sm:p-10 md:p-12">
+                <div className="flex items-center gap-3 mb-6 sm:mb-8">
                   <Sparkles size={18} className="text-[var(--accent)]" />
-                  <h3 className=" text-xl text-[var(--text)]">Quick Access</h3>
+                  <h3 className="text-lg sm:text-xl text-[var(--text)]">Quick Access</h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   {[
                     { label: "Shipping Addresses", icon: MapPin, href: "/account/profile" },
                     { label: "Wishlist Artifacts", icon: Heart, href: "/#products" },
                   ].map((item, i) => (
-                    <Link key={i} href={item.href} className="flex items-center gap-4 p-5 rounded-2xl bg-[var(--bg-subtle)]/50 border border-[var(--bg-muted)] hover:bg-white hover:shadow-lg hover:shadow-[var(--text)]/5 transition-all group">
-                      <div className="w-10 h-10 rounded-xl bg-white border border-[var(--border)] flex items-center justify-center text-[var(--accent)] group-hover:bg-[var(--text)] group-hover:text-white transition-all">
-                        <item.icon size={18} strokeWidth={1.5} />
+                    <Link key={i} href={item.href} className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-[var(--bg-subtle)]/50 border border-[var(--bg-muted)] hover:bg-white hover:shadow-lg hover:shadow-[var(--text)]/5 transition-all group">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-[var(--border)] flex items-center justify-center text-[var(--accent)] group-hover:bg-[var(--text)] group-hover:text-white transition-all shrink-0">
+                        <item.icon size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={1.5} />
                       </div>
-                      <span className="text-[14px] text-[var(--text-muted)] font-medium">{item.label}</span>
+                      <span className="text-[13px] sm:text-[14px] text-[var(--text-muted)] font-medium">{item.label}</span>
                     </Link>
                   ))}
                 </div>
@@ -213,23 +215,23 @@ export default function AccountPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)] flex flex-col">
       <BreadcrumbHero items={[{ label: "Account" }]} eyebrow="Member Area" title="My Account" />
-      <div className="relative flex-1 flex items-center justify-center px-4 py-20">
+      <div className="relative flex-1 flex items-center justify-center px-4 py-12 sm:py-20">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--bg-subtle),_var(--bg)_60%)] pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full max-w-[480px] bg-white rounded-[2.5rem] shadow-xl shadow-[var(--text)]/5 border border-[var(--border)] overflow-hidden"
+        className="relative z-10 w-full max-w-[480px] bg-white rounded-2xl sm:rounded-[2.5rem] shadow-xl shadow-[var(--text)]/5 border border-[var(--border)] overflow-hidden"
       >
-        <div className="pt-10 pb-8 px-10 text-center border-b border-[var(--border)]">
-          <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full border border-[var(--border)] bg-[var(--bg-subtle)] text-[10px] uppercase tracking-[0.2em] text-[var(--accent)] font-medium mb-5">
+        <div className="pt-8 pb-6 px-6 sm:px-10 text-center border-b border-[var(--border)]">
+          <div className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 rounded-full border border-[var(--border)] bg-[var(--bg-subtle)] text-[10px] uppercase tracking-[0.2em] text-[var(--accent)] font-medium mb-4 sm:mb-5">
             <Sparkles size={12} /> Mythris Gleams
           </div>
-          <h1 className="text-3xl  text-[var(--text)] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl text-[var(--text)] tracking-tight">
             {tab === "login" ? "Welcome Back" : "Create Account"}
           </h1>
-          <p className="text-[13px] text-[var(--text-muted)] font-light mt-2">
+          <p className="text-[12px] sm:text-[13px] text-[var(--text-muted)] font-light mt-1.5 sm:mt-2">
             {tab === "login" ? "Sign in to access your cart and orders." : "Join our artisan community today."}
           </p>
         </div>
@@ -239,7 +241,7 @@ export default function AccountPage() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-4 text-[12px] font-medium uppercase tracking-[0.15em] transition-colors relative ${
+              className={`flex-1 py-3.5 sm:py-4 text-[11px] sm:text-[12px] font-medium uppercase tracking-[0.15em] transition-colors relative ${
                 tab === t ? "text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
               }`}
             >
@@ -251,7 +253,7 @@ export default function AccountPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="px-10 py-8 flex flex-col gap-5" noValidate>
+        <form onSubmit={handleSubmit} className="px-6 sm:px-10 py-6 sm:py-8 flex flex-col gap-4 sm:gap-5" noValidate>
           <AnimatePresence mode="wait">
             {tab === "register" && (
               <motion.div key="name" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">

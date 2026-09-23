@@ -9,7 +9,10 @@ import ErrorResponse from '../utils/errorResponse';
  * @access Private
  */
 export const getCart = asyncHandler(async (req: Request, res: Response) => {
-    const cart = await Cart.findOne({ user: req.user._id }).populate('items.product', 'name images price slug');
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
+    const cart = await Cart.findOne({ user: req.user._id });
     res.status(200).json({ success: true, data: cart?.items || [] });
 });
 
@@ -19,6 +22,9 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
  * @access Private
  */
 export const addToCart = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
     const { productId, name, image, price, weight = 0, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
 
     let cart = await Cart.findOne({ user: req.user._id });
@@ -29,7 +35,7 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
 
     const existingIndex = cart.items.findIndex(
         (item) =>
-            item.product.toString() === productId &&
+            (typeof item.product === 'object' && (item.product as any)?._id ? (item.product as any)._id.toString() : item.product?.toString()) === productId &&
             item.selectedVariant === selectedVariant &&
             item.selectedColor === selectedColor
     );
@@ -51,6 +57,9 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
  * @access Private
  */
 export const updateCartItem = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
     const { quantity } = req.body;
     const cart = await Cart.findOne({ user: req.user._id });
     if (!cart) return next(new ErrorResponse('Cart not found in the archives.', 404));
@@ -74,6 +83,9 @@ export const updateCartItem = asyncHandler(async (req: Request, res: Response, n
  * @access Private
  */
 export const removeFromCart = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
     const cart = await Cart.findOne({ user: req.user._id });
     if (!cart) return next(new ErrorResponse('Cart not found.', 404));
 
@@ -88,6 +100,9 @@ export const removeFromCart = asyncHandler(async (req: Request, res: Response, n
  * @access Private
  */
 export const clearCart = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
     await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
     res.status(200).json({ success: true, data: [] });
 });

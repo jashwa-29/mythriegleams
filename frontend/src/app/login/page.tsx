@@ -11,6 +11,7 @@ import { Mail, Lock, Loader2, ArrowLeft, AlertCircle, UserPlus, LogIn, User } fr
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { login, registerUser, resetAuthError } from '@/redux/slices/authSlice';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // Validation Schemas
 const loginSchema = z.object({
@@ -43,10 +44,12 @@ const LoginContent = () => {
         if (userInfo) {
             if (userInfo.role === 'admin') {
                 router.push('/admin');
+            } else if (redirect) {
+                router.push(redirect);
             } else if (isRegistering) {
-                router.push(`/account/profile?redirect=${redirect || '/'}`);
+                router.push('/account/profile');
             } else {
-                router.push(redirect || '/');
+                router.push('/');
             }
         }
     }, [userInfo, router, redirect, isRegistering]);
@@ -78,10 +81,23 @@ const LoginContent = () => {
                 className="w-full max-w-md"
             >
                 {/* Brand Logo */}
-                <div className="text-center mb-10">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-900 text-gold shadow-2xl mb-6 shadow-gold/20">
-                        <span className="text-2xl font-bold font-serif italic">M</span>
+                <div className="text-center mb-8 flex flex-col items-center">
+                    <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-[var(--accent-gold)] shadow-xl bg-black mb-3">
+                        <Image
+                            src="/logo.png"
+                            alt="Mythris Gleams"
+                            fill
+                            sizes="80px"
+                            className="object-cover"
+                            priority
+                        />
                     </div>
+                    <span className="font-serif text-2xl font-bold text-zinc-900 tracking-tight">
+                      Mythris <span className="text-[var(--accent)]">Gleams</span>
+                    </span>
+                    <span className="text-[9px] font-bold tracking-[0.25em] uppercase text-zinc-400 mt-0.5">
+                      Handcrafted Clay Art
+                    </span>
                 </div>
 
                 {/* Form Card */}

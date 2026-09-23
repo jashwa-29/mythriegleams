@@ -33,24 +33,25 @@ export default function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed top-0 right-0 bottom-0 w-[420px] max-w-[100vw] bg-[var(--bg)] z-[999] flex flex-col shadow-2xl border-l border-[var(--border)]"
+            className="fixed top-0 right-0 bottom-0 w-full sm:w-[420px] max-w-full bg-[var(--bg)] z-[999] flex flex-col shadow-2xl border-l border-[var(--border)]"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-8 py-6 border-b border-[var(--border)]">
+            <div className="flex items-center justify-between px-5 sm:px-8 py-5 sm:py-6 border-b border-[var(--border)]">
               <div>
-                <h2 className="text-[var(--text)] text-xl md:text-2xl font-bold tracking-tight leading-tight">Your Collection</h2>
-                <p className="text-[var(--text-faint)] text-[10px] font-bold uppercase tracking-[0.25em] mt-1">{totalItems} piece{totalItems !== 1 ? "s" : ""} selected</p>
+                <h2 className="text-[var(--text)] text-lg sm:text-2xl font-bold tracking-tight leading-tight">Your Collection</h2>
+                <p className="text-[var(--text-faint)] text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.25em] mt-1">{totalItems} piece{totalItems !== 1 ? "s" : ""} selected</p>
               </div>
               <button
                 onClick={close}
-                className="w-10 h-10 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--text)] hover:text-white transition-all"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--text)] hover:text-white transition-all"
+                aria-label="Close cart"
               >
                 <X size={16} strokeWidth={1.5} />
               </button>
             </div>
 
             {/* Items */}
-            <div className="flex-grow overflow-y-auto px-8 py-6 flex flex-col gap-6">
+            <div className="flex-grow overflow-y-auto px-5 sm:px-8 py-5 sm:py-6 flex flex-col gap-5 touch-scroll">
               {loading && (
                 <div className="flex items-center justify-center py-20">
                   <div className="w-6 h-6 border-2 border-[var(--text-faint)] border-t-transparent rounded-full animate-spin" />
@@ -147,10 +148,10 @@ export default function CartDrawer() {
 
             {/* Footer */}
             {items.length > 0 && (
-              <div className="px-8 py-6 border-t border-[var(--border)] bg-white space-y-4">
+              <div className="px-5 sm:px-8 py-4 sm:py-6 border-t border-[var(--border)] bg-white space-y-3.5">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-muted)]">Subtotal</span>
-                  <span className="text-[var(--text)] text-xl md:text-2xl font-bold tracking-tight">₹{totalPrice.toLocaleString()}</span>
+                  <span className="text-[var(--text)] text-lg sm:text-2xl font-bold tracking-tight">₹{totalPrice.toLocaleString()}</span>
                 </div>
                 {totalWeight > 0 && (
                   <div className="flex justify-between items-center text-[11px] text-[var(--text-faint)]">

@@ -122,31 +122,31 @@ const OrderManagement = () => {
     }, [orders, userId, searchTerm]);
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen">
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
             {/* Professional Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-zinc-200 pb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-200 pb-5 sm:pb-6">
                 <div>
                     <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Orders</h1>
                     <p className="text-xs text-zinc-500 font-medium">View and manage customer orders and fulfillment.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={exportToExcel} className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
                         <Download size={14} />
-                        <span>Export Excel</span>
+                        <span>Export</span>
                     </button>
                     <div className="flex bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-                        <button className="bg-zinc-900 text-white shadow-sm px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all">Paid Only</button>
+                        <button className="bg-zinc-900 text-white shadow-sm px-3 sm:px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all">Paid Only</button>
                     </div>
                 </div>
             </div>
 
             {/* Toolbar */}
-            <div className="flex flex-col xl:flex-row items-center justify-between gap-4 border border-zinc-200 bg-zinc-50/50 p-2 rounded-xl">
-                <div className="relative w-full xl:w-96">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 border border-zinc-200 bg-zinc-50/50 p-2 sm:p-2.5 rounded-xl">
+                <div className="relative w-full sm:w-80">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
                     <input type="text" placeholder="Search orders..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg py-2 pl-9 pr-4 text-xs focus:border-zinc-900 outline-none transition-all" />
                 </div>
-                <div className="text-[10px] font-bold text-zinc-900 bg-white px-4 py-2 rounded-lg border border-zinc-200">Total Revenue: ₹{orders.filter(o => o.isPaid).reduce((acc, o) => acc + o.totalPrice, 0).toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-zinc-900 bg-white px-3 sm:px-4 py-2 rounded-lg border border-zinc-200 text-center">Total Revenue: ₹{orders.filter(o => o.isPaid).reduce((acc, o) => acc + o.totalPrice, 0).toLocaleString()}</div>
             </div>
 
             {/* Order Table */}
@@ -155,7 +155,7 @@ const OrderManagement = () => {
                     <div className="py-20 flex flex-col items-center gap-3"><Loader2 className="w-6 h-6 animate-spin text-zinc-200" /><p className="text-[10px] uppercase font-bold text-zinc-300">Loading Orders</p></div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[650px]">
                             <thead>
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Order Info</th>
@@ -198,27 +198,27 @@ const OrderManagement = () => {
             {/* Details Modal */}
             <AnimatePresence>
                 {inspectedOrder && (
-                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInspectedOrder(null)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
                         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden flex flex-col max-h-[90vh]">
-                            <div className="px-8 py-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                            <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
                                 <div>
-                                    <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-3">Order Details: #{inspectedOrder._id.substring(inspectedOrder._id.length-8).toUpperCase()}</h2>
-                                    <div className="flex items-center gap-4 mt-1">
-                                        <div className="text-[9px] text-zinc-400 font-bold uppercase">Manage this order</div>
-                                        <div className="text-[9px] text-zinc-500 font-bold uppercase flex items-center gap-1.5 border-l border-zinc-200 pl-4">
+                                    <h2 className="text-base sm:text-lg font-bold text-zinc-900 flex items-center gap-2 sm:gap-3">Order #{inspectedOrder._id.substring(inspectedOrder._id.length-8).toUpperCase()}</h2>
+                                    <div className="flex items-center gap-2 sm:gap-4 mt-0.5 sm:mt-1 flex-wrap">
+                                        <div className="text-[9px] text-zinc-400 font-bold uppercase">Order Details</div>
+                                        <div className="text-[9px] text-zinc-500 font-bold uppercase flex items-center gap-1.5 border-l border-zinc-200 pl-2 sm:pl-4">
                                             <Calendar size={10} /> {new Date(inspectedOrder.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
                                         </div>
                                     </div>
                                 </div>
                                 <button onClick={() => setInspectedOrder(null)} className="p-2 hover:bg-zinc-200 rounded-lg text-zinc-400 transition-all"><X size={20} /></button>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    <div className="lg:col-span-2 space-y-8">
-                                        <div className="bg-zinc-50 border border-zinc-100 p-6 rounded-xl space-y-5">
+                            <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                                    <div className="lg:col-span-2 space-y-6 sm:space-y-8">
+                                        <div className="bg-zinc-50 border border-zinc-100 p-4 sm:p-6 rounded-xl space-y-4 sm:space-y-5">
                                             <h3 className="font-bold text-[10px] uppercase text-zinc-500 tracking-wider flex items-center gap-2"><Hammer size={14} /> Update Order Status</h3>
-                                            <div className="grid grid-cols-3 gap-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                 {orderStatuses.map(status => (
                                                     <button key={status} onClick={() => { if (status === 'Dispatched') { handleActionInitiation(inspectedOrder._id, status, dispatchData.tracking, dispatchData.note); } else { handleActionInitiation(inspectedOrder._id, status); } }} className={`px-3 py-2.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${inspectedOrder.status === status ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 hover:border-zinc-900 hover:text-zinc-900'}`}>{status}</button>
                                                 ))}

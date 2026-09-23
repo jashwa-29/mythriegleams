@@ -96,21 +96,21 @@ const ProductManagement = () => {
     };
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen">
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
             {/* Professional Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-5 sm:pb-6">
                 <div>
                     <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Product Management</h1>
                     <p className="text-xs text-zinc-500 font-medium">Manage your store's inventory and product details.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={exportToExcel} className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
                         <Download size={14} />
-                        <span>Export Excel</span>
+                        <span>Export</span>
                     </button>
                     <button 
                         onClick={() => { setSelectedProduct(null); setAddModalOpen(true); }}
-                        className="flex items-center gap-2 bg-zinc-900 text-white px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-zinc-900 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all shadow-sm"
                     >
                         <Plus size={14} />
                         <span>New Entry</span>
@@ -119,8 +119,8 @@ const ProductManagement = () => {
             </div>
 
             {/* Precision Toolbar */}
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between border border-zinc-200 bg-zinc-50/50 p-2 rounded-xl">
-                <div className="relative w-full md:w-80">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between border border-zinc-200 bg-zinc-50/50 p-2 sm:p-2.5 rounded-xl">
+                <div className="relative w-full sm:w-80">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
                     <input 
                         type="text" 
@@ -142,7 +142,7 @@ const ProductManagement = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[650px]">
                             <thead>
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Product</th>
@@ -199,21 +199,21 @@ const ProductManagement = () => {
             {/* Details Modal */}
             <AnimatePresence>
                 {inspectedProduct && (
-                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInspectedProduct(null)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
                         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden">
-                            <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                            <div className="p-4 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
                                 <h3 className="font-bold text-zinc-900 flex items-center gap-2">Product Details</h3>
                                 <button onClick={() => setInspectedProduct(null)} className="text-zinc-400 hover:text-zinc-900 transition-colors"><X size={20} /></button>
                             </div>
-                            <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-                                <div className="flex gap-8">
-                                    <div className="w-40 h-40 rounded-xl border border-zinc-200 overflow-hidden shrink-0 bg-zinc-50">
-                                        {inspectedProduct.images?.[0] ? <img src={getImageUrl(inspectedProduct.images[0])} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto mt-12" size={40} />}
+                            <div className="p-4 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+                                <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 items-start sm:items-stretch">
+                                    <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-xl border border-zinc-200 overflow-hidden shrink-0 bg-zinc-50 mx-auto sm:mx-0">
+                                        {inspectedProduct.images?.[0] ? <img src={getImageUrl(inspectedProduct.images[0])} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto mt-10" size={36} />}
                                     </div>
-                                    <div className="space-y-4 flex-1">
+                                    <div className="space-y-3 sm:space-y-4 flex-1 w-full">
                                         <div className="space-y-1">
-                                            <div className="text-xl font-bold text-zinc-900">{inspectedProduct.name}</div>
+                                            <div className="text-lg sm:text-xl font-bold text-zinc-900">{inspectedProduct.name}</div>
                                             <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">UID: {inspectedProduct._id}</div>
                                         </div>
                                         <div className="space-y-3">
@@ -225,30 +225,30 @@ const ProductManagement = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><DollarSign size={10}/> Price</div>
-                                        <div className="text-lg font-bold text-zinc-900 tabular-nums">₹{inspectedProduct.price.toLocaleString()}</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 tabular-nums">₹{inspectedProduct.price.toLocaleString()}</div>
                                     </div>
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Box size={10}/> Weight</div>
-                                        <div className="text-lg font-bold text-zinc-900 tabular-nums">{inspectedProduct.weight ? `${inspectedProduct.weight} g` : "—"}</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 tabular-nums">{inspectedProduct.weight ? `${inspectedProduct.weight} g` : "—"}</div>
                                     </div>
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Category</div>
-                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.category}</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.category}</div>
                                     </div>
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Subcategory</div>
-                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.subcategory || "—"}</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.subcategory || "—"}</div>
                                     </div>
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Occasion</div>
-                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasion || "—"}</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasion || "—"}</div>
                                     </div>
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Occasion Subcategory</div>
-                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasionSub || "—"}</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasionSub || "—"}</div>
                                     </div>
                                 </div>
                                 {(inspectedProduct.variants?.length > 0 || inspectedProduct.requiresImage) && (
@@ -266,11 +266,11 @@ const ProductManagement = () => {
                                     </div>
                                 )}
                             </div>
-                             <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between">
-                                <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setDeleteModalOpen(true); }} className="flex items-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all"><Trash2 size={16}/> Delete Product</button>
+                             <div className="p-4 sm:p-6 bg-zinc-50 border-t border-zinc-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setDeleteModalOpen(true); }} className="flex items-center justify-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all py-2"><Trash2 size={16}/> Delete Product</button>
                                 <div className="flex gap-2">
-                                    <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setAddModalOpen(true); }} className="px-6 py-2 bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-zinc-300">Edit Product</button>
-                                    <button onClick={() => setInspectedProduct(null)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black">Close</button>
+                                    <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setAddModalOpen(true); }} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-zinc-300">Edit</button>
+                                    <button onClick={() => setInspectedProduct(null)} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black">Close</button>
                                 </div>
                             </div>
                         </motion.div>
