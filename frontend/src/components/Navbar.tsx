@@ -238,7 +238,7 @@ export default function Navbar() {
             <div className="flex items-center gap-6">
               <span className="flex items-center gap-1.5 text-[var(--accent-light)] font-semibold">
                 <Sparkles size={12} />
-                Free shipping above ₹999
+                Free shipping above ₹4,999
               </span>
             </div>
           </div>

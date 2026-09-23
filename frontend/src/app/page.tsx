@@ -620,7 +620,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Special Festive Bundle Callout */}
+          {/* Special Festive Bundle Callout (Hidden) */}
+          {/*
           <div className="mb-10 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#fae8d4] via-[#fcefdc] to-[#f7e4ce] border border-[var(--accent-gold)]/40 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 text-center sm:text-left">
               <span className="text-2xl">🎁</span>
@@ -637,6 +638,7 @@ export default function HomePage() {
               Code: CLAY5BUNDLE
             </span>
           </div>
+          */}
 
           {/* Product Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5">

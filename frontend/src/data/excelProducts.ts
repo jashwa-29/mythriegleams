@@ -1,4 +1,4 @@
-﻿export interface ExcelCatalogProduct {
+export interface ExcelCatalogProduct {
   sku: string;
   name: string;
   slug: string;
@@ -241,8 +241,8 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
   },
   {
     sku: 'MG-FB-006',
-    name: 'Miniature Pineapple Fruit Basket',
-    slug: 'miniature-pineapple-fruit-basket',
+    name: 'Miniature Orange Fruit Basket',
+    slug: 'miniature-orange-fruit-basket',
     group: 'fruit-baskets',
     category: 'Miniature Fruit Baskets',
     subcategory: 'Handcrafted Fruit Baskets',
@@ -250,27 +250,12 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     mrp: 300,
     badge: 'Collector Pick',
     image: '/Fruit baskets/Orange.png',
-    shortDesc: 'Handcrafted miniature pineapple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    shortDesc: 'Handcrafted miniature orange basket made with detailed clay fruit miniatures in a charming traditional basket.',
     rating: 4.9,
     reviewsCount: 27
   },
   {
     sku: 'MG-FB-007',
-    name: 'Miniature Pomegranate Fruit Basket',
-    slug: 'miniature-pomegranate-fruit-basket',
-    group: 'fruit-baskets',
-    category: 'Miniature Fruit Baskets',
-    subcategory: 'Handcrafted Fruit Baskets',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Fruit baskets/strawberry.png',
-    shortDesc: 'Handcrafted miniature pomegranate basket made with detailed clay fruit miniatures in a charming traditional basket.',
-    rating: 4.9,
-    reviewsCount: 29
-  },
-  {
-    sku: 'MG-FB-008',
     name: 'Miniature Pear Fruit Basket',
     slug: 'miniature-pear-fruit-basket',
     group: 'fruit-baskets',
@@ -285,7 +270,7 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     reviewsCount: 22
   },
   {
-    sku: 'MG-FB-009',
+    sku: 'MG-FB-008',
     name: 'Miniature Watermelon Fruit Basket',
     slug: 'miniature-watermelon-fruit-basket',
     group: 'fruit-baskets',
@@ -299,111 +284,7 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     rating: 4.9,
     reviewsCount: 28
   },
-  {
-    sku: 'MG-FB-010',
-    name: 'Miniature Jamun Fruit Basket',
-    slug: 'miniature-jamun-fruit-basket',
-    group: 'fruit-baskets',
-    category: 'Miniature Fruit Baskets',
-    subcategory: 'Handcrafted Fruit Baskets',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Fruit baskets/pears.png',
-    shortDesc: 'Handcrafted miniature jamun basket made with detailed clay fruit miniatures in a charming traditional basket.',
-    rating: 4.9,
-    reviewsCount: 23
-  },
-  {
-    sku: 'MG-FB-011',
-    name: 'Miniature Custard Apple Fruit Basket',
-    slug: 'miniature-custard-apple-fruit-basket',
-    group: 'fruit-baskets',
-    category: 'Miniature Fruit Baskets',
-    subcategory: 'Handcrafted Fruit Baskets',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Fruit baskets/apple.png',
-    shortDesc: 'Handcrafted miniature custard apple basket made with detailed clay fruit miniatures in a charming traditional basket.',
-    rating: 4.9,
-    reviewsCount: 31
-  },
-  {
-    sku: 'MG-FB-012',
-    name: 'Miniature Guava Fruit Basket',
-    slug: 'miniature-guava-fruit-basket',
-    group: 'fruit-baskets',
-    category: 'Miniature Fruit Baskets',
-    subcategory: 'Handcrafted Fruit Baskets',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Fruit baskets/apple.png',
-    shortDesc: 'Handcrafted miniature guava basket made with detailed clay fruit miniatures in a charming traditional basket.',
-    rating: 4.9,
-    reviewsCount: 23
-  },
-  {
-    sku: 'MG-FB-013',
-    name: 'Miniature Muskmelon Fruit Basket',
-    slug: 'miniature-muskmelon-fruit-basket',
-    group: 'fruit-baskets',
-    category: 'Miniature Fruit Baskets',
-    subcategory: 'Handcrafted Fruit Baskets',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Fruit baskets/watermelon.png',
-    shortDesc: 'Handcrafted miniature muskmelon basket made with detailed clay fruit miniatures in a charming traditional basket.',
-    rating: 4.9,
-    reviewsCount: 27
-  },
-  {
-    sku: 'MG-FB-014',
-    name: 'Miniature Dragon Fruit Fruit Basket',
-    slug: 'miniature-dragon-fruit-fruit-basket',
-    group: 'fruit-baskets',
-    category: 'Miniature Fruit Baskets',
-    subcategory: 'Handcrafted Fruit Baskets',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Fruit baskets/strawberry.png',
-    shortDesc: 'Handcrafted miniature dragon fruit basket made with detailed clay fruit miniatures in a charming traditional basket.',
-    rating: 4.9,
-    reviewsCount: 30
-  },
-  {
-    sku: 'MG-FB-015',
-    name: 'Miniature Jackfruit Fruit Basket',
-    slug: 'miniature-jackfruit-fruit-basket',
-    group: 'fruit-baskets',
-    category: 'Miniature Fruit Baskets',
-    subcategory: 'Handcrafted Fruit Baskets',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Fruit baskets/papaya.png',
-    shortDesc: 'Handcrafted miniature jackfruit basket made with detailed clay fruit miniatures in a charming traditional basket.',
-    rating: 4.9,
-    reviewsCount: 27
-  },
-  {
-    sku: 'MG-VG-001',
-    name: 'Miniature Tomato Vegetable Crate',
-    slug: 'miniature-tomato-vegetable-crate',
-    group: 'vegetable-crates',
-    category: 'Miniature Vegetable Crates',
-    subcategory: 'Handcrafted Vegetable Crates',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Vegetable Baskets/carrot.png',
-    shortDesc: 'Handcrafted miniature tomato crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
-    rating: 4.9,
-    reviewsCount: 27
-  },
+
   {
     sku: 'MG-VG-002',
     name: 'Miniature Potato Vegetable Crate',
@@ -434,21 +315,7 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     rating: 4.9,
     reviewsCount: 28
   },
-  {
-    sku: 'MG-VG-004',
-    name: 'Miniature Onion Vegetable Crate',
-    slug: 'miniature-onion-vegetable-crate',
-    group: 'vegetable-crates',
-    category: 'Miniature Vegetable Crates',
-    subcategory: 'Handcrafted Vegetable Crates',
-    price: 199,
-    mrp: 300,
-    badge: 'Collector Pick',
-    image: '/Vegetable Baskets/beetroot.png',
-    shortDesc: 'Handcrafted miniature onion crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
-    rating: 4.9,
-    reviewsCount: 26
-  },
+
   {
     sku: 'MG-VG-005',
     name: 'Miniature Drumstick Vegetable Crate',
@@ -555,9 +422,9 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     reviewsCount: 28
   },
   {
-    sku: 'MG-VG-012',
-    name: 'Miniature Bottle Gourd Vegetable Crate',
-    slug: 'miniature-bottle-gourd-vegetable-crate',
+    sku: 'MG-VG-010',
+    name: 'Miniature Cucumber Vegetable Crate',
+    slug: 'miniature-cucumber-vegetable-crate',
     group: 'vegetable-crates',
     category: 'Miniature Vegetable Crates',
     subcategory: 'Handcrafted Vegetable Crates',
@@ -565,7 +432,7 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     mrp: 300,
     badge: 'Collector Pick',
     image: '/Vegetable Baskets/cucumber.png',
-    shortDesc: 'Handcrafted miniature bottle gourd crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    shortDesc: 'Handcrafted miniature cucumber crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
     rating: 4.9,
     reviewsCount: 33
   },
@@ -629,21 +496,7 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     rating: 4.9,
     reviewsCount: 24
   },
-  {
-    sku: 'MG-FM-001',
-    name: 'South Indian Banana Leaf Thali Fridge Magnet',
-    slug: 'south-indian-banana-leaf-thali-fridge-magnet',
-    group: 'fruit-baskets',
-    category: 'Fridge Magnets',
-    subcategory: 'Miniature Food Magnets',
-    price: 499,
-    mrp: 699,
-    badge: 'Collector Pick',
-    image: '/Fridge Magnets/Banana leaf thali with mdf base.png',
-    shortDesc: 'Handcrafted miniature South Indian Banana Leaf Thali mounted on a sturdy MDF base with a high-grade neodymium magnet.',
-    rating: 4.9,
-    reviewsCount: 38
-  },
+
   {
     sku: 'MG-SV-001',
     name: 'Karnataka Yakshagana & Oota Heritage Souvenir',

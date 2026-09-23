@@ -159,6 +159,24 @@ export default function CartDrawer() {
                     <span className="font-semibold text-[var(--text-muted)]">{formatWeight(totalWeight)}</span>
                   </div>
                 )}
+                {totalPrice >= 4999 ? (
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#2e7d32] font-semibold bg-[#2e7d32]/10 px-3 py-2 rounded-xl">
+                    <span>✨</span> You have unlocked Free Shipping!
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 bg-[var(--bg-subtle)]/70 p-2.5 rounded-xl border border-[var(--border)]/60">
+                    <div className="flex justify-between text-[11px] text-[var(--text-muted)] font-medium">
+                      <span>Add ₹{(4999 - totalPrice).toLocaleString()} more for <strong className="text-[var(--text)]">Free Shipping</strong></span>
+                      <span className="font-semibold">{Math.min(100, Math.round((totalPrice / 4999) * 100))}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent)] transition-all duration-300 rounded-full"
+                        style={{ width: `${Math.min(100, Math.round((totalPrice / 4999) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <p className="text-[11px] text-[var(--text-faint)]">Shipping & taxes calculated at checkout.</p>
 
                 <Link

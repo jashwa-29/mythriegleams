@@ -598,27 +598,7 @@ const products = [
         rating: 4.9,
         reviewCount: 27
     },
-    {
-        name: 'Miniature Pomegranate Fruit Basket',
-        slug: 'miniature-pomegranate-fruit-basket',
-        category: 'Miniature Fruit Baskets',
-        subcategory: 'Handcrafted Fruit Baskets',
-        occasion: 'Festivals & Religious Events',
-        occasionSub: 'Navaratri / Golu',
-        price: 199,
-        mrp: 300,
-        weight: 120,
-        story: 'Handcrafted miniature pomegranate basket made with detailed clay fruit miniatures in a charming traditional basket.',
-        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Pomegranate Fruit Basket from Mythris Gleams. The basket is carefully created with tiny pomegranate miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
-        metaDescription: 'Shop a handcrafted miniature pomegranate fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
-        images: [
-            '/Fruit baskets/strawberry.png'
-        ],
-        variants: [],
-        stockStatus: 'made-to-order',
-        rating: 4.9,
-        reviewCount: 29
-    },
+
     {
         name: 'Miniature Pear Fruit Basket',
         slug: 'miniature-pear-fruit-basket',
@@ -787,27 +767,7 @@ const products = [
         rating: 4.9,
         reviewCount: 27
     },
-    {
-        name: 'Miniature Tomato Vegetable Crate',
-        slug: 'miniature-tomato-vegetable-crate',
-        category: 'Miniature Vegetable Crates',
-        subcategory: 'Handcrafted Vegetable Crates',
-        occasion: 'Festivals & Religious Events',
-        occasionSub: 'Navaratri / Golu',
-        price: 199,
-        mrp: 300,
-        weight: 120,
-        story: 'Handcrafted miniature tomato crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
-        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Tomato Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny tomato miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
-        metaDescription: 'Shop a handcrafted miniature tomato vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
-        images: [
-            '/Vegetable Baskets/carrot.png'
-        ],
-        variants: [],
-        stockStatus: 'made-to-order',
-        rating: 4.9,
-        reviewCount: 27
-    },
+
     {
         name: 'Miniature Potato Vegetable Crate',
         slug: 'miniature-potato-vegetable-crate',
@@ -850,27 +810,7 @@ const products = [
         rating: 4.9,
         reviewCount: 28
     },
-    {
-        name: 'Miniature Onion Vegetable Crate',
-        slug: 'miniature-onion-vegetable-crate',
-        category: 'Miniature Vegetable Crates',
-        subcategory: 'Handcrafted Vegetable Crates',
-        occasion: 'Festivals & Religious Events',
-        occasionSub: 'Navaratri / Golu',
-        price: 199,
-        mrp: 300,
-        weight: 120,
-        story: 'Handcrafted miniature onion crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
-        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Onion Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny onion miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
-        metaDescription: 'Shop a handcrafted miniature onion vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
-        images: [
-            '/Vegetable Baskets/beetroot.png'
-        ],
-        variants: [],
-        stockStatus: 'made-to-order',
-        rating: 4.9,
-        reviewCount: 26
-    },
+
     {
         name: 'Miniature Drumstick Vegetable Crate',
         slug: 'miniature-drumstick-vegetable-crate',
@@ -1019,8 +959,8 @@ const products = [
         reviewCount: 28
     },
     {
-        name: 'Miniature Bottle Gourd Vegetable Crate',
-        slug: 'miniature-bottle-gourd-vegetable-crate',
+        name: 'Miniature Cucumber Vegetable Crate',
+        slug: 'miniature-cucumber-vegetable-crate',
         category: 'Miniature Vegetable Crates',
         subcategory: 'Handcrafted Vegetable Crates',
         occasion: 'Festivals & Religious Events',
@@ -1028,9 +968,9 @@ const products = [
         price: 199,
         mrp: 300,
         weight: 120,
-        story: 'Handcrafted miniature bottle gourd crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
-        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Bottle Gourd Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny bottle gourd miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
-        metaDescription: 'Shop a handcrafted miniature bottle gourd vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        story: 'Handcrafted miniature cucumber crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Cucumber Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny cucumber miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature cucumber vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
         images: [
             '/Vegetable Baskets/cucumber.png'
         ],

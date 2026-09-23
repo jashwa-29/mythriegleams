@@ -60,6 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${cormorant.variable} ${dmSans.variable} ${playfair.variable} ${quicksand.variable} h-full antialiased`}
     >
       <head>
@@ -72,7 +73,7 @@ export default function RootLayout({
         <link rel="icon" href="/logo.png" />
         <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
       </head>
-      <body className="min-h-full flex flex-col font-sans overflow-x-hidden w-full relative">
+      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans overflow-x-hidden w-full relative">
         <ReduxProvider>
           <Toaster position="top-right" />
           {!isAdmin && <Navbar />}
