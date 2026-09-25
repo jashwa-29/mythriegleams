@@ -134,7 +134,7 @@ export default function Footer() {
             <div className="flex flex-col gap-6 text-[14px] text-white/80 font-light">
               <div className="flex items-start gap-4 hover:text-[var(--accent-light)] transition-colors duration-300 cursor-default">
                 <MapPin size={18} className="shrink-0 text-white/60 mt-1" strokeWidth={1.5} />
-                <p className="leading-relaxed">Mythris Gleams Studio,<br />Chrompet, Chennai,<br />Tamil Nadu - 600044</p>
+                <p className="leading-relaxed">Mythris Gleams Studio,<br />2nd St, AE Block, C-Sector,<br />Anna Nagar West Extension,<br />Chennai, Tamil Nadu 600101</p>
               </div>
               <div className="flex items-center gap-4 hover:text-[var(--accent-light)] transition-colors duration-300 cursor-default">
                 <Mail size={18} className="shrink-0 text-white/60" strokeWidth={1.5} />
