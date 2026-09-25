@@ -23,6 +23,8 @@ export interface IOrder extends Document {
         zip: string;
         phone: string;
     };
+    itemsPrice: number;
+    shippingPrice: number;
     totalPrice: number;
     isPaid: boolean;
     paidAt?: Date;
@@ -58,6 +60,8 @@ const OrderSchema: Schema = new Schema({
         zip: { type: String, required: true },
         phone: { type: String, required: true }
     },
+    itemsPrice: { type: Number, required: true, default: 0.0 },
+    shippingPrice: { type: Number, required: true, default: 0.0 },
     totalPrice: { type: Number, required: true, default: 0.0 },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },

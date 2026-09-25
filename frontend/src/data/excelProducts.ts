@@ -422,7 +422,7 @@ export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
     reviewsCount: 28
   },
   {
-    sku: 'MG-VG-010',
+    sku: 'MG-VG-001',
     name: 'Miniature Cucumber Vegetable Crate',
     slug: 'miniature-cucumber-vegetable-crate',
     group: 'vegetable-crates',

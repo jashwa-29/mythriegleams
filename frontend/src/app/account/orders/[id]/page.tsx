@@ -222,11 +222,11 @@ export default function OrderDetailsPage() {
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between text-[#8c8273]">
                     <span>Items Total</span>
-                    <span>₹{order.totalPrice.toLocaleString()}</span>
+                    <span>₹{(order.itemsPrice ?? order.totalPrice).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between text-[#8c8273]">
                     <span>Shipping</span>
-                    <span>Free</span>
+                    <span>{order.shippingPrice ? `₹${order.shippingPrice.toLocaleString()}` : 'Free'}</span>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-[#e8e4db] mt-2">
                     <span className="font-serif text-[16px] text-[#3d332a]">Grand Total</span>

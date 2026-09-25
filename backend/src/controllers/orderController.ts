@@ -3,6 +3,7 @@ import Order from '../models/Order';
 import sendEmail from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { calculateShipping } from '../utils/shipping';
 
 /**
  * @desc    Create new order
@@ -10,7 +11,7 @@ import ErrorResponse from '../utils/errorResponse';
  * @access  Public (Guest/User)
  */
 export const addOrderItems = asyncHandler(async (req: Request, res: Response) => {
-    const { orderItems, shippingAddress, totalPrice, isPaid } = req.body;
+    const { orderItems, shippingAddress, isPaid } = req.body;
 
     if (!orderItems || orderItems.length === 0) {
         throw new ErrorResponse('Registry Forge requires artisanal components to proceed (No order items).', 400);
@@ -20,10 +21,18 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
         throw new ErrorResponse('Fulfillment Narrative incomplete. Destination details (street/email) missing.', 400);
     }
 
+    // Authoritative totals: derive items price from line items, shipping from the free-shipping rule,
+    // and grand total as their sum. Client-supplied values are ignored to prevent tampering.
+    const itemsPrice = orderItems.reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+    const shippingPrice = calculateShipping(itemsPrice);
+    const totalPrice = itemsPrice + shippingPrice;
+
     const order = new Order({
         user: req.user?._id, // Add if logged in
         orderItems,
         shippingAddress,
+        itemsPrice,
+        shippingPrice,
         totalPrice,
         isPaid: isPaid || false // Default to unpaid unless validated
     });

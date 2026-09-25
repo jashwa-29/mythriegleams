@@ -11,8 +11,9 @@ import { fetchProducts } from "@/redux/slices/productSlice";
 import { fetchCollections } from "@/redux/slices/collectionSlice";
 import { fetchOccasions } from "@/redux/slices/occasionSlice";
 import { RootState } from "@/redux/store";
+import { getImageUrl } from "@/utils/getImageUrl";
 import { useCart } from "@/hooks/useCart";
-import { EXCEL_PRODUCTS, ExcelCatalogProduct } from "@/data/excelProducts";
+import { EXCEL_PRODUCTS } from "@/data/excelProducts";
 import {
   ChevronLeft,
   ChevronRight,
@@ -41,10 +42,32 @@ export default function HomePage() {
     dispatch(fetchOccasions());
   }, [dispatch]);
 
-  // Filter products from Excel catalog
+  // Heritage stalls drawn from the live product catalog (API)
   const miniatureShops = useMemo(
-    () => EXCEL_PRODUCTS.filter((p) => p.group === "miniature-shops"),
-    []
+    () =>
+      products
+        .filter(
+          (p) =>
+            p.category === "Navaratri Miniature Shops" ||
+            p.subcategory === "Cultural Souvenirs"
+        )
+        .map((p) => ({
+          _id: p._id,
+          sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          group: "miniature-shops" as const,
+          subcategory: p.subcategory || "Miniature Shops",
+          image: p.images?.[0] || p.image || "",
+          price: p.price,
+          mrp: p.mrp || p.price,
+          badge: p.badge,
+          shortDesc: p.story || p.details || "",
+          rating: p.rating ?? 5,
+          reviewsCount: p.reviewCount ?? 0,
+        })),
+    [products]
   );
   const fruitBaskets = useMemo(
     () => EXCEL_PRODUCTS.filter((p) => p.group === "fruit-baskets"),
@@ -59,7 +82,50 @@ export default function HomePage() {
     []
   );
 
-  // Embla carousel for Miniature Heritage Shops
+  // Newest additions to the catalog, sorted by createdAt (newest first)
+  const newArrivals = useMemo(
+    () =>
+      [...products]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime()
+        )
+        .slice(0, 8)
+        .map((p) => ({
+          _id: p._id,
+          sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          subcategory: p.subcategory || p.category || "",
+          image: p.images?.[0] || p.image || "",
+          price: p.price,
+          mrp: p.mrp || p.price,
+          shortDesc: p.story || p.details || "",
+        })),
+    [products]
+  );
+
+  // Custom Miniature Wall Clocks drawn from the live catalog (API)
+  const wallClocks = useMemo(
+    () =>
+      products
+        .filter((p) => p.category === "Custom Miniature Wall Clocks")
+        .map((p) => ({
+          _id: p._id,
+          sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          subcategory: p.subcategory || p.category || "",
+          image: p.images?.[0] || p.image || "",
+          price: p.price,
+          mrp: p.mrp || p.price,
+          shortDesc: p.story || p.details || "",
+        })),
+    [products]
+  );
   const [shopsEmblaRef, shopsEmblaApi] = useEmblaCarousel(
     {
       align: "start",
@@ -85,12 +151,38 @@ export default function HomePage() {
     };
   }, [shopsEmblaApi]);
 
+  // Custom Miniature Wall Clocks carousel
+  const [clocksEmblaRef, clocksEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [clocksProgress, setClocksProgress] = useState(0);
+
+  useEffect(() => {
+    if (!clocksEmblaApi) return;
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, clocksEmblaApi.scrollProgress()));
+      setClocksProgress(p * 100);
+    };
+    onScroll();
+    clocksEmblaApi.on("scroll", onScroll);
+    clocksEmblaApi.on("reInit", onScroll);
+    return () => {
+      clocksEmblaApi.off("scroll", onScroll);
+      clocksEmblaApi.off("reInit", onScroll);
+    };
+  }, [clocksEmblaApi]);
+
   // Handle Quick Add to Cart
-  const handleQuickAdd = (product: ExcelCatalogProduct, e: React.MouseEvent) => {
+  const handleQuickAdd = (product: { _id?: string; sku: string; name: string; image: string; price: number }, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     addToCart({
-      productId: product.sku,
+      productId: product._id || product.sku,
       name: product.name,
       image: product.image,
       price: product.price,
@@ -344,12 +436,15 @@ export default function HomePage() {
                       key={product.sku}
                       className="shrink-0 grow-0 pl-4 md:pl-6 basis-[85%] sm:basis-[50%] lg:basis-[33.33%] xl:basis-[28%]"
                     >
-                      <div className="group relative flex flex-col h-full rounded-[24px] bg-[var(--bg)] border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500">
+                      <Link
+                        href={`/product/${product.slug}`}
+                        className="group relative flex flex-col h-full rounded-[24px] bg-[var(--bg)] border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500"
+                      >
                         
                         {/* Image Showcase */}
                         <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
                           <img
-                            src={product.image}
+                            src={getImageUrl(product.image)}
                             alt={product.name}
                             className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                           />
@@ -365,9 +460,11 @@ export default function HomePage() {
                           )}
 
                           {/* Golu Badge */}
-                          <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md border border-white/40 text-[9px] font-bold tracking-wider uppercase text-[var(--text)] shadow-sm">
-                            {product.badge}
-                          </span>
+                          {product.badge && (
+                            <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md border border-white/40 text-[9px] font-bold tracking-wider uppercase text-[var(--text)] shadow-sm">
+                              {product.badge}
+                            </span>
+                          )}
 
                           {/* SKU Pill */}
                           <span className="absolute bottom-3 left-3 text-[9px] font-mono text-white/90 font-bold bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded">
@@ -384,18 +481,22 @@ export default function HomePage() {
                                   <Star key={i} size={11} fill="currentColor" />
                                 ))}
                               </div>
-                              <span className="text-[10px] font-bold text-[var(--text-muted)]">
-                                ({product.reviewsCount} reviews)
-                              </span>
+                              {product.reviewsCount > 0 && (
+                                <span className="text-[10px] font-bold text-[var(--text-muted)]">
+                                  ({product.reviewsCount} reviews)
+                                </span>
+                              )}
                             </div>
 
                             <h3 className="font-serif text-[17px] font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors leading-snug mb-2 line-clamp-2">
                               {product.name}
                             </h3>
 
-                            <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-4">
-                              {product.shortDesc}
-                            </p>
+                            {product.shortDesc && (
+                              <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-4">
+                                {product.shortDesc}
+                              </p>
+                            )}
                           </div>
 
                           {/* Pricing & CTA */}
@@ -426,7 +527,7 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                      </div>
+                      </Link>
                     </div>
                   );
                 })}
@@ -576,6 +677,200 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════
+          CUSTOM MINIATURE WALL CLOCKS: Commission & Curated Range
+      ═══════════════════════════════════════════════════════════ */}
+      <section id="wall-clocks" className="relative w-full py-14 md:py-20 bg-[var(--bg-subtle)] border-b border-[var(--border)] overflow-hidden">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+
+          {/* Commission CTA Banner */}
+          <div className="rounded-[28px] md:rounded-[36px] bg-gradient-to-tr from-[#1e130b] via-[#2c1910] to-[#180e07] text-white relative overflow-hidden shadow-2xl mb-12">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[var(--accent-gold)]/15 blur-3xl"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-[var(--accent)]/10 blur-3xl"
+            />
+            <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8 p-8 sm:p-12">
+              <div className="flex-1 text-center lg:text-left">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[var(--accent-gold)]/15 border border-[var(--accent-gold)]/30 text-[var(--accent-gold-light)] text-[10px] font-bold tracking-[0.22em] uppercase mb-4">
+                  <Sparkles size={12} className="text-[var(--accent-gold)]" />
+                  Commissioned Timepieces
+                </div>
+                <h2 className="font-serif text-[2rem] sm:text-[2.8rem] md:text-[3.2rem] leading-[1.08] tracking-tight text-white mb-3">
+                  Custom Miniature{" "}
+                  <span className="text-[var(--accent-gold)] italic">Wall Clocks</span>
+                </h2>
+                <p className="text-white/80 text-[13px] sm:text-[15px] leading-relaxed font-light max-w-[560px] mx-auto lg:mx-0 mb-7">
+                  Bespoke sculptural timepieces capturing heritage, food and personal stories —
+                  each hour hand-sculpted in polymer clay around a silent quartz movement.
+                  Made to order, personalised to you.
+                </p>
+                <a
+                  href="https://wa.me/918300034451?text=Hi%20Mythris%20Gleams,%20I%20would%20like%20to%20commission%20a%20custom%20miniature%20wall%20clock."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[var(--accent-gold)] text-[var(--text)] text-[11px] font-bold tracking-widest uppercase hover:bg-[var(--accent-gold-light)] transition-all duration-300 shadow-xl shadow-[var(--accent-gold)]/20"
+                >
+                  <MessageCircle size={15} />
+                  Commission Your Custom Clock
+                </a>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 w-full lg:w-auto shrink-0">
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center lg:text-left">
+                  <span className="text-lg mb-1 block">🕰️</span>
+                  <p className="text-[12px] font-bold text-white">Silent Quartz</p>
+                  <p className="text-[10px] text-white/60">Soft sweep movement</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center lg:text-left">
+                  <span className="text-lg mb-1 block">🎨</span>
+                  <p className="text-[12px] font-bold text-white">100% Bespoke</p>
+                  <p className="text-[10px] text-white/60">Theme, colours &amp; name</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center lg:text-left">
+                  <span className="text-lg mb-1 block">🎁</span>
+                  <p className="text-[12px] font-bold text-white">Prized Gifts</p>
+                  <p className="text-[10px] text-white/60">Heirlooms &amp; executive spaces</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid Header */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-gold)]/20 text-[var(--text)] text-[10px] font-bold tracking-[0.2em] uppercase mb-3">
+                <Sparkles size={12} className="text-[var(--accent)]" />
+                The Signature Clock Range
+              </div>
+              <h3 className="font-serif text-[1.9rem] sm:text-[2.4rem] leading-[1.1] text-[var(--text)] tracking-tight">
+                Curated Commissions
+              </h3>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => clocksEmblaApi?.scrollPrev()}
+                aria-label="Previous Clock"
+                className="w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => clocksEmblaApi?.scrollNext()}
+                aria-label="Next Clock"
+                className="w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+              >
+                <ChevronRight size={18} />
+              </button>
+              <Link
+                href="/category/wall-clocks"
+                className="group shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full border border-[var(--border)] text-[11px] font-bold tracking-widest uppercase text-[var(--text)] hover:bg-[var(--text)] hover:text-white hover:border-[var(--text)] transition-all duration-300"
+              >
+                Explore Clock Range
+                <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+          </div>
+
+          {wallClocks.length === 0 ? (
+            <p className="text-center text-[13px] text-[var(--text-muted)] py-12">
+              New clock commissions are being crafted — message us to start yours.
+            </p>
+          ) : (
+            <div className="relative">
+              <div className="overflow-hidden" ref={clocksEmblaRef}>
+                <div className="flex touch-pan-y select-none -ml-4 md:-ml-6">
+                  {wallClocks.map((product) => {
+                    const discountPct = Math.round(
+                      ((product.mrp - product.price) / product.mrp) * 100
+                    );
+                    return (
+                      <div
+                        key={product.sku}
+                        className="shrink-0 grow-0 basis-[70%] sm:basis-[45%] md:basis-[33.33%] lg:basis-[25%] xl:basis-[20%] pl-4 md:pl-6"
+                      >
+                        <Link
+                          href={`/product/${product.slug}`}
+                          className="group relative flex flex-col h-full rounded-[24px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-300"
+                        >
+                          <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
+                            <img
+                              src={getImageUrl(product.image)}
+                              alt={product.name}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            />
+                            {discountPct > 0 && (
+                              <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/95 text-[var(--accent)] text-[9px] font-extrabold tracking-wider uppercase shadow-sm">
+                                {discountPct}% OFF
+                              </span>
+                            )}
+                            <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-sm text-white/90 text-[9px] font-bold tracking-wider uppercase border border-white/15">
+                              Made to Order
+                            </span>
+                          </div>
+
+                          <div className="p-5 flex flex-col flex-1 justify-between">
+                            <div>
+                              <h3 className="font-serif text-[17px] font-bold text-[var(--text)] leading-snug mb-1.5 group-hover:text-[var(--accent)] transition-colors line-clamp-2">
+                                {product.name}
+                              </h3>
+                              {product.subcategory && (
+                                <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mb-2">
+                                  {product.subcategory}
+                                </p>
+                              )}
+                              {product.shortDesc && (
+                                <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-4">
+                                  {product.shortDesc}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
+                              <div>
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-[18px] font-bold text-[var(--text)]">
+                                    ₹{product.price.toLocaleString()}
+                                  </span>
+                                  {product.mrp > product.price && (
+                                    <span className="text-[12px] text-[var(--text-muted)] line-through">
+                                      ₹{product.mrp.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={(e) => handleQuickAdd(product, e)}
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--text)] text-white text-[11px] font-bold tracking-wider uppercase hover:bg-[var(--accent)] transition-colors shadow-sm"
+                              >
+                                <ShoppingBag size={13} />
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mt-8 h-[2px] w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--accent)] transition-all duration-300"
+                  style={{ width: `${clocksProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
           3. ₹199 COLLECTORS' CORNER: Fruit Baskets & Vegetable Crates
       ═══════════════════════════════════════════════════════════ */}
       <section id="market-crates" className="relative w-full py-14 md:py-20 bg-[var(--bg-subtle)] border-b border-[var(--border)]">
@@ -709,7 +1004,7 @@ export default function HomePage() {
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-gold)]/20 border border-[var(--accent-gold)]/40 text-[var(--accent-gold-light)] text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
                   🪔 Sacred Festive Keepsakes
                 </div>
-                <h2 className="font-serif text-[2.2rem] sm:text-[2.8rem] md:text-[3.2rem] leading-[1.05] tracking-tight mb-4">
+                <h2 className="font-serif text-[2.2rem] sm:text-[2.8rem] md:text-[3.2rem] leading-[1.05] tracking-tight mb-4 text-white">
                   Navaratri Miniature <span className="text-[var(--accent-gold)] italic">Thamboolam</span> Sets
                 </h2>
                 <p className="text-white/80 text-[13px] sm:text-[14px] leading-relaxed mb-6 max-w-[480px]">
@@ -783,7 +1078,111 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════
-          5. THE CRAFT: Behind The Gleam (Artisan Spotlight)
+          5. NEW COLLECTIONS: Fresh From The Kiln
+      ═══════════════════════════════════════════════════════════ */}
+      <section id="new-collections" className="relative w-full py-14 md:py-20 bg-white border-b border-[var(--border)]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-gold)]/20 text-[var(--text)] text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
+                <Sparkles size={12} className="text-[var(--accent)]" />
+                Fresh From The Kiln
+              </div>
+              <h2 className="font-serif text-[2rem] sm:text-[2.6rem] md:text-[3rem] leading-[1.1] text-[var(--text)] tracking-tight">
+                New Collections
+              </h2>
+              <p className="text-[13px] sm:text-[14px] text-[var(--text-muted)] mt-3 leading-relaxed max-w-[520px]">
+                The latest handcrafted additions straight to our shelves — freshly shaped, painted, and ready for your Golu, home, and gift-giving.
+              </p>
+            </div>
+            <Link
+              href="/category/all"
+              className="group shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full border border-[var(--border)] text-[11px] font-bold tracking-widest uppercase text-[var(--text)] hover:bg-[var(--text)] hover:text-white hover:border-[var(--text)] transition-all duration-300"
+            >
+              View All Pieces
+              <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+
+          {newArrivals.length === 0 ? (
+            <p className="text-center text-[13px] text-[var(--text-muted)] py-16">
+              New pieces are being crafted — check back soon.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4 md:gap-5">
+              {newArrivals.map((product) => {
+                const discountPct = Math.round(
+                  ((product.mrp - product.price) / product.mrp) * 100
+                );
+                return (
+                  <Link
+                    key={product.sku}
+                    href={`/product/${product.slug}`}
+                    className="group relative flex flex-col rounded-2xl bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-lg hover:border-[var(--accent-gold)] transition-all duration-300"
+                  >
+                    {/* Image */}
+                    <div className="relative aspect-square w-full overflow-hidden bg-stone-100">
+                      <img
+                        src={getImageUrl(product.image)}
+                        alt={product.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      {/* New Pill */}
+                      <span className="absolute top-2 left-2 px-2 py-1 rounded-full bg-[var(--accent)] text-white text-[9px] font-extrabold tracking-wider uppercase shadow-md">
+                        New
+                      </span>
+                      {/* Discount Pill */}
+                      {discountPct > 0 && (
+                        <span className="absolute top-2 right-2 px-2 py-1 rounded-full bg-white/95 text-[var(--accent)] text-[9px] font-extrabold tracking-wider uppercase shadow-sm">
+                          {discountPct}% OFF
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Details */}
+                    <div className="p-3.5 sm:p-4 flex flex-col flex-1 justify-between">
+                      <div>
+                        <h3 className="text-[12px] sm:text-[13px] font-bold text-[var(--text)] leading-snug line-clamp-2 group-hover:text-[var(--accent)] transition-colors">
+                          {product.name}
+                        </h3>
+                        {product.subcategory && (
+                          <p className="text-[10px] text-[var(--text-muted)] mt-1 truncate uppercase tracking-wide">
+                            {product.subcategory}
+                          </p>
+                        )}
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-[15px] sm:text-[16px] font-bold text-[var(--text)]">
+                            ₹{product.price.toLocaleString()}
+                          </span>
+                          {product.mrp > product.price && (
+                            <span className="text-[11px] text-[var(--text-muted)] line-through">
+                              ₹{product.mrp.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => handleQuickAdd(product, e)}
+                        className="mt-3 w-full py-2 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--accent)] hover:text-white text-[10px] font-bold text-[var(--text)] tracking-wider uppercase transition-colors flex items-center justify-center gap-1.5 border border-[var(--border)]"
+                      >
+                        <ShoppingBag size={11} />
+                        Add to Cart
+                      </button>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          6. THE CRAFT: Behind The Gleam (Artisan Spotlight)
       ═══════════════════════════════════════════════════════════ */}
       <section className="relative w-full py-16 md:py-24 bg-[var(--bg)] border-b border-[var(--border)]">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
@@ -870,7 +1269,7 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════
-          6. NOSTALGIA & CUSTOMER REVIEWS
+          7. NOSTALGIA & CUSTOMER REVIEWS
       ═══════════════════════════════════════════════════════════ */}
       <section className="relative w-full py-14 md:py-20 bg-white">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
@@ -944,7 +1343,7 @@ export default function HomePage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════════
-          7. BOTTOM CTA BANNER: Custom Orders & Corporate Gifting
+          8. BOTTOM CTA BANNER: Custom Orders & Corporate Gifting
       ═══════════════════════════════════════════════════════════ */}
       <section className="relative w-full py-12 bg-gradient-to-r from-[var(--accent)] via-[#be442b] to-[#a83c25] text-white">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-8 text-center">

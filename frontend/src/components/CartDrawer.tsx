@@ -8,6 +8,7 @@ import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2 } from "lucide-react";
 import { CartItem } from "@/redux/slices/cartSlice";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { formatWeight } from '@/utils/formatWeight';
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE, calculateShipping } from '@/utils/shipping';
 
 export default function CartDrawer() {
   const { items, isOpen, close, setQty, remove, totalPrice, totalWeight, totalItems, loading } = useCart();
@@ -159,24 +160,30 @@ export default function CartDrawer() {
                     <span className="font-semibold text-[var(--text-muted)]">{formatWeight(totalWeight)}</span>
                   </div>
                 )}
-                {totalPrice >= 4999 ? (
+                {totalPrice >= FREE_SHIPPING_THRESHOLD ? (
                   <div className="flex items-center gap-1.5 text-[11px] text-[#2e7d32] font-semibold bg-[#2e7d32]/10 px-3 py-2 rounded-xl">
                     <span>✨</span> You have unlocked Free Shipping!
                   </div>
                 ) : (
                   <div className="space-y-1.5 bg-[var(--bg-subtle)]/70 p-2.5 rounded-xl border border-[var(--border)]/60">
                     <div className="flex justify-between text-[11px] text-[var(--text-muted)] font-medium">
-                      <span>Add ₹{(4999 - totalPrice).toLocaleString()} more for <strong className="text-[var(--text)]">Free Shipping</strong></span>
-                      <span className="font-semibold">{Math.min(100, Math.round((totalPrice / 4999) * 100))}%</span>
+                      <span>Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more for <strong className="text-[var(--text)]">Free Shipping</strong></span>
+                      <span className="font-semibold">{Math.min(100, Math.round((totalPrice / FREE_SHIPPING_THRESHOLD) * 100))}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
                       <div
                         className="h-full bg-[var(--accent)] transition-all duration-300 rounded-full"
-                        style={{ width: `${Math.min(100, Math.round((totalPrice / 4999) * 100))}%` }}
+                        style={{ width: `${Math.min(100, Math.round((totalPrice / FREE_SHIPPING_THRESHOLD) * 100))}%` }}
                       />
                     </div>
                   </div>
                 )}
+                <div className="flex justify-between text-[11px] text-[var(--text-faint)]">
+                  <span>Shipping</span>
+                  <span className="font-semibold text-[var(--text-muted)]">
+                    {calculateShipping(totalPrice) === 0 ? <span className="text-[#2e7d32]">Free</span> : `₹${SHIPPING_FEE.toLocaleString()}`}
+                  </span>
+                </div>
                 <p className="text-[11px] text-[var(--text-faint)]">Shipping & taxes calculated at checkout.</p>
 
                 <Link

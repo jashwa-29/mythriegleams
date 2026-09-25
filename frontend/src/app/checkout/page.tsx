@@ -13,6 +13,7 @@ import { useCart } from "@/hooks/useCart";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { formatWeight } from '@/utils/formatWeight';
+import { FREE_SHIPPING_THRESHOLD, calculateShipping } from '@/utils/shipping';
 import {
   MapPin, User, Mail, Phone, Home, Package,
   CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
@@ -110,7 +111,7 @@ export default function CheckoutPage() {
   // Redirect unauthenticated users
   useEffect(() => {
     if (!isAuth) {
-      router.push("/login?redirect=/checkout");
+      router.push("/account?redirect=/checkout");
     }
   }, [isAuth, router]);
 
@@ -120,6 +121,9 @@ export default function CheckoutPage() {
   }, [items, paymentSuccess, success, router]);
 
   const touch = (k: keyof ShippingForm) => setTouched(p => ({ ...p, [k]: true }));
+
+  const shippingPrice = calculateShipping(totalPrice);
+  const grandTotal = totalPrice + shippingPrice;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -145,7 +149,9 @@ export default function CheckoutPage() {
         customerImage: i.customerImage,
       })),
       shippingAddress: form,
-      totalPrice,
+      itemsPrice: totalPrice,
+      shippingPrice,
+      totalPrice: grandTotal,
     };
 
     dispatch(createOrder({ orderData, isGuest: false })).then((res: any) => {
@@ -451,7 +457,7 @@ export default function CheckoutPage() {
             )}
 
             <button type="submit" disabled={loading || isProcessingPayment} className="h-14 sm:h-16 bg-[var(--text)] text-white rounded-xl sm:rounded-2xl text-[12px] sm:text-[13px] font-medium tracking-[0.15em] uppercase hover:bg-[var(--text-muted)] transition-all disabled:opacity-60 flex items-center justify-center gap-3 shadow-lg shadow-[var(--text)]/10">
-              {loading || isProcessingPayment ? <><Loader2 size={18} className="animate-spin" /> {isProcessingPayment ? "Processing Payment..." : "Preparing Order..."}</> : <><CheckCircle2 size={18} strokeWidth={1.5} /> Proceed to Pay — ₹{totalPrice.toLocaleString()}</>}
+              {loading || isProcessingPayment ? <><Loader2 size={18} className="animate-spin" /> {isProcessingPayment ? "Processing Payment..." : "Preparing Order..."}</> : <><CheckCircle2 size={18} strokeWidth={1.5} /> Proceed to Pay — ₹{grandTotal.toLocaleString()}</>}
             </button>
             </fieldset>
           </form>
@@ -494,8 +500,18 @@ export default function CheckoutPage() {
                 <span>Subtotal</span><span>₹{totalPrice.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
-                <span>Shipping</span><span className="text-[#849b87] font-medium">Free</span>
+                <span>Shipping</span>
+                {shippingPrice === 0 ? (
+                  <span className="text-[#849b87] font-medium">Free</span>
+                ) : (
+                  <span className="text-[var(--text)] font-medium">₹{shippingPrice.toLocaleString()}</span>
+                )}
               </div>
+              {shippingPrice > 0 && (
+                <div className="text-[11px] text-[var(--text-faint)] bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl px-3 py-2">
+                  Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more to unlock free shipping (₹0).
+                </div>
+              )}
               {totalWeight > 0 && (
                 <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
                   <span>Total Weight</span>
@@ -504,7 +520,7 @@ export default function CheckoutPage() {
               )}
               <div className="flex justify-between items-center pt-4 border-t border-[var(--border)]">
                 <span className=" text-[1rem] text-[var(--text)]">Total</span>
-                <span className=" text-2xl text-[var(--text)]">₹{totalPrice.toLocaleString()}</span>
+                <span className=" text-2xl text-[var(--text)]">₹{grandTotal.toLocaleString()}</span>
               </div>
               <p className="text-[11px] text-[var(--text-faint)] text-center">✦ Estimated delivery: 10–14 days ✦</p>
             </div>
