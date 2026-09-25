@@ -153,26 +153,30 @@ export default function HomePage() {
       occasion.slug === SEASONAL_OCCASION_SLUG ||
       occasion.name === DEFAULT_SEASONAL_OCCASION_NAME
   );
+  // Pick the first enabled seasonal section from the new array
+  const activeSeasonalSection = useMemo(() => {
+    if (!homepageSettings?.seasonalSections?.length) return null;
+    return homepageSettings.seasonalSections.find((s) => s.enabled) ?? null;
+  }, [homepageSettings]);
+
   const selectedCollections = useMemo(() => {
-    if (!homepageSettings) {
+    if (!activeSeasonalSection) {
       return fallbackSeasonalCollection ? [fallbackSeasonalCollection] : [];
     }
-
     const selectedIds = new Set(
-      homepageSettings.seasonalSection.collectionIds.map(getReferenceId)
+      activeSeasonalSection.collectionIds.map(getReferenceId)
     );
     return collections.filter((collection) => selectedIds.has(collection._id));
-  }, [collections, fallbackSeasonalCollection, homepageSettings]);
+  }, [collections, fallbackSeasonalCollection, activeSeasonalSection]);
   const selectedOccasions = useMemo(() => {
-    if (!homepageSettings) {
+    if (!activeSeasonalSection) {
       return fallbackSeasonalOccasion ? [fallbackSeasonalOccasion] : [];
     }
-
     const selectedIds = new Set(
-      homepageSettings.seasonalSection.occasionIds.map(getReferenceId)
+      activeSeasonalSection.occasionIds.map(getReferenceId)
     );
     return occasions.filter((occasion) => selectedIds.has(occasion._id));
-  }, [fallbackSeasonalOccasion, homepageSettings, occasions]);
+  }, [fallbackSeasonalOccasion, activeSeasonalSection, occasions]);
   const seasonalCollectionItems = useMemo(
     () => expandSelectedItems(selectedCollections, collections),
     [collections, selectedCollections]
@@ -181,14 +185,17 @@ export default function HomePage() {
     () => expandSelectedItems(selectedOccasions, occasions),
     [occasions, selectedOccasions]
   );
-  const seasonalSectionEnabled = homepageSettings?.seasonalSection.enabled ?? true;
-  const seasonalCollectionName = selectedCollections.length > 0
-    ? selectedCollections.map((collection) => collection.name).join(" · ")
-    : DEFAULT_SEASONAL_COLLECTION_NAME;
-  const seasonalOccasionName = selectedOccasions.length > 0
-    ? selectedOccasions.map((occasion) => occasion.name).join(" · ")
-    : "Sacred Festive Keepsakes";
-  const seasonalDescription =
+  const seasonalSectionEnabled = Boolean(activeSeasonalSection?.enabled);
+  const seasonalBadge = activeSeasonalSection?.badge || "";
+  const seasonalCollectionName = activeSeasonalSection?.heading ||
+    (selectedCollections.length > 0
+      ? selectedCollections.map((collection) => collection.name).join(" · ")
+      : DEFAULT_SEASONAL_COLLECTION_NAME);
+  const seasonalOccasionName = activeSeasonalSection?.badge ||
+    (selectedOccasions.length > 0
+      ? selectedOccasions.map((occasion) => occasion.name).join(" · ")
+      : "Sacred Festive Keepsakes");
+  const seasonalDescription = activeSeasonalSection?.description ||
     seasonalOccasionItems.find((occasion) => occasion.description)?.description ||
     seasonalCollectionItems.find((collection) => collection.description)?.description ||
     DEFAULT_SEASONAL_DESCRIPTION;
@@ -1394,7 +1401,7 @@ export default function HomePage() {
               <div className="lg:col-span-5 flex flex-col justify-center">
                 <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/5 backdrop-blur-md border border-[var(--accent-gold)]/30 text-[var(--accent-gold)] text-[10px] font-bold tracking-[0.25em] uppercase mb-6 self-start shadow-sm">
                   <Sparkles size={12} className="text-[var(--accent-gold)]" />
-                  {seasonalOccasionName}
+                  {seasonalBadge || seasonalOccasionName}
                 </div>
                 
                 <h2 className="font-serif text-[2.4rem] sm:text-[3.2rem] md:text-[3.5rem] leading-[1.05] tracking-tight mb-5 text-white">

@@ -11,22 +11,38 @@ export interface HomepageSettingsReference {
 
 export type HomepageSettingsReferenceValue = string | HomepageSettingsReference | null;
 
+export interface SeasonalSection {
+    _id?: string;
+    name: string;
+    enabled: boolean;
+    badge: string;
+    heading: string;
+    description: string;
+    collectionIds: HomepageSettingsReferenceValue[];
+    occasionIds: HomepageSettingsReferenceValue[];
+}
+
 export interface HomepageSettings {
     _id: string;
     key: string;
-    seasonalSection: {
-        enabled: boolean;
-        collectionIds: HomepageSettingsReferenceValue[];
-        occasionIds: HomepageSettingsReferenceValue[];
-    };
+    seasonalSections: SeasonalSection[];
     createdAt?: string;
     updatedAt?: string;
 }
 
-export interface HomepageSettingsPayload {
+export interface SeasonalSectionPayload {
+    _id?: string;
+    name: string;
     enabled: boolean;
+    badge: string;
+    heading: string;
+    description: string;
     collectionIds: string[];
     occasionIds: string[];
+}
+
+export interface HomepageSettingsPayload {
+    seasonalSections: SeasonalSectionPayload[];
 }
 
 type RequestError = {

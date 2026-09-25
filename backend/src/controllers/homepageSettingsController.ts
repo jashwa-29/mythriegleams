@@ -9,8 +9,8 @@ import ErrorResponse from '../utils/errorResponse';
 const SETTINGS_KEY = 'homepage';
 
 const populateSettings = (query: any) => query
-    .populate('seasonalSection.collectionIds', 'name slug parent isActive')
-    .populate('seasonalSection.occasionIds', 'name slug parent isActive');
+    .populate('seasonalSections.collectionIds', 'name slug parent isActive')
+    .populate('seasonalSections.occasionIds', 'name slug parent isActive');
 
 const normalizeIds = (value: unknown, fieldName: string): string[] => {
     if (!Array.isArray(value)) {
@@ -31,44 +31,59 @@ export const getHomepageSettings = asyncHandler(async (req: Request, res: Respon
 });
 
 export const updateHomepageSettings = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const { enabled, collectionIds, occasionIds } = req.body;
+    const { seasonalSections } = req.body;
 
-    if (enabled !== undefined && typeof enabled !== 'boolean' && enabled !== 'true' && enabled !== 'false') {
-        return next(new ErrorResponse('Enabled must be a boolean.', 400));
+    if (!Array.isArray(seasonalSections)) {
+        return next(new ErrorResponse('seasonalSections must be an array.', 400));
     }
 
-    let normalizedCollectionIds: string[];
-    let normalizedOccasionIds: string[];
+    const validatedSections = [];
 
-    try {
-        normalizedCollectionIds = normalizeIds(collectionIds ?? [], 'collectionIds');
-        normalizedOccasionIds = normalizeIds(occasionIds ?? [], 'occasionIds');
-    } catch (error) {
-        return next(error);
+    for (const section of seasonalSections) {
+        const { _id, name, enabled, badge, heading, description, collectionIds, occasionIds } = section;
+
+        let normalizedCollectionIds: string[];
+        let normalizedOccasionIds: string[];
+
+        try {
+            normalizedCollectionIds = normalizeIds(collectionIds ?? [], 'collectionIds');
+            normalizedOccasionIds = normalizeIds(occasionIds ?? [], 'occasionIds');
+        } catch (error) {
+            return next(error);
+        }
+
+        const [activeCollectionCount, activeOccasionCount] = await Promise.all([
+            Collection.countDocuments({ _id: { $in: normalizedCollectionIds }, isActive: true }),
+            Occasion.countDocuments({ _id: { $in: normalizedOccasionIds }, isActive: true })
+        ]);
+
+        if (activeCollectionCount !== normalizedCollectionIds.length) {
+            return next(new ErrorResponse('One or more selected collections are unavailable.', 400));
+        }
+        if (activeOccasionCount !== normalizedOccasionIds.length) {
+            return next(new ErrorResponse('One or more selected occasions are unavailable.', 400));
+        }
+
+        const sectionData: any = {
+            name: name || 'Seasonal Section',
+            enabled: enabled === undefined ? false : Boolean(enabled),
+            badge: badge || '🪔 Festive Special',
+            heading: heading || 'Seasonal Collection',
+            description: description || 'Explore our latest seasonal items.',
+            collectionIds: normalizedCollectionIds,
+            occasionIds: normalizedOccasionIds
+        };
+
+        if (_id) {
+            sectionData._id = _id;
+        }
+
+        validatedSections.push(sectionData);
     }
-
-    const [activeCollectionCount, activeOccasionCount] = await Promise.all([
-        Collection.countDocuments({ _id: { $in: normalizedCollectionIds }, isActive: true }),
-        Occasion.countDocuments({ _id: { $in: normalizedOccasionIds }, isActive: true })
-    ]);
-
-    if (activeCollectionCount !== normalizedCollectionIds.length) {
-        return next(new ErrorResponse('One or more selected collections are unavailable.', 400));
-    }
-
-    if (activeOccasionCount !== normalizedOccasionIds.length) {
-        return next(new ErrorResponse('One or more selected occasions are unavailable.', 400));
-    }
-
-    const seasonalSection = {
-        enabled: enabled === undefined ? true : enabled === true || enabled === 'true',
-        collectionIds: normalizedCollectionIds,
-        occasionIds: normalizedOccasionIds
-    };
 
     const settings = await populateSettings(HomepageSettings.findOneAndUpdate(
         { key: SETTINGS_KEY },
-        { $set: { key: SETTINGS_KEY, seasonalSection } },
+        { $set: { key: SETTINGS_KEY, seasonalSections: validatedSections }, $unset: { seasonalSection: 1 } },
         { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
     ));
 
