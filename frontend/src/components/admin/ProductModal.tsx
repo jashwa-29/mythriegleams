@@ -16,7 +16,8 @@ import {
     Trash2,
     Palette,
     Camera,
-    Weight
+    Weight,
+    TrendingUp
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -73,6 +74,7 @@ interface ProductModalProps {
         metaDescription?: string;
         stockStatus?: string;
         requiresImage?: boolean;
+        isBestseller?: boolean;
         images?: string[];
         variants?: { type: string; options: string[] }[];
     }>; // Data for editing
@@ -86,6 +88,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const [variants, setVariants] = useState<string[]>(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
     const [colors, setColors] = useState<string[]>([]);
     const [requiresImage, setRequiresImage] = useState(false);
+    const [isBestseller, setIsBestseller] = useState(false);
 
     // Multi-selection state
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -214,6 +217,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                 setVariants(Array.isArray(sizeVariants) && sizeVariants.length > 0 ? sizeVariants : []);
                 setColors(Array.isArray(colorVariants) ? colorVariants : []);
                 setRequiresImage(!!initialData.requiresImage);
+                setIsBestseller(!!initialData.isBestseller);
             } else {
                 reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', subcategory: '', occasion: '', occasionSub: '', price: 0, mrp: 0, weight: 0, story: '', details: '', metaDescription: '' });
                 setSelectedCategories([]);
@@ -224,6 +228,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                 setVariants(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
                 setColors([]);
                 setRequiresImage(false);
+                setIsBestseller(false);
             }
         }
     }, [isOpen, initialData, reset, dispatch]);
@@ -291,6 +296,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         if (colors.length > 0) variantPayload.push({ type: 'Color', options: colors });
         formData.append('variants', JSON.stringify(variantPayload));
         formData.append('requiresImage', String(requiresImage));
+        formData.append('isBestseller', String(isBestseller));
 
         // Add kept existing images
         const existingImagesToKeep = mediaItems
@@ -602,6 +608,30 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                                 type="button"
                                                 onClick={() => setRequiresImage(prev => !prev)}
                                                 className={`w-16 h-8 rounded-full transition-all flex items-center px-1 ${requiresImage ? 'bg-gold justify-end' : 'bg-zinc-300 justify-start'}`}
+                                            >
+                                                <span className="w-6 h-6 rounded-full bg-white shadow-md transition-all" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6 pt-6">
+                                        <div className="p-8 bg-amber-50/60 rounded-[2rem] border border-amber-100 flex items-center justify-between gap-6">
+                                            <div className="flex items-start gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                                                    <TrendingUp size={18} className="text-amber-600" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 block">Show in Best Sellers</label>
+                                                    <p className="text-[11px] font-medium text-zinc-400 italic mt-1 max-w-[260px]">Feature this product in the Best Sellers carousel on the home page.</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isBestseller}
+                                                aria-label="Show this product in Best Sellers"
+                                                onClick={() => setIsBestseller(prev => !prev)}
+                                                className={`w-16 h-8 rounded-full transition-all flex items-center px-1 ${isBestseller ? 'bg-amber-500 justify-end' : 'bg-zinc-300 justify-start'}`}
                                             >
                                                 <span className="w-6 h-6 rounded-full bg-white shadow-md transition-all" />
                                             </button>

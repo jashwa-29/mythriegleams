@@ -103,7 +103,7 @@ const MEGA_MENU = [
     featured: {
       title: "Bestsellers",
       subtitle: "Loved by Thousands",
-      href: "/category/all",
+      href: "/#bestsellers",
       img: "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400&q=80",
     },
   },

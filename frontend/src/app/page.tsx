@@ -8,8 +8,9 @@ import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProducts } from "@/redux/slices/productSlice";
-import { fetchCollections } from "@/redux/slices/collectionSlice";
+import { fetchCollections, type CollectionItem } from "@/redux/slices/collectionSlice";
 import { fetchOccasions } from "@/redux/slices/occasionSlice";
+import { fetchHomepageSettings, type HomepageSettingsReferenceValue } from "@/redux/slices/homepageSettingsSlice";
 import { RootState } from "@/redux/store";
 import { getImageUrl } from "@/utils/getImageUrl";
 import { useCart } from "@/hooks/useCart";
@@ -26,10 +27,74 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
+const SEASONAL_COLLECTION_SLUG = "navaratri-thamboolam";
+const SEASONAL_OCCASION_SLUG = "navaratri-golu";
+const DEFAULT_SEASONAL_COLLECTION_NAME = "Navaratri Thamboolam Collections";
+const DEFAULT_SEASONAL_OCCASION_NAME = "Navaratri Golu";
+const DEFAULT_SEASONAL_DESCRIPTION = "Thoughtful traditional return gifts for Golu visitors, weddings, and housewarmings. Featuring miniature betel leaves, supari, coconut, and decorative trays.";
+
+type SeasonalCatalogItem = Pick<CollectionItem, "_id" | "name" | "slug" | "description" | "image" | "parent">;
+
+const getReferenceId = (reference: HomepageSettingsReferenceValue) =>
+  typeof reference === "string" ? reference : reference?._id || "";
+
+const getParentId = (item: { parent?: string | { _id: string } | null }) =>
+  typeof item.parent === "string" ? item.parent : item.parent?._id;
+
+const expandSelectedItems = <T extends SeasonalCatalogItem>(
+  selected: T[],
+  catalog: T[]
+): T[] => {
+  const expanded: T[] = [];
+  const pending = [...selected];
+  const seen = new Set<string>();
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || seen.has(current._id)) continue;
+    seen.add(current._id);
+    expanded.push(current);
+    catalog.forEach((item) => {
+      if (getParentId(item) === current._id) pending.push(item);
+    });
+  }
+
+  return expanded;
+};
+
+const ProductImage = ({
+  image,
+  alt,
+  className,
+}: {
+  image?: string;
+  alt: string;
+  className: string;
+}) => {
+  if (!image) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-stone-100 text-[var(--text-muted)] text-xs`}>
+        Image unavailable
+      </div>
+    );
+  }
+
+  return <img src={getImageUrl(image)} alt={alt} className={className} />;
+};
+
 export default function HomePage() {
   const dispatch = useAppDispatch();
-  const { products, loading: productsLoading } = useAppSelector(
+  const { products } = useAppSelector(
     (state: RootState) => state.products
+  );
+  const { collections } = useAppSelector(
+    (state: RootState) => state.collections
+  );
+  const { occasions } = useAppSelector(
+    (state: RootState) => state.occasions
+  );
+  const { settings: homepageSettings } = useAppSelector(
+    (state: RootState) => state.homepageSettings
   );
   const { addToCart } = useCart();
 
@@ -40,6 +105,7 @@ export default function HomePage() {
     dispatch(fetchProducts({ sort: "newest" }));
     dispatch(fetchCollections());
     dispatch(fetchOccasions());
+    dispatch(fetchHomepageSettings());
   }, [dispatch]);
 
   // Heritage stalls drawn from the live product catalog (API)
@@ -77,10 +143,126 @@ export default function HomePage() {
     () => EXCEL_PRODUCTS.filter((p) => p.group === "vegetable-crates"),
     []
   );
-  const thamboolamSets = useMemo(
-    () => EXCEL_PRODUCTS.filter((p) => p.group === "navaratri-thamboolam"),
-    []
+  const fallbackSeasonalCollection = collections.find(
+    (collection) =>
+      collection.slug === SEASONAL_COLLECTION_SLUG ||
+      collection.name === DEFAULT_SEASONAL_COLLECTION_NAME
   );
+  const fallbackSeasonalOccasion = occasions.find(
+    (occasion) =>
+      occasion.slug === SEASONAL_OCCASION_SLUG ||
+      occasion.name === DEFAULT_SEASONAL_OCCASION_NAME
+  );
+  const selectedCollections = useMemo(() => {
+    if (!homepageSettings) {
+      return fallbackSeasonalCollection ? [fallbackSeasonalCollection] : [];
+    }
+
+    const selectedIds = new Set(
+      homepageSettings.seasonalSection.collectionIds.map(getReferenceId)
+    );
+    return collections.filter((collection) => selectedIds.has(collection._id));
+  }, [collections, fallbackSeasonalCollection, homepageSettings]);
+  const selectedOccasions = useMemo(() => {
+    if (!homepageSettings) {
+      return fallbackSeasonalOccasion ? [fallbackSeasonalOccasion] : [];
+    }
+
+    const selectedIds = new Set(
+      homepageSettings.seasonalSection.occasionIds.map(getReferenceId)
+    );
+    return occasions.filter((occasion) => selectedIds.has(occasion._id));
+  }, [fallbackSeasonalOccasion, homepageSettings, occasions]);
+  const seasonalCollectionItems = useMemo(
+    () => expandSelectedItems(selectedCollections, collections),
+    [collections, selectedCollections]
+  );
+  const seasonalOccasionItems = useMemo(
+    () => expandSelectedItems(selectedOccasions, occasions),
+    [occasions, selectedOccasions]
+  );
+  const seasonalSectionEnabled = homepageSettings?.seasonalSection.enabled ?? true;
+  const seasonalCollectionName = selectedCollections.length > 0
+    ? selectedCollections.map((collection) => collection.name).join(" · ")
+    : DEFAULT_SEASONAL_COLLECTION_NAME;
+  const seasonalOccasionName = selectedOccasions.length > 0
+    ? selectedOccasions.map((occasion) => occasion.name).join(" · ")
+    : "Sacred Festive Keepsakes";
+  const seasonalDescription =
+    seasonalOccasionItems.find((occasion) => occasion.description)?.description ||
+    seasonalCollectionItems.find((collection) => collection.description)?.description ||
+    DEFAULT_SEASONAL_DESCRIPTION;
+  const seasonalImage =
+    seasonalOccasionItems.find((occasion) => occasion.image)?.image ||
+    seasonalCollectionItems.find((collection) => collection.image)?.image;
+  const seasonalProducts = useMemo(() => {
+    if (!seasonalSectionEnabled) return [];
+
+    const collectionNames = new Set(
+      seasonalCollectionItems.map((collection) => collection.name)
+    );
+    const occasionNames = new Set(
+      seasonalOccasionItems.map((occasion) => occasion.name)
+    );
+
+    if (collectionNames.size === 0 && occasionNames.size === 0) return [];
+
+    return products
+      .filter((product) => {
+        const productCollectionNames = [
+          product.category,
+          product.subcategory,
+          ...(Array.isArray(product.categories) ? product.categories : []),
+          ...(Array.isArray(product.subcategories) ? product.subcategories : []),
+        ];
+        const productOccasionNames = [
+          product.occasion,
+          product.occasionSub,
+          ...(Array.isArray(product.occasions) ? product.occasions : []),
+          ...(Array.isArray(product.occasionSubs) ? product.occasionSubs : []),
+        ];
+        return productCollectionNames.some((name) => collectionNames.has(name)) ||
+          productOccasionNames.some((name) => occasionNames.has(name));
+      })
+      .map((product) => ({
+        _id: product._id,
+        sku: product._id || product.sku || product.slug || "",
+        name: product.name,
+        slug: product.slug || product._id || product.sku || "",
+        image: product.images?.[0] || product.image || "",
+        price: product.price,
+        mrp: product.mrp || product.price,
+        shortDesc: product.story || product.details || "",
+        weight: product.weight,
+        stockStatus: product.stockStatus,
+        requiresImage: product.requiresImage,
+      }));
+  }, [products, seasonalCollectionItems, seasonalOccasionItems, seasonalSectionEnabled]);
+
+  const [seasonalEmblaRef, seasonalEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [seasonalProgress, setSeasonalProgress] = useState(0);
+
+  useEffect(() => {
+    if (!seasonalEmblaApi) return;
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, seasonalEmblaApi.scrollProgress()));
+      setSeasonalProgress(p * 100);
+    };
+    onScroll();
+    seasonalEmblaApi.on("scroll", onScroll);
+    seasonalEmblaApi.on("reInit", onScroll);
+    return () => {
+      seasonalEmblaApi.off("scroll", onScroll);
+      seasonalEmblaApi.off("reInit", onScroll);
+    };
+  }, [seasonalEmblaApi]);
 
   // Newest additions to the catalog, sorted by createdAt (newest first)
   const newArrivals = useMemo(
@@ -103,6 +285,30 @@ export default function HomePage() {
           price: p.price,
           mrp: p.mrp || p.price,
           shortDesc: p.story || p.details || "",
+        })),
+    [products]
+  );
+
+  const bestSellers = useMemo(
+    () =>
+      products
+        .filter((product) => Boolean(product.isBestseller))
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime()
+        )
+        .map((product) => ({
+          _id: product._id,
+          sku: product.sku || `MG-${String(product._id).slice(-6).toUpperCase()}`,
+          name: product.name,
+          slug: product.slug,
+          category: product.category,
+          subcategory: product.subcategory || product.category || "",
+          image: product.images?.[0] || product.image || "",
+          price: product.price,
+          mrp: product.mrp || product.price,
+          shortDesc: product.story || product.details || "",
         })),
     [products]
   );
@@ -177,15 +383,49 @@ export default function HomePage() {
     };
   }, [clocksEmblaApi]);
 
+  const [bestSellersEmblaRef, bestSellersEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [bestSellersProgress, setBestSellersProgress] = useState(0);
+
+  useEffect(() => {
+    if (!bestSellersEmblaApi) return;
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, bestSellersEmblaApi.scrollProgress()));
+      setBestSellersProgress(p * 100);
+    };
+    onScroll();
+    bestSellersEmblaApi.on("scroll", onScroll);
+    bestSellersEmblaApi.on("reInit", onScroll);
+    return () => {
+      bestSellersEmblaApi.off("scroll", onScroll);
+      bestSellersEmblaApi.off("reInit", onScroll);
+    };
+  }, [bestSellersEmblaApi]);
+
   // Handle Quick Add to Cart
-  const handleQuickAdd = (product: { _id?: string; sku: string; name: string; image: string; price: number }, e: React.MouseEvent) => {
+  const handleQuickAdd = (product: { _id?: string; sku: string; name: string; image: string; price: number; weight?: number; stockStatus?: string; requiresImage?: boolean }, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (product.stockStatus === "out-of-stock") {
+      toast.error(`${product.name} is currently unavailable.`);
+      return;
+    }
+    if (product.requiresImage) {
+      toast("Please select options on the product page.");
+      return;
+    }
     addToCart({
       productId: product._id || product.sku,
       name: product.name,
       image: product.image,
       price: product.price,
+      weight: product.weight,
       quantity: 1,
     });
     toast.success(`${product.name} added to cart!`, {
@@ -377,6 +617,129 @@ export default function HomePage() {
         </div>
       </section>
 
+      {bestSellers.length > 0 && (
+        <section id="bestsellers" className="relative w-full py-14 md:py-20 bg-[var(--bg-subtle)] border-b border-[var(--border)]">
+          <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
+                  <Star size={12} fill="currentColor" />
+                  Collector Favorites
+                </div>
+                <h2 className="font-serif text-[2rem] sm:text-[2.6rem] md:text-[3rem] leading-[1.1] text-[var(--text)] tracking-tight">
+                  Best Sellers
+                </h2>
+                <p className="text-[13px] sm:text-[14px] text-[var(--text-muted)] mt-3 leading-relaxed max-w-[560px]">
+                  The handcrafted pieces our collectors return to most. Discover the stories everyone is bringing home.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 self-end md:self-auto">
+                <span className="text-[11px] font-bold tracking-wider text-[var(--text-muted)] mr-2 hidden sm:inline">
+                  {bestSellers.length} {bestSellers.length === 1 ? "Favorite" : "Favorites"}
+                </span>
+                {bestSellers.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => bestSellersEmblaApi?.scrollPrev()}
+                      aria-label="Previous best seller"
+                      className="w-10 h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      onClick={() => bestSellersEmblaApi?.scrollNext()}
+                      aria-label="Next best seller"
+                      className="w-10 h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="overflow-hidden" ref={bestSellersEmblaRef}>
+                <div className="flex touch-pan-y -ml-4 md:-ml-6">
+                  {bestSellers.map((product) => {
+                    const discountPct = product.mrp > product.price
+                      ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
+                      : 0;
+                    return (
+                      <div
+                        key={product._id || product.sku}
+                        className="shrink-0 grow-0 pl-4 md:pl-6 basis-[85%] sm:basis-[50%] lg:basis-[33.33%] xl:basis-[25%]"
+                      >
+                        <Link
+                          href={`/product/${product.slug}`}
+                          className="group relative flex flex-col h-full rounded-[24px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500"
+                        >
+                          <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
+                            <ProductImage
+                              image={product.image}
+                              alt={product.name}
+                              className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                            />
+                            <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold tracking-wider uppercase shadow-md">
+                              Bestseller
+                            </span>
+                            {discountPct > 0 && (
+                              <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/95 text-[var(--accent)] text-[9px] font-extrabold tracking-wider uppercase shadow-sm">
+                                {discountPct}% OFF
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-5 flex flex-col flex-1 justify-between">
+                            <div>
+                              <h3 className="font-serif text-[17px] font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors leading-snug mb-2 line-clamp-2">
+                                {product.name}
+                              </h3>
+                              {product.shortDesc && (
+                                <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-4">
+                                  {product.shortDesc}
+                                </p>
+                              )}
+                            </div>
+                            <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-[18px] font-bold text-[var(--text)]">
+                                  ₹{product.price.toLocaleString()}
+                                </span>
+                                {product.mrp > product.price && (
+                                  <span className="text-[12px] text-[var(--text-muted)] line-through">
+                                    ₹{product.mrp.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => handleQuickAdd(product, e)}
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--text)] text-white text-[11px] font-bold tracking-wider uppercase hover:bg-[var(--accent)] transition-colors shadow-sm"
+                              >
+                                <ShoppingBag size={13} />
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {bestSellers.length > 1 && (
+                <div className="mt-8 h-[2px] w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-300"
+                    style={{ width: `${bestSellersProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ══════════════════════════════════════════════════════════
           2. SIGNATURE COLLECTION: Navaratri Miniature Shops
       ═══════════════════════════════════════════════════════════ */}
@@ -443,8 +806,8 @@ export default function HomePage() {
                         
                         {/* Image Showcase */}
                         <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
-                          <img
-                            src={getImageUrl(product.image)}
+                          <ProductImage
+                            image={product.image}
                             alt={product.name}
                             className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                           />
@@ -796,8 +1159,8 @@ export default function HomePage() {
                           className="group relative flex flex-col h-full rounded-[24px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-300"
                         >
                           <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
-                            <img
-                              src={getImageUrl(product.image)}
+                            <ProductImage
+                              image={product.image}
                               alt={product.name}
                               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                             />
@@ -940,42 +1303,58 @@ export default function HomePage() {
             {(activeMarketTab === "fruits" ? fruitBaskets : vegetableCrates).map((item) => (
               <div
                 key={item.sku}
-                className="group relative flex flex-col rounded-2xl bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-md hover:border-[var(--accent)] transition-all duration-300"
+                className="group relative flex flex-col h-full rounded-[20px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500"
               >
                 {/* Image */}
-                <div className="relative aspect-square w-full overflow-hidden bg-stone-50">
-                  <img
-                    src={item.image}
+                <div className="relative aspect-[4/3] sm:aspect-square w-full overflow-hidden bg-stone-100">
+                  <ProductImage
+                    image={item.image}
                     alt={item.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                   />
-                  {/* Price Tag */}
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/95 text-[10px] font-bold text-[var(--accent)] shadow-sm">
-                    ₹{item.price}
-                  </span>
-                  <span className="absolute top-2 right-2 text-[8px] font-mono bg-black/40 text-white px-1.5 py-0.5 rounded">
-                    {item.sku.replace("MG-", "")}
+
+                  {/* Discount Badge */}
+                  {item.mrp > item.price && (
+                    <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#be442b] text-white text-[10px] font-extrabold tracking-wider uppercase shadow-md z-10">
+                      {Math.round(((item.mrp - item.price) / item.mrp) * 100)}% OFF
+                    </span>
+                  )}
+
+                  {/* Gradient overlay on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                  <span className="absolute bottom-3 left-3 text-[9px] font-mono text-white/90 font-bold bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    {item.sku}
                   </span>
                 </div>
 
                 {/* Details */}
-                <div className="p-3 flex flex-col flex-1 justify-between">
+                <div className="p-4 flex flex-col flex-1 justify-between bg-gradient-to-b from-white to-[var(--bg-subtle)]">
                   <div>
-                    <h4 className="text-[12px] font-bold text-[var(--text)] leading-snug line-clamp-1 group-hover:text-[var(--accent)] transition-colors">
-                      {item.name.replace("Miniature ", "")}
+                    <h4 className="text-[14px] font-bold text-[var(--text)] leading-snug line-clamp-2 group-hover:text-[var(--accent)] transition-colors mb-2">
+                      {item.name}
                     </h4>
-                    <p className="text-[10px] text-[var(--text-muted)] line-through">
-                      MRP ₹{item.mrp}
-                    </p>
                   </div>
 
-                  <button
-                    onClick={(e) => handleQuickAdd(item, e)}
-                    className="mt-3 w-full py-1.5 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--accent)] hover:text-white text-[10px] font-bold text-[var(--text)] tracking-wider uppercase transition-colors flex items-center justify-center gap-1 border border-[var(--border)]"
-                  >
-                    <ShoppingBag size={11} />
-                    Add
-                  </button>
+                  <div className="pt-3 border-t border-[var(--border)] mt-auto">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-[18px] font-extrabold text-[var(--accent)]">
+                        ₹{item.price}
+                      </span>
+                      {item.mrp > item.price && (
+                        <span className="text-[12px] font-semibold text-[var(--text-muted)] line-through">
+                          ₹{item.mrp}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => handleQuickAdd(item, e)}
+                      className="w-full py-2.5 rounded-xl bg-[var(--text)] hover:bg-[var(--accent)] text-white text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_12px_rgba(190,68,43,0.3)] hover:-translate-y-0.5"
+                    >
+                      <ShoppingBag size={14} />
+                      Add to Cart
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -987,95 +1366,167 @@ export default function HomePage() {
       {/* ══════════════════════════════════════════════════════════
           4. FESTIVE SPECIAL: Navaratri Thamboolam Return Gifts
       ═══════════════════════════════════════════════════════════ */}
-      <section className="relative w-full py-14 md:py-20 bg-white border-b border-[var(--border)]">
+      {seasonalSectionEnabled && (selectedCollections.length > 0 || selectedOccasions.length > 0) && seasonalProducts.length > 0 && (
+        <section id="seasonal-collection" className="relative w-full py-14 md:py-20 bg-white border-b border-[var(--border)]">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
           
-          <div className="rounded-[32px] bg-gradient-to-tr from-[#2d1810] via-[#3a1d13] to-[#25130b] text-white p-8 sm:p-12 md:p-16 relative overflow-hidden shadow-2xl">
-            {/* Background Festive Lights Glow */}
+          <div className="rounded-[36px] bg-gradient-to-br from-[#180e07] via-[#24130b] to-[#120a05] border border-[var(--accent-gold)]/20 text-white p-8 sm:p-12 md:p-16 relative overflow-hidden shadow-2xl">
+            {seasonalImage && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.12] mix-blend-overlay"
+                style={{ backgroundImage: `url(${getImageUrl(seasonalImage)})` }}
+              />
+            )}
+            {/* Elegant Background Glows */}
             <div
               aria-hidden
-              className="pointer-events-none absolute -top-20 -right-20 w-80 h-80 rounded-full bg-[var(--accent-gold)]/20 blur-3xl"
+              className="pointer-events-none absolute -top-24 -right-24 w-[30rem] h-[30rem] rounded-full bg-[var(--accent-gold)]/15 blur-[100px]"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-[var(--accent)]/10 blur-[80px]"
             />
 
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
               
-              {/* Left Info */}
-              <div className="lg:col-span-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-gold)]/20 border border-[var(--accent-gold)]/40 text-[var(--accent-gold-light)] text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
-                  🪔 Sacred Festive Keepsakes
+              {/* Left Info - Premium Design */}
+              <div className="lg:col-span-5 flex flex-col justify-center">
+                <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/5 backdrop-blur-md border border-[var(--accent-gold)]/30 text-[var(--accent-gold)] text-[10px] font-bold tracking-[0.25em] uppercase mb-6 self-start shadow-sm">
+                  <Sparkles size={12} className="text-[var(--accent-gold)]" />
+                  {seasonalOccasionName}
                 </div>
-                <h2 className="font-serif text-[2.2rem] sm:text-[2.8rem] md:text-[3.2rem] leading-[1.05] tracking-tight mb-4 text-white">
-                  Navaratri Miniature <span className="text-[var(--accent-gold)] italic">Thamboolam</span> Sets
+                
+                <h2 className="font-serif text-[2.4rem] sm:text-[3.2rem] md:text-[3.5rem] leading-[1.05] tracking-tight mb-5 text-white">
+                  {seasonalCollectionName.split(' ').map((word, i, arr) => 
+                    i === arr.length - 1 ? <em key={i} className="italic text-[var(--accent-gold)] font-normal">{word}</em> : `${word} `
+                  )}
                 </h2>
-                <p className="text-white/80 text-[13px] sm:text-[14px] leading-relaxed mb-6 max-w-[480px]">
-                  Thoughtful traditional return gifts for Golu visitors, weddings, and housewarmings. 
-                  Featuring miniature betel leaves, supari, coconut, and decorative trays.
+                
+                {/* Decorative Divider */}
+                <div className="flex items-center gap-3 mb-6 opacity-60">
+                  <span className="h-[1px] w-12 bg-gradient-to-r from-[var(--accent-gold)] to-transparent" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-gold)]" />
+                  <span className="h-[1px] w-12 bg-gradient-to-l from-[var(--accent-gold)] to-transparent" />
+                </div>
+                
+                <p className="text-white/70 text-[14px] md:text-[15px] font-light leading-relaxed mb-8 max-w-[420px]">
+                  {seasonalDescription}
                 </p>
 
-                <div className="flex flex-wrap items-center gap-4 mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-5 mb-4">
                   <a
                     href="https://wa.me/918300034451?text=Hi%20Mythris%20Gleams,%20I%20am%20interested%20in%20bulk%20Navaratri%20Thamboolam%20orders."
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-[var(--accent-gold)] text-[var(--text)] text-[11px] font-bold tracking-widest uppercase hover:bg-[var(--accent-gold-light)] transition-all duration-300 shadow-lg"
+                    className="inline-flex items-center justify-center gap-2.5 px-7 py-4 rounded-full bg-gradient-to-r from-[var(--accent-gold)] to-yellow-600 text-[#1a0f0a] text-[11px] font-extrabold tracking-[0.15em] uppercase hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all duration-300"
                   >
-                    <MessageCircle size={15} />
+                    <MessageCircle size={16} />
                     Inquire Bulk Gifting
                   </a>
-                  <span className="text-white/60 text-[11px]">
+                  <p className="text-white/50 text-[10px] md:text-[11px] leading-snug max-w-[180px]">
                     Custom packaging & personalized name tags available.
-                  </span>
+                  </p>
                 </div>
               </div>
 
-              {/* Right: 3 Thamboolam Variants Cards */}
-              <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {thamboolamSets.map((set) => (
-                  <div
-                    key={set.sku}
-                    className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 flex flex-col justify-between hover:bg-white/15 transition-all duration-300"
-                  >
-                    <div className="aspect-square w-full rounded-xl overflow-hidden mb-3 bg-black/20">
-                      <img
-                        src={set.image}
-                        alt={set.name}
-                        className="w-full h-full object-cover"
+              {/* Right: Carousel */}
+              <div className="lg:col-span-7 relative">
+                <div className="overflow-hidden" ref={seasonalEmblaRef}>
+                  <div className="flex touch-pan-y -ml-4">
+                    {seasonalProducts.map((set) => (
+                      <div
+                        key={set._id || set.slug}
+                        className="shrink-0 grow-0 pl-4 basis-[85%] sm:basis-[45%] md:basis-[40%] lg:basis-[45%] xl:basis-[40%]"
+                      >
+                        <div
+                          className="h-full rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 flex flex-col justify-between hover:bg-white/15 transition-all duration-300"
+                        >
+                          <Link href={`/product/${set.slug}`} className="block">
+                            <div className="aspect-square w-full rounded-xl overflow-hidden mb-3 bg-black/20">
+                              <ProductImage
+                                image={set.image}
+                                alt={set.name}
+                                className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                              />
+                            </div>
+                            <h4 className="text-[13px] font-bold text-white leading-snug mb-1">
+                              {set.name.replace(/^Navaratri Miniature Thamboolam\s*[–-]\s*/, "")}
+                            </h4>
+                          </Link>
+                          <p className="text-[10px] text-white/60 line-clamp-2 mb-3 mt-1">
+                            {set.shortDesc}
+                          </p>
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+                            <div>
+                              <span className="text-[14px] font-bold text-[var(--accent-gold)]">
+                                ₹{set.price.toLocaleString()}
+                              </span>
+                              {set.mrp > set.price && (
+                                <span className="text-[10px] text-white/40 line-through ml-1.5">
+                                  ₹{set.mrp.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                            {set.requiresImage ? (
+                              <Link
+                                href={`/product/${set.slug}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors text-[11px]"
+                              >
+                                Customize
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleQuickAdd(set, e)}
+                                disabled={set.stockStatus === "out-of-stock"}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-light)] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 text-[11px]"
+                                aria-label={`Add ${set.name} to cart`}
+                              >
+                                <ShoppingBag size={12} />
+                                {set.stockStatus === "out-of-stock" ? "Out of Stock" : "Add"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Progress bar and navigation */}
+                {seasonalProducts.length > 1 && (
+                  <div className="mt-6 flex items-center justify-between gap-4">
+                    <div className="h-[2px] flex-1 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent-gold)] transition-all duration-300"
+                        style={{ width: `${seasonalProgress}%` }}
                       />
                     </div>
-                    <div>
-                      <h4 className="text-[13px] font-bold text-white leading-snug mb-1">
-                        {set.name.replace("Navaratri Miniature Thamboolam – ", "")}
-                      </h4>
-                      <p className="text-[10px] text-white/60 line-clamp-2 mb-3">
-                        {set.shortDesc}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                      <div>
-                        <span className="text-[14px] font-bold text-[var(--accent-gold)]">
-                          ₹{set.price}
-                        </span>
-                        <span className="text-[10px] text-white/40 line-through ml-1.5">
-                          ₹{set.mrp}
-                        </span>
-                      </div>
+                    <div className="flex gap-2 shrink-0">
                       <button
-                        onClick={(e) => handleQuickAdd(set, e)}
-                        className="p-2 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-light)] text-white transition-colors"
-                        title="Add to cart"
+                        onClick={() => seasonalEmblaApi?.scrollPrev()}
+                        className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-colors"
                       >
-                        <ShoppingBag size={12} />
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        onClick={() => seasonalEmblaApi?.scrollNext()}
+                        className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-colors"
+                      >
+                        <ChevronRight size={16} />
                       </button>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
 
             </div>
           </div>
 
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       {/* ══════════════════════════════════════════════════════════
           5. NEW COLLECTIONS: Fresh From The Kiln
@@ -1124,8 +1575,8 @@ export default function HomePage() {
                   >
                     {/* Image */}
                     <div className="relative aspect-square w-full overflow-hidden bg-stone-100">
-                      <img
-                        src={getImageUrl(product.image)}
+                      <ProductImage
+                        image={product.image}
                         alt={product.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />

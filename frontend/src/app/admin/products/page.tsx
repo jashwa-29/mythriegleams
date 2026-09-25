@@ -16,6 +16,7 @@ import {
     X,
     Hash,
     Tag,
+    TrendingUp,
     Layers,
     Archive,
     Image as ImageIcon,
@@ -212,10 +213,17 @@ const ProductManagement = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm ${
-                                                product.stockStatus === 'in-stock' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                product.stockStatus === 'made-to-order' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-zinc-100 text-zinc-400 border-zinc-200'
-                                            }`}>{product.stockStatus}</span>
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm ${
+                                                    product.stockStatus === 'in-stock' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                    product.stockStatus === 'made-to-order' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-zinc-100 text-zinc-400 border-zinc-200'
+                                                }`}>{product.stockStatus}</span>
+                                                {product.isBestseller && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-50 text-amber-600 border border-amber-100">
+                                                        <TrendingUp size={9} /> Bestseller
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right font-bold text-zinc-900 tabular-nums">₹{product.price.toLocaleString()}</td>
                                     </tr>

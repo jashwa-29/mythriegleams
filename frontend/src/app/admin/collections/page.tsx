@@ -68,11 +68,11 @@ const CollectionManagement = () => {
 
     const galleryName = watch('name');
     useEffect(() => {
-        if (galleryName) {
+        if (galleryName && !editingCollection) {
             const generatedSlug = galleryName.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
             setValue('slug', generatedSlug);
         }
-    }, [galleryName, setValue]);
+    }, [galleryName, setValue, editingCollection]);
 
     useEffect(() => {
         dispatch(fetchCollections());

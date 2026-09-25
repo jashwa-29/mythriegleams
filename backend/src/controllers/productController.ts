@@ -22,11 +22,21 @@ const parseArrayField = (input: any): string[] => {
     return [];
 };
 
+const parseBooleanInput = (input: any): boolean | undefined => {
+    const value = Array.isArray(input) ? input[0] : input;
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return undefined;
+};
+
 // @desc    Get all products (with optional filtering)
 // @route   GET /api/products
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
-    const { category, subcategory, occasion, occasionSub, sort, search } = req.query;
+    const { category, subcategory, occasion, occasionSub, sort, search, isBestseller } = req.query;
     let query: any = {};
+
+    const bestsellerFilter = parseBooleanInput(isBestseller);
+    if (bestsellerFilter !== undefined) query.isBestseller = bestsellerFilter;
 
     if (category) {
         query.$or = query.$or || [];
@@ -122,6 +132,7 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         metaDescription,
         stockStatus,
         requiresImage,
+        isBestseller,
         variants // JSON string because it's FormData
     } = req.body;
 
@@ -161,7 +172,8 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         details,
         metaDescription,
         stockStatus: stockStatus || 'made-to-order',
-        requiresImage: requiresImage === true || requiresImage === 'true'
+        requiresImage: requiresImage === true || requiresImage === 'true',
+        isBestseller: parseBooleanInput(isBestseller) ?? false
     };
 
     // Parse variants if provided as string
@@ -223,6 +235,7 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
         metaDescription, 
         stockStatus, 
         requiresImage, 
+        isBestseller,
         variants, 
         existingImages 
     } = req.body;
@@ -274,6 +287,8 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
     product.metaDescription = metaDescription || product.metaDescription;
     product.stockStatus = stockStatus || product.stockStatus;
     product.requiresImage = requiresImage === true || requiresImage === 'true';
+    const bestsellerValue = parseBooleanInput(isBestseller);
+    if (bestsellerValue !== undefined) product.isBestseller = bestsellerValue;
 
     if (variants) {
         try {

@@ -69,11 +69,11 @@ const OccasionManagement = () => {
 
     const occasionName = watch('name');
     useEffect(() => {
-        if (occasionName) {
+        if (occasionName && !editingOccasion) {
             const generatedSlug = occasionName.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
             setValue('slug', generatedSlug);
         }
-    }, [occasionName, setValue]);
+    }, [occasionName, setValue, editingOccasion]);
 
     useEffect(() => {
         dispatch(fetchOccasions());

@@ -29,6 +29,7 @@ import inquiryRoutes from './routes/inquiryRoutes';
 import userRoutes from './routes/userRoutes';
 import collectionRoutes from './routes/collectionRoutes';
 import occasionRoutes from './routes/occasionRoutes';
+import homepageSettingsRoutes from './routes/homepageSettingsRoutes';
 import cartRoutes from './routes/cartRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import path from 'path';
@@ -45,6 +46,7 @@ app.use('/api/inquiries', inquiryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/occasions', occasionRoutes);
+app.use('/api/homepage-settings', homepageSettingsRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/payments', paymentRoutes);
 

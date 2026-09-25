@@ -274,7 +274,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
               })}
 
               {/* All Occasions */}
-              {Array.from(new Set([p.occasion, ...(p.occasions || [])].filter(Boolean))).map((occ) => {
+              {Array.from(new Set([p.occasion, ...(p.occasions || [])].filter((occ): occ is string => Boolean(occ)))).map((occ) => {
                 const occSlug = occ.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
                 return (
                   <Link
