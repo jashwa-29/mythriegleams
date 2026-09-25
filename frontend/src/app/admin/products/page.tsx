@@ -61,8 +61,14 @@ const ProductManagement = () => {
 
     const exportToExcel = () => {
         if (products.length === 0) return toast.error("No data available to export");
-        const headers = ["ID", "Name", "Slug", "Category", "Subcategory", "Occasion", "Occasion Subcategory", "Price", "Weight (g)", "Stock Status"];
-        const rows = products.map(p => [p._id, p.name, p.slug, p.category, p.subcategory || '', p.occasion || '', p.occasionSub || '', p.price, p.weight || 0, p.stockStatus]);
+        const headers = ["ID", "Name", "Slug", "Collections", "Subcategories", "Occasions", "Occasion Subcategories", "Price", "Weight (g)", "Stock Status"];
+        const rows = products.map(p => {
+            const cats = p.categories && p.categories.length > 0 ? p.categories.join("; ") : (p.category || '');
+            const subs = p.subcategories && p.subcategories.length > 0 ? p.subcategories.join("; ") : (p.subcategory || '');
+            const occs = p.occasions && p.occasions.length > 0 ? p.occasions.join("; ") : (p.occasion || '');
+            const occSubs = p.occasionSubs && p.occasionSubs.length > 0 ? p.occasionSubs.join("; ") : (p.occasionSub || '');
+            return [p._id, p.name, p.slug, cats, subs, occs, occSubs, p.price, p.weight || 0, p.stockStatus];
+        });
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
@@ -79,13 +85,21 @@ const ProductManagement = () => {
         }
     };
 
-    const filteredProducts = products.filter((p: any) => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.subcategory || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.occasion || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.occasionSub || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProducts = products.filter((p: any) => {
+        const q = searchTerm.toLowerCase();
+        const allCats = [p.category, ...(p.categories || [])].filter(Boolean).join(" ").toLowerCase();
+        const allSubs = [p.subcategory, ...(p.subcategories || [])].filter(Boolean).join(" ").toLowerCase();
+        const allOccs = [p.occasion, ...(p.occasions || [])].filter(Boolean).join(" ").toLowerCase();
+        const allOccSubs = [p.occasionSub, ...(p.occasionSubs || [])].filter(Boolean).join(" ").toLowerCase();
+        return (
+            p.name.toLowerCase().includes(q) ||
+            p.slug.toLowerCase().includes(q) ||
+            allCats.includes(q) ||
+            allSubs.includes(q) ||
+            allOccs.includes(q) ||
+            allOccSubs.includes(q)
+        );
+    });
 
     const handleFormSubmit = (formData: FormData) => {
         if (selectedProduct) {
@@ -170,16 +184,32 @@ const ProductManagement = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="px-2 py-0.5 rounded border border-zinc-200 text-[9px] font-bold uppercase text-zinc-500 bg-zinc-50">{product.category}</span>
-                                            {product.subcategory && (
-                                                <span className="ml-1.5 px-2 py-0.5 rounded border border-zinc-100 text-[9px] font-bold uppercase text-zinc-400 bg-white">{product.subcategory}</span>
-                                            )}
-                                            {product.occasion && (
-                                                <span className="ml-1.5 px-2 py-0.5 rounded border border-rose-100 text-[9px] font-bold uppercase text-rose-500 bg-rose-50">{product.occasion}</span>
-                                            )}
-                                            {product.occasionSub && (
-                                                <span className="ml-1.5 px-2 py-0.5 rounded border border-rose-50 text-[9px] font-bold uppercase text-rose-400 bg-white">{product.occasionSub}</span>
-                                            )}
+                                            <div className="flex flex-wrap gap-1 max-w-xs">
+                                                {/* Collections / Categories */}
+                                                {(product.categories && product.categories.length > 0 ? product.categories : [product.category]).filter(Boolean).map((cat: string) => (
+                                                    <span key={cat} className="px-2 py-0.5 rounded border border-zinc-200 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-50">
+                                                        {cat}
+                                                    </span>
+                                                ))}
+                                                {/* Subcategories */}
+                                                {(product.subcategories && product.subcategories.length > 0 ? product.subcategories : [product.subcategory]).filter(Boolean).map((sub: string) => (
+                                                    <span key={sub} className="px-2 py-0.5 rounded border border-zinc-100 text-[9px] font-bold uppercase text-zinc-400 bg-white">
+                                                        {sub}
+                                                    </span>
+                                                ))}
+                                                {/* Occasions */}
+                                                {(product.occasions && product.occasions.length > 0 ? product.occasions : [product.occasion]).filter(Boolean).map((occ: string) => (
+                                                    <span key={occ} className="px-2 py-0.5 rounded border border-rose-100 text-[9px] font-bold uppercase text-rose-600 bg-rose-50">
+                                                        {occ}
+                                                    </span>
+                                                ))}
+                                                {/* Occasion Subcategories */}
+                                                {(product.occasionSubs && product.occasionSubs.length > 0 ? product.occasionSubs : [product.occasionSub]).filter(Boolean).map((occSub: string) => (
+                                                    <span key={occSub} className="px-2 py-0.5 rounded border border-rose-50 text-[9px] font-bold uppercase text-rose-400 bg-white">
+                                                        {occSub}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm ${
@@ -234,21 +264,38 @@ const ProductManagement = () => {
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Box size={10}/> Weight</div>
                                         <div className="text-base sm:text-lg font-bold text-zinc-900 tabular-nums">{inspectedProduct.weight ? `${inspectedProduct.weight} g` : "—"}</div>
                                     </div>
-                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
-                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Category</div>
-                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.category}</div>
+                                    <div className="col-span-2 p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1.5">
+                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2"><Tag size={10}/> Collections (Galleries)</div>
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                            {(inspectedProduct.categories && inspectedProduct.categories.length > 0 ? inspectedProduct.categories : [inspectedProduct.category]).filter(Boolean).map((cat: string) => (
+                                                <span key={cat} className="px-2.5 py-1 rounded-lg bg-zinc-900 text-white font-bold text-[10px] uppercase">
+                                                    {cat}
+                                                </span>
+                                            ))}
+                                            {(inspectedProduct.subcategories && inspectedProduct.subcategories.length > 0 ? inspectedProduct.subcategories : [inspectedProduct.subcategory]).filter(Boolean).map((sub: string) => (
+                                                <span key={sub} className="px-2.5 py-1 rounded-lg bg-zinc-200 text-zinc-700 font-bold text-[10px] uppercase">
+                                                    {sub}
+                                                </span>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
-                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Subcategory</div>
-                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.subcategory || "—"}</div>
-                                    </div>
-                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
-                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Occasion</div>
-                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasion || "—"}</div>
-                                    </div>
-                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
-                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Occasion Subcategory</div>
-                                        <div className="text-base sm:text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.occasionSub || "—"}</div>
+                                    <div className="col-span-2 p-3 sm:p-4 bg-rose-50/50 rounded-xl border border-rose-100 space-y-1.5">
+                                        <div className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-2"><Tag size={10}/> Occasions & Festivals</div>
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                            {(inspectedProduct.occasions && inspectedProduct.occasions.length > 0 ? inspectedProduct.occasions : [inspectedProduct.occasion]).filter(Boolean).map((occ: string) => (
+                                                <span key={occ} className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-bold text-[10px] uppercase">
+                                                    {occ}
+                                                </span>
+                                            ))}
+                                            {(inspectedProduct.occasionSubs && inspectedProduct.occasionSubs.length > 0 ? inspectedProduct.occasionSubs : [inspectedProduct.occasionSub]).filter(Boolean).map((occSub: string) => (
+                                                <span key={occSub} className="px-2.5 py-1 rounded-lg bg-rose-200 text-rose-800 font-bold text-[10px] uppercase">
+                                                    {occSub}
+                                                </span>
+                                            ))}
+                                            {(!inspectedProduct.occasion && (!inspectedProduct.occasions || inspectedProduct.occasions.length === 0)) && (
+                                                <span className="text-zinc-400 text-xs">—</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 {(inspectedProduct.variants?.length > 0 || inspectedProduct.requiresImage) && (

@@ -32,7 +32,7 @@ import toast from 'react-hot-toast';
 const artisanalSchema = z.object({
     name: z.string().min(3, "Name your creation"),
     slug: z.string().min(3, "Unique identifier required"),
-    category: z.string().min(1, "Choose a collection"),
+    category: z.string().optional(),
     subcategory: z.string().optional(),
     occasion: z.string().optional(),
     occasionSub: z.string().optional(),
@@ -58,9 +58,13 @@ interface ProductModalProps {
         name: string;
         slug: string;
         category: string;
+        categories?: string[];
         subcategory?: string | null;
+        subcategories?: string[];
         occasion?: string | null;
+        occasions?: string[];
         occasionSub?: string | null;
+        occasionSubs?: string[];
         price: number;
         mrp?: number | null;
         weight?: number | null;
@@ -82,6 +86,12 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const [variants, setVariants] = useState<string[]>(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
     const [colors, setColors] = useState<string[]>([]);
     const [requiresImage, setRequiresImage] = useState(false);
+
+    // Multi-selection state
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
+    const [selectedOccasions, setSelectedOccasions] = useState<string[]>([]);
+    const [selectedOccasionSubs, setSelectedOccasionSubs] = useState<string[]>([]);
 
     const COLOR_PALETTE = [
         { name: 'Gold', hex: '#d4af37' },
@@ -113,28 +123,28 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         defaultValues: { stockStatus: 'made-to-order', subcategory: '', weight: 0 }
     });
 
-    const selectedCategory = watch('category');
     const mainCategories = collections.filter(c => !c.parent);
-    const selectedCategoryObj = collections.find(c => c.name === selectedCategory && !c.parent);
-    const subcategories = collections.filter(c => {
-        if (!c.parent || !selectedCategoryObj) return false;
+    // Subcategories available for any currently selected main categories
+    const activeSubcategories = collections.filter(c => {
+        if (!c.parent) return false;
         const parentId = typeof c.parent === 'object' ? c.parent._id : c.parent;
-        return parentId === selectedCategoryObj._id;
+        const parentCol = collections.find(col => col._id === parentId);
+        return parentCol && selectedCategories.includes(parentCol.name);
     });
 
-    const selectedOccasion = watch('occasion');
     const mainOccasions = occasions.filter(o => !o.parent);
-    const selectedOccasionObj = occasions.find(o => o.name === selectedOccasion && !o.parent);
-    const occasionSubs = occasions.filter(o => {
-        if (!o.parent || !selectedOccasionObj) return false;
+    // Occasion subcategories available for any currently selected main occasions
+    const activeOccasionSubs = occasions.filter(o => {
+        if (!o.parent) return false;
         const parentId = typeof o.parent === 'object' ? o.parent._id : o.parent;
-        return parentId === selectedOccasionObj._id;
+        const parentOcc = occasions.find(occ => occ._id === parentId);
+        return parentOcc && selectedOccasions.includes(parentOcc.name);
     });
 
     // Auto-Slug Generation Logic
     const productName = watch('name');
     useEffect(() => {
-        if (productName) {
+        if (productName && !initialData) {
             const generatedSlug = productName
                 .toLowerCase()
                 .trim()
@@ -143,7 +153,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                 .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
             setValue('slug', generatedSlug);
         }
-    }, [productName, setValue]);
+    }, [productName, setValue, initialData]);
 
     useEffect(() => {
         if (isOpen) {
@@ -165,18 +175,51 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                     metaDescription: initialData.metaDescription || '',
                     stockStatus: (initialData.stockStatus as ArtisanalFormData['stockStatus']) || 'made-to-order',
                 });
+
+                // Populate multi categories
+                const initCats = Array.from(new Set([
+                    ...(initialData.categories || []),
+                    ...(initialData.category ? [initialData.category] : [])
+                ].filter(Boolean)));
+                setSelectedCategories(initCats);
+
+                // Populate multi subcategories
+                const initSubs = Array.from(new Set([
+                    ...(initialData.subcategories || []),
+                    ...(initialData.subcategory ? [initialData.subcategory] : [])
+                ].filter(Boolean)));
+                setSelectedSubcategories(initSubs);
+
+                // Populate multi occasions
+                const initOccs = Array.from(new Set([
+                    ...(initialData.occasions || []),
+                    ...(initialData.occasion ? [initialData.occasion] : [])
+                ].filter(Boolean)));
+                setSelectedOccasions(initOccs);
+
+                // Populate multi occasion subs
+                const initOccSubs = Array.from(new Set([
+                    ...(initialData.occasionSubs || []),
+                    ...(initialData.occasionSub ? [initialData.occasionSub] : [])
+                ].filter(Boolean)));
+                setSelectedOccasionSubs(initOccSubs);
+
                 if (initialData.images) {
                     setMediaItems(initialData.images.map((url: string) => ({ type: 'existing', url })));
                 } else {
                     setMediaItems([]);
                 }
-const sizeVariants = initialData.variants?.find((v) => v.type === 'Size')?.options || [];
-                                    const colorVariants = initialData.variants?.find((v) => v.type === 'Color')?.options || [];
+                const sizeVariants = initialData.variants?.find((v) => v.type === 'Size')?.options || [];
+                const colorVariants = initialData.variants?.find((v) => v.type === 'Color')?.options || [];
                 setVariants(Array.isArray(sizeVariants) && sizeVariants.length > 0 ? sizeVariants : []);
                 setColors(Array.isArray(colorVariants) ? colorVariants : []);
                 setRequiresImage(!!initialData.requiresImage);
             } else {
                 reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', subcategory: '', occasion: '', occasionSub: '', price: 0, mrp: 0, weight: 0, story: '', details: '', metaDescription: '' });
+                setSelectedCategories([]);
+                setSelectedSubcategories([]);
+                setSelectedOccasions([]);
+                setSelectedOccasionSubs([]);
                 setMediaItems([]);
                 setVariants(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
                 setColors([]);
@@ -221,6 +264,26 @@ const sizeVariants = initialData.variants?.find((v) => v.type === 'Size')?.optio
         Object.keys(data).forEach(key => {
             formData.append(key, String((data as Record<string, unknown>)[key]));
         });
+
+        // Set primary and multi collections
+        const primaryCat = selectedCategories[0] || data.category || '';
+        formData.set('category', primaryCat);
+        formData.set('categories', JSON.stringify(selectedCategories));
+
+        // Set primary and multi subcategories
+        const primarySub = selectedSubcategories[0] || data.subcategory || '';
+        formData.set('subcategory', primarySub);
+        formData.set('subcategories', JSON.stringify(selectedSubcategories));
+
+        // Set primary and multi occasions
+        const primaryOcc = selectedOccasions[0] || data.occasion || '';
+        formData.set('occasion', primaryOcc);
+        formData.set('occasions', JSON.stringify(selectedOccasions));
+
+        // Set primary and multi occasion subcategories
+        const primaryOccSub = selectedOccasionSubs[0] || data.occasionSub || '';
+        formData.set('occasionSub', primaryOccSub);
+        formData.set('occasionSubs', JSON.stringify(selectedOccasionSubs));
         
         // Add variants
         const variantPayload: { type: string; options: string[] }[] = [];
@@ -559,41 +622,169 @@ const sizeVariants = initialData.variants?.find((v) => v.type === 'Size')?.optio
                                             <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Reference Slug</label>
                                             <input {...register('slug')} placeholder="slug-path" className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-mono text-xs focus:ring-2 focus:ring-gold/20 outline-none transition-all" />
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Collection</label>
-                                            <select {...register('category')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
-                                                <option value="">Select Gallery...</option>
-                                                {mainCategories.map((col) => (
+                                        {/* Multi-Collection Selection */}
+                                        <div className="col-span-2 space-y-3 bg-zinc-50/70 p-5 rounded-2xl border border-zinc-100">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 flex items-center gap-1.5">
+                                                    <Layers size={13} className="text-gold" /> Collections (Galleries)
+                                                </label>
+                                                <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                                                    {selectedCategories.length} selected
+                                                </span>
+                                            </div>
+
+                                            {/* Dropdown to add collection */}
+                                            <select
+                                                value=""
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val && !selectedCategories.includes(val)) {
+                                                        setSelectedCategories(prev => [...prev, val]);
+                                                    }
+                                                }}
+                                                className="w-full bg-white border border-zinc-200 rounded-xl p-3.5 text-zinc-900 font-bold text-xs focus:ring-2 focus:ring-gold/20 outline-none transition-all cursor-pointer shadow-sm"
+                                            >
+                                                <option value="">+ Add to Collection...</option>
+                                                {mainCategories.filter(c => !selectedCategories.includes(c.name)).map((col) => (
                                                     <option key={col._id} value={col.name}>{col.name}</option>
                                                 ))}
                                             </select>
+
+                                            {/* Selected collections chips */}
+                                            {selectedCategories.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {selectedCategories.map((cat, idx) => (
+                                                        <span key={cat} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 text-white text-[11px] font-bold shadow-sm">
+                                                            {idx === 0 && <span className="text-[8px] bg-gold/30 text-gold px-1.5 py-0.5 rounded font-black tracking-wider uppercase mr-0.5">Primary</span>}
+                                                            {cat}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedCategories(prev => prev.filter(c => c !== cat));
+                                                                    // remove subcategories that belong only to this category if needed
+                                                                }}
+                                                                className="hover:text-rose-400 p-0.5 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Subcategories multi-select (appears if activeSubcategories exist) */}
+                                            {activeSubcategories.length > 0 && (
+                                                <div className="pt-3 border-t border-zinc-200/60 space-y-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Subcategories</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {activeSubcategories.map(sub => {
+                                                            const isSelected = selectedSubcategories.includes(sub.name);
+                                                            return (
+                                                                <button
+                                                                    key={sub._id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isSelected) {
+                                                                            setSelectedSubcategories(prev => prev.filter(s => s !== sub.name));
+                                                                        } else {
+                                                                            setSelectedSubcategories(prev => [...prev, sub.name]);
+                                                                        }
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider uppercase transition-all border ${
+                                                                        isSelected 
+                                                                            ? 'bg-gold text-white border-gold shadow-sm' 
+                                                                            : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected ? '✓ ' : '+ '} {sub.name}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Subcategory</label>
-                                            <select {...register('subcategory')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
-                                                <option value="">Select Subcategory...</option>
-                                                {subcategories.map((sub) => (
-                                                    <option key={sub._id} value={sub.name}>{sub.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Occasion</label>
-                                            <select {...register('occasion')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
-                                                <option value="">Select Occasion...</option>
-                                                {mainOccasions.map((occ) => (
+
+                                        {/* Multi-Occasion Selection */}
+                                        <div className="col-span-2 space-y-3 bg-rose-50/40 p-5 rounded-2xl border border-rose-100/70">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-rose-800 flex items-center gap-1.5">
+                                                    <Sparkles size={13} className="text-rose-500" /> Occasions & Festivals
+                                                </label>
+                                                <span className="text-[9px] font-bold text-rose-400 uppercase tracking-wider">
+                                                    {selectedOccasions.length} selected
+                                                </span>
+                                            </div>
+
+                                            {/* Dropdown to add occasion */}
+                                            <select
+                                                value=""
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val && !selectedOccasions.includes(val)) {
+                                                        setSelectedOccasions(prev => [...prev, val]);
+                                                    }
+                                                }}
+                                                className="w-full bg-white border border-rose-200 rounded-xl p-3.5 text-zinc-900 font-bold text-xs focus:ring-2 focus:ring-rose-300 outline-none transition-all cursor-pointer shadow-sm"
+                                            >
+                                                <option value="">+ Add to Occasion...</option>
+                                                {mainOccasions.filter(o => !selectedOccasions.includes(o.name)).map((occ) => (
                                                     <option key={occ._id} value={occ.name}>{occ.name}</option>
                                                 ))}
                                             </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Occasion Subcategory</label>
-                                            <select {...register('occasionSub')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
-                                                <option value="">Select Occasion Subcategory...</option>
-                                                {occasionSubs.map((sub) => (
-                                                    <option key={sub._id} value={sub.name}>{sub.name}</option>
-                                                ))}
-                                            </select>
+
+                                            {/* Selected occasions chips */}
+                                            {selectedOccasions.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {selectedOccasions.map((occ, idx) => (
+                                                        <span key={occ} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 text-white text-[11px] font-bold shadow-sm">
+                                                            {idx === 0 && <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-black tracking-wider uppercase mr-0.5">Primary</span>}
+                                                            {occ}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedOccasions(prev => prev.filter(o => o !== occ));
+                                                                }}
+                                                                className="hover:text-rose-200 p-0.5 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Occasion Subcategories multi-select (appears if activeOccasionSubs exist) */}
+                                            {activeOccasionSubs.length > 0 && (
+                                                <div className="pt-3 border-t border-rose-200/60 space-y-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-wider text-rose-500 block">Occasion Subcategories</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {activeOccasionSubs.map(sub => {
+                                                            const isSelected = selectedOccasionSubs.includes(sub.name);
+                                                            return (
+                                                                <button
+                                                                    key={sub._id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isSelected) {
+                                                                            setSelectedOccasionSubs(prev => prev.filter(s => s !== sub.name));
+                                                                        } else {
+                                                                            setSelectedOccasionSubs(prev => [...prev, sub.name]);
+                                                                        }
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider uppercase transition-all border ${
+                                                                        isSelected 
+                                                                            ? 'bg-rose-500 text-white border-rose-500 shadow-sm' 
+                                                                            : 'bg-white text-rose-700 border-rose-200 hover:border-rose-300'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected ? '✓ ' : '+ '} {sub.name}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 

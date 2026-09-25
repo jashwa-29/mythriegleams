@@ -4,7 +4,13 @@ export interface Product {
   slug?: string; // SEO Slug
   name: string;
   category: string;
+  categories?: string[];
   subcategory?: string;
+  subcategories?: string[];
+  occasion?: string;
+  occasions?: string[];
+  occasionSub?: string;
+  occasionSubs?: string[];
   price: number;
   mrp?: number; // Backend valuation
   weight?: number; // grams

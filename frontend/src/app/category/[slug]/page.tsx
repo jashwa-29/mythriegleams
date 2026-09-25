@@ -103,7 +103,10 @@ function CategoryContent({ slug }: { slug: string }) {
 
     if (excelMeta) {
       const matchedDb = (products || []).filter(
-        (p: any) => p.category === excelMeta.name || p.group === excelMeta.group
+        (p: any) =>
+          p.category === excelMeta.name ||
+          (p.categories && p.categories.includes(excelMeta.name)) ||
+          p.group === excelMeta.group
       );
       if (matchedDb.length > 0) {
         list = matchedDb as Product[];

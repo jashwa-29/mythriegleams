@@ -256,9 +256,38 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col gap-8"
         >
-          {/* Category Label + Name */}
-          <div className="space-y-2">
-            <div className="text-[10px] tracking-[0.25em] uppercase text-[var(--text-faint)] font-bold">{p.category}</div>
+          {/* Category / Collections & Occasions Label + Name */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* All Collections */}
+              {Array.from(new Set([p.category, ...(p.categories || [])].filter(Boolean))).map((cat) => {
+                const catSlug = cat.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+                return (
+                  <Link
+                    key={cat}
+                    href={`/category/${catSlug}`}
+                    className="text-[9px] tracking-[0.15em] uppercase font-bold px-2.5 py-1 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-all"
+                  >
+                    {cat}
+                  </Link>
+                );
+              })}
+
+              {/* All Occasions */}
+              {Array.from(new Set([p.occasion, ...(p.occasions || [])].filter(Boolean))).map((occ) => {
+                const occSlug = occ.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+                return (
+                  <Link
+                    key={occ}
+                    href={`/occasion/${occSlug}`}
+                    className="text-[9px] tracking-[0.15em] uppercase font-bold px-2.5 py-1 rounded-full bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 transition-all"
+                  >
+                    ✦ {occ}
+                  </Link>
+                );
+              })}
+            </div>
+
             <h2 className="text-[var(--text)] text-2xl md:text-3xl font-bold leading-[1.2] tracking-tight">
               {p.name}
             </h2>
