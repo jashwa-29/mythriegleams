@@ -509,7 +509,7 @@ export default function CheckoutPage() {
               </div>
               {shippingPrice > 0 && (
                 <div className="text-[11px] text-[var(--text-faint)] bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl px-3 py-2">
-                  Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more to unlock free shipping (₹0).
+                  Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more to unlock free shipping within India (₹0).
                 </div>
               )}
               {totalWeight > 0 && (

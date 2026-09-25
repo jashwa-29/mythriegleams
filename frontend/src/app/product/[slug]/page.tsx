@@ -469,7 +469,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                 {activeTab === 'shipping' && (
                   <motion.div key="shipping" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }} className="flex gap-4">
                     <Truck size={18} strokeWidth={1.5} className="text-[var(--accent)] shrink-0 mt-0.5" />
-                    <p>Delivered with care across India. Please allow 10–14 days for this handcrafted piece to reach your home.</p>
+                    <p>Delivered with care across India. Orders above ₹4,999 qualify for free shipping within India. Please allow 10–14 days for this handcrafted piece to reach your home.</p>
                   </motion.div>
                 )}
               </AnimatePresence>
