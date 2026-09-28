@@ -105,42 +105,44 @@ const PayOrderContent = () => {
     const [paying, setPaying] = useState(false);
     const [paid, setPaid] = useState(false);
 
+    // Reload safety net. A settled order has its token destroyed, so the token-gated
+    // GET answers 410 — that alone tells us the payment may have gone through. The
+    // server re-asks Razorpay before we claim success, so a live-but-unpaid order
+    // never shows a false confirmation. Resolves true only when Razorpay confirms paid.
+    const recoverSettledPayment = useCallback(async (): Promise<boolean> => {
+        const pending = readPendingPayOrder();
+        if (!pending) return false;
+
+        try {
+            const { data } = await publicApi.post(`/orders/public/pay/${id}/reconcile`, {
+                razorpayOrderId: pending.rzpOrderId,
+            });
+            // The gateway gave a definitive answer, so the marker has done its job.
+            clearPendingPayOrder();
+            if (!data?.data?.isPaid) return false;
+            setOrder((prev) => ({
+                _id: data.data._id,
+                orderCode: data.data.orderCode,
+                title: prev?.title || data.data.title || 'Custom Order',
+                image: prev?.image || '',
+                weight: prev?.weight || 0,
+                totalPrice: data.data.totalPrice,
+                isPaid: true,
+                status: data.data.status,
+                customerName: data.data.customerName || prev?.customerName || '',
+                customerEmail: prev?.customerEmail || '',
+                customerPhone: prev?.customerPhone || '',
+            }));
+            setPaid(true);
+            return true;
+        } catch {
+            clearPendingPayOrder();
+            return false;
+        }
+    }, [id]);
+
     useEffect(() => {
         let active = true;
-
-        // Reload safety net. A settled order has its token destroyed, so the token-gated
-        // GET answers 410 — that alone tells us the payment may have gone through. The
-        // server re-asks Razorpay before we claim success, so a live-but-unpaid order
-        // never shows a false confirmation.
-        const recoverSettledPayment = async () => {
-            const pending = readPendingPayOrder();
-            if (!pending) return;
-
-            try {
-                const { data } = await publicApi.post(`/orders/public/pay/${id}/reconcile`, {
-                    razorpayOrderId: pending.rzpOrderId,
-                });
-                // The gateway gave a definitive answer, so the marker has done its job.
-                clearPendingPayOrder();
-                if (!active || !data?.data?.isPaid) return;
-                setOrder((prev) => ({
-                    _id: data.data._id,
-                    orderCode: data.data.orderCode,
-                    title: data.data.title,
-                    image: prev?.image || '',
-                    weight: prev?.weight || 0,
-                    totalPrice: data.data.totalPrice,
-                    isPaid: true,
-                    status: data.data.status,
-                    customerName: data.data.customerName,
-                    customerEmail: prev?.customerEmail || '',
-                    customerPhone: prev?.customerPhone || '',
-                }));
-                setPaid(true);
-            } catch {
-                clearPendingPayOrder();
-            }
-        };
 
         const load = async () => {
             if (!id || !token) {
@@ -166,7 +168,7 @@ const PayOrderContent = () => {
         return () => {
             active = false;
         };
-    }, [id, token]);
+    }, [id, token, recoverSettledPayment]);
 
     const handlePay = useCallback(async () => {
         setPaying(true);
@@ -215,6 +217,12 @@ const PayOrderContent = () => {
                         clearPendingPayOrder();
                         setPaid(true);
                     } catch (err: unknown) {
+                        // Razorpay's `order.paid` webhook often settles the order — and
+                        // destroys this link's token — before this browser callback
+                        // lands, which makes verify answer 410 (or 400 "already paid").
+                        // That is a SUCCESS, not a failure. Ask the gateway before telling
+                        // the customer their money is at risk.
+                        if (await recoverSettledPayment()) return;
                         // The webhook or reconciler may still confirm this payment,
                         // so the marker is deliberately left in place.
                         alert(apiErrorMessage(err, "Payment verification failed. If money was deducted, it is saved and the store has been notified."));
@@ -238,7 +246,7 @@ const PayOrderContent = () => {
             setPaying(false);
             setError(apiErrorMessage(err, "We could not start the payment. Please try again."));
         }
-    }, [id, token, order]);
+    }, [id, token, order, recoverSettledPayment]);
 
     if (loading) {
         return (
