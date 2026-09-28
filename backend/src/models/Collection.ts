@@ -8,6 +8,8 @@ export interface ICollection extends Document {
     image?: string;
     parent: mongoose.Types.ObjectId | null; // null => top-level category
     isActive: boolean;
+    isPaused?: boolean;   // Hides this collection's products from the storefront
+    pausedAt?: Date;
     createdAt: Date;
 }
 
@@ -19,6 +21,8 @@ const CollectionSchema: Schema = new Schema({
     image: { type: String },
     parent: { type: Schema.Types.ObjectId, ref: 'Collection', default: null },
     isActive: { type: Boolean, default: true },
+    isPaused: { type: Boolean, default: false, index: true },
+    pausedAt: { type: Date },
 }, {
     timestamps: true
 });

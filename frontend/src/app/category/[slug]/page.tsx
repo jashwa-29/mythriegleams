@@ -10,6 +10,7 @@ import { fetchCollections } from "@/redux/slices/collectionSlice";
 import { RootState } from "@/redux/store";
 import { getImageUrl } from "@/utils/getImageUrl";
 import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight, X } from "lucide-react";
+import PausedSectionNotice from "@/components/PausedSectionNotice";
 import { Product } from "@/data/products";
 import { EXCEL_PRODUCTS } from "@/data/excelProducts";
 import { motion, AnimatePresence } from "framer-motion";
@@ -189,6 +190,13 @@ function CategoryContent({ slug }: { slug: string }) {
 
   const bgImage = getImageUrl(currentCollection?.image || mainCollection?.image) || excelMeta?.image || '/hero-bg.jpg';
 
+  // A paused section stays browsable; this explains why its products are not listed.
+  const isSectionPaused = slug !== 'all' && !!currentCollection?.isEffectivelyPaused;
+  const sectionPausedBecause =
+    currentCollection?.isPaused || !currentCollection?.pausedBecause
+      ? null
+      : currentCollection.pausedBecause;
+
   return (
     <div className="flex flex-col min-h-screen font-sans bg-[var(--bg)]">
 
@@ -250,6 +258,16 @@ function CategoryContent({ slug }: { slug: string }) {
           </motion.div>
         </div>
       </section>
+
+      {isSectionPaused && (
+        <PausedSectionNotice
+          kind="collection"
+          sectionName={currentCollection?.name || pageTitle}
+          pausedBecause={sectionPausedBecause}
+          browseAllHref="/category/all"
+          browseAllLabel="Browse all products"
+        />
+      )}
 
       {/* ── SHOP LAYOUT ── */}
       <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-12 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 lg:gap-16 items-start w-full">

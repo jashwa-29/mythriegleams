@@ -75,7 +75,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onClose }) 
             <nav className="flex-1 px-3 space-y-1 mt-2 overflow-y-auto">
                 <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-[0.2em] px-3 mb-2">Main Menu</div>
                 {menuItems.map((item) => {
-                    const isActive = pathname === item.path;
+                    const isActive = item.path === '/admin' ? pathname === item.path : pathname.startsWith(item.path);
                     return (
                         <Link 
                             key={item.name} 

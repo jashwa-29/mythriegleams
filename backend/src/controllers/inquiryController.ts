@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import Inquiry from '../models/Inquiry';
-import sendEmail from '../utils/sendEmail';
+import sendEmail, { storeNotificationEmail } from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
 
@@ -34,7 +34,7 @@ export const createInquiry = asyncHandler(async (req: Request, res: Response, ne
 
         // Email Alert to Admin
         await sendEmail({
-            email: process.env.ADMIN_EMAIL || 'admin@mythrisgleams.com',
+            email: storeNotificationEmail(),
             subject: `📦 NEW INQUIRY: ${type} from ${name}`,
             message: `Inquiry #${inquiry._id} - ${subject}. Check the admin dashboard for details.`
         });

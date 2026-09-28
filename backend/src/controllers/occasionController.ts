@@ -3,14 +3,31 @@ import mongoose from 'mongoose';
 import Occasion from '../models/Occasion';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, describeSectionPause, invalidatePausedIndex } from '../services/productVisibilityService';
+import { parsePauseInput } from './collectionController';
 
-// @desc    Get all active occasions (top-level and subcategories)
+// @desc    Get occasions. Paused occasions stay listed (their products are hidden instead),
+//          but ?all=1 lets an admin also see deactivated ones so they can be reactivated.
 // @route   GET /api/occasions
 export const getOccasions = asyncHandler(async (req: Request, res: Response) => {
-    const occasions = await Occasion.find({ isActive: true })
-        .populate('parent', 'name slug')
+    const includeInactive = req.query.all === 'true' && req.user?.role === 'admin';
+    const occasions = await Occasion.find(includeInactive ? {} : { isActive: true })
+        .populate('parent', 'name slug isPaused')
         .sort({ createdAt: 1 });
-    res.status(200).json({ success: true, count: occasions.length, data: occasions });
+
+    // A sub-occasion below a paused parent is not sellable either, so the storefront needs the
+    // effective state to explain the empty page.
+    const index = await getPausedIndex();
+    const data = occasions.map((occ: any) => {
+        const reason = describeSectionPause(index, 'occasion', occ.name);
+        return {
+            ...occ.toObject(),
+            isEffectivelyPaused: !!reason,
+            pausedBecause: reason ? reason.pausedName : null
+        };
+    });
+
+    res.status(200).json({ success: true, count: data.length, data });
 });
 
 // @desc    Create new occasion (Admin Only)
@@ -49,13 +66,18 @@ export const updateOccasion = asyncHandler(async (req: Request, res: Response, n
         return next(new ErrorResponse('Occasion for revision not found.', 404));
     }
 
-    const { name, slug, description, metaDescription, parent, isActive } = req.body;
+    const { name, slug, description, metaDescription, parent, isActive, isPaused } = req.body;
 
     if (name) occasion.name = name;
     if (slug) occasion.slug = slug;
     if (description !== undefined) occasion.description = description;
     if (metaDescription !== undefined) occasion.metaDescription = metaDescription;
     if (isActive !== undefined) occasion.isActive = isActive === true || isActive === 'true';
+    if (isPaused !== undefined) {
+        const isPausedValue = parsePauseInput(isPaused);
+        occasion.isPaused = isPausedValue === true;
+        occasion.pausedAt = occasion.isPaused ? new Date() : undefined;
+    }
 
     if (parent !== undefined) {
         if (parent === '' || parent === 'null' || parent === null) {
@@ -80,7 +102,36 @@ export const updateOccasion = asyncHandler(async (req: Request, res: Response, n
     }
 
     const updatedOccasion = await occasion.save();
+    // Pause state is cached for a few seconds; drop it so the storefront reacts immediately.
+    invalidatePausedIndex();
     res.status(200).json({ success: true, data: updatedOccasion });
+});
+
+// @desc    Pause / resume an occasion's products (Admin Only)
+// @route   PUT /api/occasions/:id/pause
+export const setOccasionPause = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const occasion = await Occasion.findById(req.params.id);
+    if (!occasion) {
+        return next(new ErrorResponse('Occasion narrative for revision not found.', 404));
+    }
+
+    const isPaused = parsePauseInput(req.body?.isPaused);
+    if (isPaused === null) {
+        return next(new ErrorResponse('isPaused must be true or false.', 400));
+    }
+
+    occasion.isPaused = isPaused;
+    occasion.pausedAt = isPaused ? new Date() : undefined;
+    await occasion.save();
+    invalidatePausedIndex();
+
+    res.status(200).json({
+        success: true,
+        message: isPaused
+            ? `"${occasion.name}" is paused. Its products are now hidden from the storefront.`
+            : `"${occasion.name}" is live again. Its products are back on the storefront.`,
+        data: occasion
+    });
 });
 
 // @desc    Delete occasion and its subcategories (Admin Only)

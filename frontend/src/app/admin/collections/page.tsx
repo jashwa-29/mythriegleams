@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-import { fetchCollections, createCollection, updateCollection, deleteCollection, resetCollectionState, type CollectionItem } from '@/redux/slices/collectionSlice';
+import { fetchCollections, createCollection, updateCollection, deleteCollection, setCollectionPause, resetCollectionState, type CollectionItem } from '@/redux/slices/collectionSlice';
 import { 
     Layers, 
     Plus, 
@@ -27,6 +27,7 @@ import Modal from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getImageUrl } from '@/utils/getImageUrl';
+import PauseToggle from '@/components/admin/PauseToggle';
 
 const collectionSchema = z.object({
     name: z.string().min(2, "Collection name required"),
@@ -75,7 +76,8 @@ const CollectionManagement = () => {
     }, [galleryName, setValue, editingCollection]);
 
     useEffect(() => {
-        dispatch(fetchCollections());
+        // ?all=true → paused and deactivated collections stay visible here so they can be managed.
+        dispatch(fetchCollections({ all: true }));
     }, [dispatch]);
 
     useEffect(() => {
@@ -88,7 +90,7 @@ const CollectionManagement = () => {
             setImage(null);
             setPreview(null);
             dispatch(resetCollectionState());
-            dispatch(fetchCollections());
+            dispatch(fetchCollections({ all: true }));
         }
         if (error) {
             toast.error(error);
@@ -135,6 +137,19 @@ const CollectionManagement = () => {
         if (inspectedCollection) {
             dispatch(deleteCollection(inspectedCollection._id));
             setDeleteModalOpen(false);
+        }
+    };
+
+    const handlePauseToggle = async (id: string, isPaused: boolean) => {
+        const name = collections.find(c => c._id === id)?.name || 'Collection';
+        try {
+            const res = await dispatch(setCollectionPause({ id, isPaused })).unwrap();
+            toast.success(res.message || (isPaused ? `${name} paused` : `${name} is live again`));
+            // The slice already flips the row, but refetching keeps inherited pauses accurate.
+            dispatch(fetchCollections({ all: true }));
+        } catch (err) {
+            toast.error(typeof err === 'string' ? err : `Could not update ${name}`);
+            throw err;
         }
     };
 
@@ -235,6 +250,7 @@ const CollectionManagement = () => {
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Category Tree</th>
                                     <th className="px-6 py-4">Slug</th>
+                                    <th className="px-6 py-4">Storefront</th>
                                     <th className="px-6 py-4 text-right">Type</th>
                                 </tr>
                             </thead>
@@ -264,6 +280,13 @@ const CollectionManagement = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-[9px] text-zinc-400 font-bold uppercase">/{col.slug}</td>
+                                                <td className="px-6 py-4">
+                                                    <PauseToggle
+                                                        kind="collection"
+                                                        item={{ _id: col._id, name: col.name, isPaused: col.isPaused, childCount: subs.length }}
+                                                        onToggle={handlePauseToggle}
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <span className="px-2 py-0.5 rounded-full border border-zinc-900/10 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-900/5">
                                                         {subs.length} Subcategories
@@ -290,6 +313,13 @@ const CollectionManagement = () => {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-3 font-mono text-[9px] text-zinc-400 font-bold uppercase pl-16">/{sub.slug}</td>
+                                                    <td className="px-6 py-3">
+                                                        <PauseToggle
+                                                            kind="collection"
+                                                            item={{ _id: sub._id, name: sub.name, isPaused: sub.isPaused }}
+                                                            onToggle={handlePauseToggle}
+                                                        />
+                                                    </td>
                                                     <td className="px-6 py-3 text-right">
                                                         <span className="px-2 py-0.5 rounded-full border border-zinc-200 text-[9px] font-bold uppercase text-zinc-400 bg-white">Subcategory</span>
                                                     </td>

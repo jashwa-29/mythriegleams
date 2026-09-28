@@ -6,20 +6,30 @@
 # Environment Variables
 NODE_ENV=production
 PORT=5010
-MONGO_URI=mongodb://localhost:27017/mythris_gleams
+MONGO_URI=mongodb://localhost:27017/mythris_gleam
 JWT_SECRET=your_jwt_secret_change_this_for_production
 CLIENT_URL=http://localhost:3000,https://mythrisgleams.com,https://www.mythrisgleams.com
 
 # Email Config (Nodemailer)
 EMAIL_SERVICE=gmail
-EMAIL_USER=jashwa4673@gmail.com
-EMAIL_PASS=bqunmxldtahpndde
+EMAIL_USER=swiflare@gmail.com
+EMAIL_PASS=hqkdjoycflcblhcp
 EMAIL_FROM=Mythris Gleams <noreply@mythrisgleams.com>
+SUPPORT_EMAIL=swiflare@gmail.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
 
 
 # Razorpay Keys
-RAZORPAY_KEY_ID="rzp_live_ShbzVUWfxBnc97"
-RAZORPAY_KEY_SECRET="BNxx3vvoHTQcBQ7xb2KjQs7H"
+# RAZORPAY_KEY_ID="rzp_live_ShbzVUWfxBnc97" 
+# RAZORPAY_KEY_SECRET="BNxx3vvoHTQcBQ7xb2KjQs7H"
+
+
+RAZORPAY_KEY_ID=rzp_test_S62vBzEAbojS89
+RAZORPAY_KEY_SECRET=HwGyrn45FBD46D5squa7d0ZR
+
+
+
 ```
 
 ## File: `backend/package.json`
@@ -34,7 +44,7 @@ RAZORPAY_KEY_SECRET="BNxx3vvoHTQcBQ7xb2KjQs7H"
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "tsx src/server.ts",
     "seed": "tsx src/seeder.ts",
     "seed:destroy": "tsx src/seeder.ts -d",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -53,7 +63,8 @@ RAZORPAY_KEY_SECRET="BNxx3vvoHTQcBQ7xb2KjQs7H"
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.13",
-    "razorpay": "^2.9.6"
+    "razorpay": "^2.9.6",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -65,7 +76,6 @@ RAZORPAY_KEY_SECRET="BNxx3vvoHTQcBQ7xb2KjQs7H"
     "@types/node": "^20.12.7",
     "@types/nodemailer": "^6.4.15",
     "ts-node-dev": "^2.0.0",
-    "tsx": "^4.21.0",
     "typescript": "^5.4.5"
   }
 }
@@ -83,11 +93,13 @@ import dotenv from 'dotenv';
 
 // Load Env
 dotenv.config();
-
+ 
 const app: Application = express();
 
 // Middlewares
-app.use(helmet()); // Security headers
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+})); // Security headers
 app.use(cors({
     origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : '*', // Restrict to front-end in prod
     credentials: true
@@ -103,6 +115,8 @@ import orderRoutes from './routes/orderRoutes';
 import inquiryRoutes from './routes/inquiryRoutes';
 import userRoutes from './routes/userRoutes';
 import collectionRoutes from './routes/collectionRoutes';
+import occasionRoutes from './routes/occasionRoutes';
+import homepageSettingsRoutes from './routes/homepageSettingsRoutes';
 import cartRoutes from './routes/cartRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import path from 'path';
@@ -118,6 +132,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/inquiries', inquiryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/collections', collectionRoutes);
+app.use('/api/occasions', occasionRoutes);
+app.use('/api/homepage-settings', homepageSettingsRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/payments', paymentRoutes);
 
@@ -216,6 +232,9 @@ import ErrorResponse from '../utils/errorResponse';
  * @access  Private
  */
 export const getMe = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired.' });
+    }
     const user = await User.findById(req.user._id);
     if (user) {
         res.status(200).json({
@@ -288,6 +307,9 @@ export const loginUser = asyncHandler(async (req: Request, res: Response, next: 
  * @access  Private
  */
 export const updateUserProfile = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired.' });
+    }
     const user = await User.findById(req.user._id);
 
     if (user) {
@@ -353,7 +375,10 @@ import ErrorResponse from '../utils/errorResponse';
  * @access Private
  */
 export const getCart = asyncHandler(async (req: Request, res: Response) => {
-    const cart = await Cart.findOne({ user: req.user._id }).populate('items.product', 'name images price slug');
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
+    const cart = await Cart.findOne({ user: req.user._id });
     res.status(200).json({ success: true, data: cart?.items || [] });
 });
 
@@ -363,7 +388,10 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
  * @access Private
  */
 export const addToCart = asyncHandler(async (req: Request, res: Response) => {
-    const { productId, name, image, price, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
+    const { productId, name, image, price, weight = 0, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
 
     let cart = await Cart.findOne({ user: req.user._id });
 
@@ -373,7 +401,7 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
 
     const existingIndex = cart.items.findIndex(
         (item) =>
-            item.product.toString() === productId &&
+            (typeof item.product === 'object' && (item.product as any)?._id ? (item.product as any)._id.toString() : item.product?.toString()) === productId &&
             item.selectedVariant === selectedVariant &&
             item.selectedColor === selectedColor
     );
@@ -382,7 +410,7 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
         cart.items[existingIndex].quantity += quantity;
         if (customerImage) cart.items[existingIndex].customerImage = customerImage;
     } else {
-        cart.items.push({ product: productId, name, image, price, quantity, selectedVariant, selectedColor, customerImage });
+        cart.items.push({ product: productId, name, image, price, weight, quantity, selectedVariant, selectedColor, customerImage });
     }
 
     await cart.save();
@@ -395,6 +423,9 @@ export const addToCart = asyncHandler(async (req: Request, res: Response) => {
  * @access Private
  */
 export const updateCartItem = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
     const { quantity } = req.body;
     const cart = await Cart.findOne({ user: req.user._id });
     if (!cart) return next(new ErrorResponse('Cart not found in the archives.', 404));
@@ -418,6 +449,9 @@ export const updateCartItem = asyncHandler(async (req: Request, res: Response, n
  * @access Private
  */
 export const removeFromCart = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
     const cart = await Cart.findOne({ user: req.user._id });
     if (!cart) return next(new ErrorResponse('Cart not found.', 404));
 
@@ -432,6 +466,9 @@ export const removeFromCart = asyncHandler(async (req: Request, res: Response, n
  * @access Private
  */
 export const clearCart = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
+    }
     await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
     res.status(200).json({ success: true, data: [] });
 });
@@ -442,24 +479,40 @@ export const clearCart = asyncHandler(async (req: Request, res: Response) => {
 
 ```typescript
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import Collection from '../models/Collection';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
 
-// @desc    Get all active collections
+// @desc    Get all active collections (top-level and subcategories)
 // @route   GET /api/collections
 export const getCollections = asyncHandler(async (req: Request, res: Response) => {
-    const collections = await Collection.find({ isActive: true }).sort({ createdAt: -1 });
+    const collections = await Collection.find({ isActive: true })
+        .populate('parent', 'name slug')
+        .sort({ createdAt: 1 });
     res.status(200).json({ success: true, count: collections.length, data: collections });
 });
 
 // @desc    Create new collection (Admin Only)
 // @route   POST /api/collections
-export const createCollection = asyncHandler(async (req: Request, res: Response) => {
-    const { name, slug, description, metaDescription } = req.body;
-    
-    const collectionData: any = { name, slug, description, metaDescription };
-    
+export const createCollection = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const { name, slug, description, metaDescription, parent } = req.body;
+
+    // Ensure parent (if given) actually exists and is a string/ObjectId
+    let parentId: mongoose.Types.ObjectId | null = null;
+    if (parent) {
+        if (!mongoose.Types.ObjectId.isValid(parent)) {
+            return next(new ErrorResponse('Invalid parent collection reference.', 400));
+        }
+        const parentCollection = await Collection.findById(parent);
+        if (!parentCollection) {
+            return next(new ErrorResponse('Parent collection not found.', 404));
+        }
+        parentId = parentCollection._id as mongoose.Types.ObjectId;
+    }
+
+    const collectionData: any = { name, slug, description, metaDescription, parent: parentId };
+
     if (req.file) {
         collectionData.image = `/uploads/${req.file.filename}`;
     }
@@ -468,15 +521,487 @@ export const createCollection = asyncHandler(async (req: Request, res: Response)
     res.status(201).json({ success: true, data: collection });
 });
 
-// @desc    Delete collection (Admin Only)
+// @desc    Update collection (Admin Only)
+// @route   PUT /api/collections/:id
+export const updateCollection = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const collection = await Collection.findById(req.params.id);
+    if (!collection) {
+        return next(new ErrorResponse('Collection narrative for revision not found.', 404));
+    }
+
+    const { name, slug, description, metaDescription, parent, isActive } = req.body;
+
+    if (name) collection.name = name;
+    if (slug) collection.slug = slug;
+    if (description !== undefined) collection.description = description;
+    if (metaDescription !== undefined) collection.metaDescription = metaDescription;
+    if (isActive !== undefined) collection.isActive = isActive === true || isActive === 'true';
+
+    if (parent !== undefined) {
+        if (parent === '' || parent === 'null' || parent === null) {
+            collection.parent = null as any;
+        } else {
+            if (collection._id.toString() === parent) {
+                return next(new ErrorResponse('A collection cannot be its own parent.', 400));
+            }
+            if (!mongoose.Types.ObjectId.isValid(parent)) {
+                return next(new ErrorResponse('Invalid parent collection reference.', 400));
+            }
+            const parentCollection = await Collection.findById(parent);
+            if (!parentCollection) {
+                return next(new ErrorResponse('Parent collection not found.', 404));
+            }
+            collection.parent = parentCollection._id as mongoose.Types.ObjectId;
+        }
+    }
+
+    if (req.file) {
+        collection.image = `/uploads/${req.file.filename}`;
+    }
+
+    const updatedCollection = await collection.save();
+    res.status(200).json({ success: true, data: updatedCollection });
+});
+
+// @desc    Delete collection and its subcategories (Admin Only)
 // @route   DELETE /api/collections/:id
 export const deleteCollection = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const collection = await Collection.findById(req.params.id);
     if (!collection) {
         return next(new ErrorResponse('Collection narrative for removal not found.', 404));
     }
+    // Cascade delete: remove any subcategories that reference this collection as parent
+    await Collection.deleteMany({ parent: collection._id });
     await collection.deleteOne();
-    res.status(200).json({ success: true, message: 'Collection removed from registry.' });
+    res.status(200).json({ success: true, message: 'Collection and its subcategories removed from registry.' });
+});
+```
+
+## File: `backend/src/controllers/customOrderController.ts`
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
+import Razorpay from 'razorpay';
+import Order from '../models/Order';
+import User from '../models/User';
+import sendEmail from '../utils/sendEmail';
+import asyncHandler from '../middlewares/asyncHandler';
+import ErrorResponse from '../utils/errorResponse';
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.SUPPORT_EMAIL || 'admin@mythrisgleams.com';
+
+const shortOrderCode = (id: any) => String(id).slice(-8).toUpperCase();
+
+/**
+ * Constant-time signature comparison to avoid leaking timing information.
+ */
+const isAuthenticSignature = (expected: string, received: any): boolean => {
+    if (typeof received !== 'string' || received.length !== expected.length) return false;
+    try {
+        return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(received, 'utf8'));
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * Load an order and validate the caller-supplied payment token.
+ * Shared by every public (token-gated) endpoint.
+ */
+const loadOrderByToken = async (id: string, token: any, next: NextFunction) => {
+    if (!token || typeof token !== 'string') {
+        next(new ErrorResponse('Payment link is missing its access token.', 401));
+        return null;
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+        next(new ErrorResponse('This order could not be traced.', 404));
+        return null;
+    }
+
+    if (!order.paymentToken) {
+        next(new ErrorResponse('This payment link has already been used or was revoked by the store.', 410));
+        return null;
+    }
+
+    if (order.paymentToken !== token) {
+        next(new ErrorResponse('Invalid payment link. Please request a fresh link from the store.', 401));
+        return null;
+    }
+
+    return order;
+};
+
+/**
+ * @desc    Admin creates a custom order for a customer and issues a payment link
+ * @route   POST /api/orders/admin/custom
+ * @access  Private/Admin
+ */
+export const createAdminCustomOrder = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const {
+        customerName,
+        customerEmail,
+        customerPhone,
+        customerStreet,
+        customerCity,
+        customerState,
+        customerZip,
+        amount,
+        title,
+        description,
+        image,
+        weight = 0,
+    } = req.body;
+
+    if (!customerName || !customerPhone) {
+        return next(new ErrorResponse('Customer name and phone number are required.', 400));
+    }
+
+    const totalPrice = Number(amount);
+    if (!Number.isFinite(totalPrice) || totalPrice <= 0) {
+        return next(new ErrorResponse('Amount must be a number greater than zero.', 400));
+    }
+
+    const email = String(customerEmail || '').trim().toLowerCase();
+    const phone = String(customerPhone).trim();
+    if (phone.length < 6 || phone.length > 20) {
+        return next(new ErrorResponse('Enter a valid phone number.', 400));
+    }
+
+    // 192 bits of entropy — brute forcing a valid link is infeasible.
+    const paymentToken = crypto.randomBytes(24).toString('hex');
+
+    // Link the order to a registered account when the email matches, so it also
+    // shows up under "My Orders" for that customer.
+    const linkedUser = email ? await User.findOne({ email }).select('_id') : null;
+
+    const itemsPrice = Math.round(totalPrice * 100) / 100;
+    const shippingPrice = 0;
+
+    const order = new Order({
+        user: linkedUser ? linkedUser._id : undefined,
+        orderItems: [
+            {
+                name: String(title || 'Custom Order').trim(),
+                qty: 1,
+                image: String(image || '').trim(),
+                price: itemsPrice,
+                weight: Number(weight) || 0,
+                product: 'admin-custom',
+            },
+        ],
+        shippingAddress: {
+            label: 'Custom',
+            name: String(customerName).trim(),
+            email,
+            street: String(customerStreet || '').trim(),
+            city: String(customerCity || '').trim(),
+            state: String(customerState || '').trim(),
+            zip: String(customerZip || '').trim(),
+            phone,
+        },
+        itemsPrice,
+        shippingPrice,
+        totalPrice: itemsPrice + shippingPrice,
+        isPaid: false,
+        status: 'Pending',
+        source: 'admin-custom',
+        paymentToken,
+    });
+
+    const createdOrder = await order.save();
+
+    res.status(201).json({
+        success: true,
+        data: {
+            orderId: createdOrder._id,
+            orderCode: shortOrderCode(createdOrder._id),
+            paymentToken,
+            totalPrice: createdOrder.totalPrice,
+            payUrl: `/pay/${createdOrder._id}?token=${paymentToken}`,
+        },
+    });
+});
+
+/**
+ * @desc    Admin: live payment state of a custom order (drives the pay-link tracker on the admin page)
+ * @route   GET /api/orders/admin/custom/:id
+ * @access  Private/Admin
+ */
+export const getAdminCustomOrder = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const order = await Order.findOne({ _id: req.params.id, source: 'admin-custom' });
+
+    if (!order) {
+        return next(new ErrorResponse('Custom order not found.', 404));
+    }
+
+    const item = order.orderItems?.[0];
+
+    res.status(200).json({
+        success: true,
+        data: {
+            _id: order._id,
+            orderCode: shortOrderCode(order._id),
+            customerName: order.shippingAddress?.name || '',
+            title: item?.name || 'Custom Order',
+            totalPrice: order.totalPrice,
+            isPaid: order.isPaid,
+            status: order.status,
+            paidAt: order.paidAt || null,
+            createdAt: order.createdAt,
+        },
+    });
+});
+
+/**
+ * @desc    Public, token-gated order summary for the payment page
+ * @route   GET /api/orders/public/pay/:id?token=...
+ * @access  Public (token required)
+ */
+export const getPublicOrderForPayment = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const order = await loadOrderByToken(req.params.id, String(req.query.token || ''), next);
+    if (!order) return;
+
+    const item = order.orderItems?.[0];
+
+    // Only the fields the customer legitimately needs — no signatures, no internal metadata.
+    res.status(200).json({
+        success: true,
+        data: {
+            _id: order._id,
+            orderCode: shortOrderCode(order._id),
+            title: item?.name || 'Custom Order',
+            image: item?.image || '',
+            weight: item?.weight || 0,
+            totalPrice: order.totalPrice,
+            isPaid: order.isPaid,
+            status: order.status,
+            customerName: order.shippingAddress?.name || '',
+            customerEmail: order.shippingAddress?.email || '',
+            customerPhone: order.shippingAddress?.phone || '',
+        },
+    });
+});
+
+/**
+ * @desc    Public — create the Razorpay order for a token-gated custom payment
+ * @route   POST /api/orders/public/pay/:id/razorpay/create
+ * @access  Public (token required)
+ */
+export const createPublicRazorpayOrder = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const order = await loadOrderByToken(req.params.id, req.body?.token, next);
+    if (!order) return;
+
+    if (order.isPaid) {
+        return next(new ErrorResponse('This order has already been paid.', 400));
+    }
+
+    const rzp = new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID as string,
+        key_secret: process.env.RAZORPAY_KEY_SECRET as string,
+    });
+
+    const rzpOrder = await rzp.orders.create({
+        amount: Math.round(order.totalPrice * 100), // Paise
+        currency: 'INR',
+        receipt: `receipt_custom_${String(order._id).slice(-12)}`,
+        notes: { internalOrderId: String(order._id), source: 'admin-custom' },
+    });
+
+    order.razorpayOrderId = rzpOrder.id;
+    await order.save();
+
+    res.status(200).json({
+        success: true,
+        data: {
+            id: rzpOrder.id,
+            amount: rzpOrder.amount,
+            currency: rzpOrder.currency,
+            key: process.env.RAZORPAY_KEY_ID,
+        },
+    });
+});
+
+/**
+ * @desc    Public — verify the payment and mark the custom order as paid
+ * @route   POST /api/orders/public/pay/:id/razorpay/verify
+ * @access  Public (token required)
+ */
+export const verifyPublicRazorpayPayment = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+
+    const order = await loadOrderByToken(req.params.id, req.body?.token, next);
+    if (!order) return;
+
+    if (order.isPaid) {
+        return next(new ErrorResponse('This order has already been paid.', 400));
+    }
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return next(new ErrorResponse('Incomplete payment verification payload.', 400));
+    }
+
+    // The signature must belong to THIS order's Razorpay order — blocks replay
+    // of a valid signature harvested from a different payment.
+    if (order.razorpayOrderId && order.razorpayOrderId !== razorpay_order_id) {
+        return next(new ErrorResponse('Payment does not match the initiated order.', 400));
+    }
+
+    const expectedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET as string)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+
+    if (!isAuthenticSignature(expectedSignature, razorpay_signature)) {
+        return next(new ErrorResponse('Invalid payment signature detected. Payment rejected.', 400));
+    }
+
+    order.isPaid = true;
+    order.paidAt = new Date();
+    order.razorpayPaymentId = razorpay_payment_id;
+    order.razorpaySignature = razorpay_signature;
+    order.status = 'Handcrafting';
+    order.paymentToken = undefined; // Single-use link
+    await order.save();
+
+    const code = shortOrderCode(order._id);
+    const customerName = order.shippingAddress?.name || 'friend';
+
+    // Confirmation emails (best-effort — never block the order on SMTP issues)
+    try {
+        if (order.shippingAddress?.email) {
+            await sendEmail({
+                email: order.shippingAddress.email,
+                subject: `Payment Confirmed — Order #${code}`,
+                message: `Hi ${customerName}, we've received your payment of Rs.${order.totalPrice} for order #${code}. We're now handcrafting your piece.`,
+                html: `
+                    <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 40px; border-radius: 20px;">
+                        <h1 style="color: #000; font-style: italic;">Payment Confirmed</h1>
+                        <p>Hi ${customerName}, thank you for choosing MythrieGleams. Your payment for order <strong>#${code}</strong> is received and your piece is now in <strong>Handcrafting</strong>.</p>
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Order Summary</p>
+                            <p style="font-size: 14px;"><strong>Order ID:</strong> #${code}</p>
+                            <p style="font-size: 14px;"><strong>Total Paid:</strong> ₹${order.totalPrice}</p>
+                        </div>
+                    </div>
+                `,
+            });
+        }
+
+        await sendEmail({
+            email: ADMIN_EMAIL,
+            subject: `Custom order paid: #${code}`,
+            message: `Order #${code} paid Rs.${order.totalPrice} by ${customerName} (${order.shippingAddress?.phone}).`,
+            html: `<h2>New custom order paid</h2><p><strong>#${code}</strong> — ₹${order.totalPrice}</p><p>Customer: ${customerName} (${order.shippingAddress?.email || 'no email'} / ${order.shippingAddress?.phone})</p>`,
+        });
+    } catch (emailError: any) {
+        console.error('Email sending failed after custom payment verification. Error:', emailError.message);
+    }
+
+    res.status(200).json({
+        success: true,
+        message: 'Payment verified and order placed.',
+        data: { orderCode: code, totalPrice: order.totalPrice, status: order.status },
+    });
+});
+
+```
+
+## File: `backend/src/controllers/homepageSettingsController.ts`
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
+import Collection from '../models/Collection';
+import Occasion from '../models/Occasion';
+import HomepageSettings from '../models/HomepageSettings';
+import asyncHandler from '../middlewares/asyncHandler';
+import ErrorResponse from '../utils/errorResponse';
+
+const SETTINGS_KEY = 'homepage';
+
+const populateSettings = (query: any) => query
+    .populate('seasonalSections.collectionIds', 'name slug parent isActive')
+    .populate('seasonalSections.occasionIds', 'name slug parent isActive');
+
+const normalizeIds = (value: unknown, fieldName: string): string[] => {
+    if (!Array.isArray(value)) {
+        throw new ErrorResponse(`${fieldName} must be an array.`, 400);
+    }
+
+    const ids = Array.from(new Set(value.map((id) => String(id))));
+    if (ids.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+        throw new ErrorResponse(`${fieldName} contains an invalid reference.`, 400);
+    }
+
+    return ids;
+};
+
+export const getHomepageSettings = asyncHandler(async (req: Request, res: Response) => {
+    const settings = await populateSettings(HomepageSettings.findOne({ key: SETTINGS_KEY }));
+    res.status(200).json({ success: true, data: settings });
+});
+
+export const updateHomepageSettings = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const { seasonalSections } = req.body;
+
+    if (!Array.isArray(seasonalSections)) {
+        return next(new ErrorResponse('seasonalSections must be an array.', 400));
+    }
+
+    const validatedSections = [];
+
+    for (const section of seasonalSections) {
+        const { _id, name, enabled, badge, heading, description, collectionIds, occasionIds } = section;
+
+        let normalizedCollectionIds: string[];
+        let normalizedOccasionIds: string[];
+
+        try {
+            normalizedCollectionIds = normalizeIds(collectionIds ?? [], 'collectionIds');
+            normalizedOccasionIds = normalizeIds(occasionIds ?? [], 'occasionIds');
+        } catch (error) {
+            return next(error);
+        }
+
+        const [activeCollectionCount, activeOccasionCount] = await Promise.all([
+            Collection.countDocuments({ _id: { $in: normalizedCollectionIds }, isActive: true }),
+            Occasion.countDocuments({ _id: { $in: normalizedOccasionIds }, isActive: true })
+        ]);
+
+        if (activeCollectionCount !== normalizedCollectionIds.length) {
+            return next(new ErrorResponse('One or more selected collections are unavailable.', 400));
+        }
+        if (activeOccasionCount !== normalizedOccasionIds.length) {
+            return next(new ErrorResponse('One or more selected occasions are unavailable.', 400));
+        }
+
+        const sectionData: any = {
+            name: name || 'Seasonal Section',
+            enabled: enabled === undefined ? false : Boolean(enabled),
+            badge: badge || '🪔 Festive Special',
+            heading: heading || 'Seasonal Collection',
+            description: description || 'Explore our latest seasonal items.',
+            collectionIds: normalizedCollectionIds,
+            occasionIds: normalizedOccasionIds
+        };
+
+        if (_id) {
+            sectionData._id = _id;
+        }
+
+        validatedSections.push(sectionData);
+    }
+
+    const settings = await populateSettings(HomepageSettings.findOneAndUpdate(
+        { key: SETTINGS_KEY },
+        { $set: { key: SETTINGS_KEY, seasonalSections: validatedSections }, $unset: { seasonalSection: 1 } },
+        { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    ));
+
+    res.status(200).json({ success: true, data: settings });
 });
 
 ```
@@ -577,6 +1102,108 @@ export const deleteInquiry = asyncHandler(async (req: Request, res: Response, ne
 
 ```
 
+## File: `backend/src/controllers/occasionController.ts`
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
+import Occasion from '../models/Occasion';
+import asyncHandler from '../middlewares/asyncHandler';
+import ErrorResponse from '../utils/errorResponse';
+
+// @desc    Get all active occasions (top-level and subcategories)
+// @route   GET /api/occasions
+export const getOccasions = asyncHandler(async (req: Request, res: Response) => {
+    const occasions = await Occasion.find({ isActive: true })
+        .populate('parent', 'name slug')
+        .sort({ createdAt: 1 });
+    res.status(200).json({ success: true, count: occasions.length, data: occasions });
+});
+
+// @desc    Create new occasion (Admin Only)
+// @route   POST /api/occasions
+export const createOccasion = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const { name, slug, description, metaDescription, parent } = req.body;
+
+    // Ensure parent (if given) actually exists and is a string/ObjectId
+    let parentId: mongoose.Types.ObjectId | null = null;
+    if (parent) {
+        if (!mongoose.Types.ObjectId.isValid(parent)) {
+            return next(new ErrorResponse('Invalid parent occasion reference.', 400));
+        }
+        const parentOccasion = await Occasion.findById(parent);
+        if (!parentOccasion) {
+            return next(new ErrorResponse('Parent occasion not found.', 404));
+        }
+        parentId = parentOccasion._id as mongoose.Types.ObjectId;
+    }
+
+    const occasionData: any = { name, slug, description, metaDescription, parent: parentId };
+
+    if (req.file) {
+        occasionData.image = `/uploads/${req.file.filename}`;
+    }
+
+    const occasion = await Occasion.create(occasionData);
+    res.status(201).json({ success: true, data: occasion });
+});
+
+// @desc    Update occasion (Admin Only)
+// @route   PUT /api/occasions/:id
+export const updateOccasion = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const occasion = await Occasion.findById(req.params.id);
+    if (!occasion) {
+        return next(new ErrorResponse('Occasion for revision not found.', 404));
+    }
+
+    const { name, slug, description, metaDescription, parent, isActive } = req.body;
+
+    if (name) occasion.name = name;
+    if (slug) occasion.slug = slug;
+    if (description !== undefined) occasion.description = description;
+    if (metaDescription !== undefined) occasion.metaDescription = metaDescription;
+    if (isActive !== undefined) occasion.isActive = isActive === true || isActive === 'true';
+
+    if (parent !== undefined) {
+        if (parent === '' || parent === 'null' || parent === null) {
+            occasion.parent = null as any;
+        } else {
+            if (occasion._id.toString() === parent) {
+                return next(new ErrorResponse('An occasion cannot be its own parent.', 400));
+            }
+            if (!mongoose.Types.ObjectId.isValid(parent)) {
+                return next(new ErrorResponse('Invalid parent occasion reference.', 400));
+            }
+            const parentOccasion = await Occasion.findById(parent);
+            if (!parentOccasion) {
+                return next(new ErrorResponse('Parent occasion not found.', 404));
+            }
+            occasion.parent = parentOccasion._id as mongoose.Types.ObjectId;
+        }
+    }
+
+    if (req.file) {
+        occasion.image = `/uploads/${req.file.filename}`;
+    }
+
+    const updatedOccasion = await occasion.save();
+    res.status(200).json({ success: true, data: updatedOccasion });
+});
+
+// @desc    Delete occasion and its subcategories (Admin Only)
+// @route   DELETE /api/occasions/:id
+export const deleteOccasion = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const occasion = await Occasion.findById(req.params.id);
+    if (!occasion) {
+        return next(new ErrorResponse('Occasion for removal not found.', 404));
+    }
+    // Cascade delete: remove any subcategories that reference this occasion as parent
+    await Occasion.deleteMany({ parent: occasion._id });
+    await occasion.deleteOne();
+    res.status(200).json({ success: true, message: 'Occasion and its subcategories removed from registry.' });
+});
+```
+
 ## File: `backend/src/controllers/orderController.ts`
 
 ```typescript
@@ -585,6 +1212,7 @@ import Order from '../models/Order';
 import sendEmail from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { calculateShipping } from '../utils/shipping';
 
 /**
  * @desc    Create new order
@@ -592,7 +1220,7 @@ import ErrorResponse from '../utils/errorResponse';
  * @access  Public (Guest/User)
  */
 export const addOrderItems = asyncHandler(async (req: Request, res: Response) => {
-    const { orderItems, shippingAddress, totalPrice, isPaid } = req.body;
+    const { orderItems, shippingAddress, isPaid } = req.body;
 
     if (!orderItems || orderItems.length === 0) {
         throw new ErrorResponse('Registry Forge requires artisanal components to proceed (No order items).', 400);
@@ -602,10 +1230,18 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
         throw new ErrorResponse('Fulfillment Narrative incomplete. Destination details (street/email) missing.', 400);
     }
 
+    // Authoritative totals: derive items price from line items, shipping from the free-shipping rule,
+    // and grand total as their sum. Client-supplied values are ignored to prevent tampering.
+    const itemsPrice = orderItems.reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
+    const shippingPrice = calculateShipping(itemsPrice);
+    const totalPrice = itemsPrice + shippingPrice;
+
     const order = new Order({
         user: req.user?._id, // Add if logged in
         orderItems,
         shippingAddress,
+        itemsPrice,
+        shippingPrice,
         totalPrice,
         isPaid: isPaid || false // Default to unpaid unless validated
     });
@@ -691,6 +1327,9 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
  * @access  Private
  */
 export const getMyOrders = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user?._id) {
+        return res.status(401).json({ success: false, error: 'User session not found or expired.' });
+    }
     const orders = await Order.find({ user: req.user._id, isPaid: true }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: orders });
 });
@@ -852,19 +1491,89 @@ import Product from '../models/Product';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
 
+// Helper to normalize array input (stringified JSON, comma-separated string, or array)
+const parseArrayField = (input: any): string[] => {
+    if (!input) return [];
+    if (Array.isArray(input)) return input.map((s: any) => String(s).trim()).filter(Boolean);
+    if (typeof input === 'string') {
+        const trimmed = input.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parsed.map((s: any) => String(s).trim()).filter(Boolean);
+            } catch (e) {
+                // Ignore and fallback
+            }
+        }
+        return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+};
+
+const parseBooleanInput = (input: any): boolean | undefined => {
+    const value = Array.isArray(input) ? input[0] : input;
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return undefined;
+};
+
 // @desc    Get all products (with optional filtering)
 // @route   GET /api/products
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
-    const { category, sort, search } = req.query;
+    const { category, subcategory, occasion, occasionSub, sort, search, isBestseller } = req.query;
     let query: any = {};
 
-    if (category) query.category = category;
+    const bestsellerFilter = parseBooleanInput(isBestseller);
+    if (bestsellerFilter !== undefined) query.isBestseller = bestsellerFilter;
+
+    if (category) {
+        query.$or = query.$or || [];
+        query.$or.push(
+            { category: category },
+            { categories: category }
+        );
+    }
+    if (subcategory) {
+        query.$or = query.$or || [];
+        query.$or.push(
+            { subcategory: subcategory },
+            { subcategories: subcategory }
+        );
+    }
+    if (occasion) {
+        query.$or = query.$or || [];
+        query.$or.push(
+            { occasion: occasion },
+            { occasions: occasion }
+        );
+    }
+    if (occasionSub) {
+        query.$or = query.$or || [];
+        query.$or.push(
+            { occasionSub: occasionSub },
+            { occasionSubs: occasionSub }
+        );
+    }
     if (search) {
-        query.$or = [
-            { name: { $regex: search, $options: 'i' } },
-            { story: { $regex: search, $options: 'i' } },
-            { details: { $regex: search, $options: 'i' } }
+        const searchRegex = { $regex: search, $options: 'i' };
+        const searchConditions = [
+            { name: searchRegex },
+            { story: searchRegex },
+            { details: searchRegex },
+            { category: searchRegex },
+            { categories: searchRegex },
+            { occasion: searchRegex },
+            { occasions: searchRegex }
         ];
+        if (query.$or) {
+            query.$and = [
+                { $or: query.$or },
+                { $or: searchConditions }
+            ];
+            delete query.$or;
+        } else {
+            query.$or = searchConditions;
+        }
     }
 
     let products = Product.find(query);
@@ -896,27 +1605,63 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         name, 
         slug, 
         category, 
+        categories,
+        subcategory, 
+        subcategories,
+        occasion, 
+        occasions,
+        occasionSub, 
+        occasionSubs,
         price, 
         mrp, 
+        weight,
         story, 
         details, 
         metaDescription,
         stockStatus,
         requiresImage,
+        isBestseller,
         variants // JSON string because it's FormData
     } = req.body;
+
+    const parsedCategories = parseArrayField(categories);
+    const parsedSubcategories = parseArrayField(subcategories);
+    const parsedOccasions = parseArrayField(occasions);
+    const parsedOccasionSubs = parseArrayField(occasionSubs);
+
+    // Ensure category & categories are consistent
+    const primaryCategory = category || (parsedCategories.length > 0 ? parsedCategories[0] : '');
+    const allCategories = Array.from(new Set([primaryCategory, ...parsedCategories].filter(Boolean)));
+
+    const primarySubcategory = subcategory || (parsedSubcategories.length > 0 ? parsedSubcategories[0] : '');
+    const allSubcategories = Array.from(new Set([primarySubcategory, ...parsedSubcategories].filter(Boolean)));
+
+    const primaryOccasion = occasion || (parsedOccasions.length > 0 ? parsedOccasions[0] : '');
+    const allOccasions = Array.from(new Set([primaryOccasion, ...parsedOccasions].filter(Boolean)));
+
+    const primaryOccasionSub = occasionSub || (parsedOccasionSubs.length > 0 ? parsedOccasionSubs[0] : '');
+    const allOccasionSubs = Array.from(new Set([primaryOccasionSub, ...parsedOccasionSubs].filter(Boolean)));
     
     const productData: any = {
         name,
         slug,
-        category,
+        category: primaryCategory,
+        categories: allCategories,
+        subcategory: primarySubcategory,
+        subcategories: allSubcategories,
+        occasion: primaryOccasion,
+        occasions: allOccasions,
+        occasionSub: primaryOccasionSub,
+        occasionSubs: allOccasionSubs,
         price: Number(price),
         mrp: Number(mrp || 0),
+        weight: Number(weight || 0),
         story,
         details,
         metaDescription,
         stockStatus: stockStatus || 'made-to-order',
-        requiresImage: requiresImage === true || requiresImage === 'true'
+        requiresImage: requiresImage === true || requiresImage === 'true',
+        isBestseller: parseBooleanInput(isBestseller) ?? false
     };
 
     // Parse variants if provided as string
@@ -959,18 +1704,79 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
         return next(new ErrorResponse('Product for revision not found.', 404));
     }
 
-    const { name, slug, category, price, mrp, story, details, metaDescription, stockStatus, requiresImage, variants, existingImages } = req.body;
+    const { 
+        name, 
+        slug, 
+        category, 
+        categories,
+        subcategory, 
+        subcategories,
+        occasion, 
+        occasions,
+        occasionSub, 
+        occasionSubs,
+        price, 
+        mrp, 
+        weight, 
+        story, 
+        details, 
+        metaDescription, 
+        stockStatus, 
+        requiresImage, 
+        isBestseller,
+        variants, 
+        existingImages 
+    } = req.body;
     
     product.name = name || product.name;
     product.slug = slug || product.slug;
-    product.category = category || product.category;
+    
+    // Multiple collections / categories logic
+    if (categories !== undefined || category !== undefined) {
+        const parsedCategories = categories !== undefined ? parseArrayField(categories) : (product.categories || []);
+        const primaryCat = category !== undefined ? category : (parsedCategories[0] || product.category);
+        const allCats = Array.from(new Set([primaryCat, ...parsedCategories].filter(Boolean)));
+        product.category = primaryCat;
+        product.categories = allCats;
+    }
+
+    // Multiple subcategories logic
+    if (subcategories !== undefined || subcategory !== undefined) {
+        const parsedSubs = subcategories !== undefined ? parseArrayField(subcategories) : (product.subcategories || []);
+        const primarySub = subcategory !== undefined ? subcategory : (parsedSubs[0] || product.subcategory || '');
+        const allSubs = Array.from(new Set([primarySub, ...parsedSubs].filter(Boolean)));
+        product.subcategory = primarySub;
+        product.subcategories = allSubs;
+    }
+
+    // Multiple occasions logic
+    if (occasions !== undefined || occasion !== undefined) {
+        const parsedOccasions = occasions !== undefined ? parseArrayField(occasions) : (product.occasions || []);
+        const primaryOcc = occasion !== undefined ? occasion : (parsedOccasions[0] || product.occasion || '');
+        const allOccs = Array.from(new Set([primaryOcc, ...parsedOccasions].filter(Boolean)));
+        product.occasion = primaryOcc;
+        product.occasions = allOccs;
+    }
+
+    // Multiple occasion subcategories logic
+    if (occasionSubs !== undefined || occasionSub !== undefined) {
+        const parsedOccSubs = occasionSubs !== undefined ? parseArrayField(occasionSubs) : (product.occasionSubs || []);
+        const primaryOccSub = occasionSub !== undefined ? occasionSub : (parsedOccSubs[0] || product.occasionSub || '');
+        const allOccSubs = Array.from(new Set([primaryOccSub, ...parsedOccSubs].filter(Boolean)));
+        product.occasionSub = primaryOccSub;
+        product.occasionSubs = allOccSubs;
+    }
+
     product.price = price ? Number(price) : product.price;
     product.mrp = mrp ? Number(mrp) : product.mrp;
+    if (weight !== undefined) product.weight = Number(weight) || 0;
     product.story = story || product.story;
     product.details = details || product.details;
     product.metaDescription = metaDescription || product.metaDescription;
     product.stockStatus = stockStatus || product.stockStatus;
     product.requiresImage = requiresImage === true || requiresImage === 'true';
+    const bestsellerValue = parseBooleanInput(isBestseller);
+    if (bestsellerValue !== undefined) product.isBestseller = bestsellerValue;
 
     if (variants) {
         try {
@@ -1040,6 +1846,9 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
             
             // Add user info to request (excluding password)
             req.user = await User.findById(decoded.id).select('-password');
+            if (!req.user) {
+                return res.status(401).json({ success: false, error: 'User session expired or user no longer exists. Please log in again.' });
+            }
             return next();
         } catch (error) {
             return res.status(401).json({ success: false, error: 'Authorization signature mismatch or artifact expired.' });
@@ -1139,10 +1948,11 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ICartItem {
     _id?: mongoose.Types.ObjectId;
-    product: mongoose.Types.ObjectId;
+    product: mongoose.Types.ObjectId | string;
     name: string;
     image: string;
     price: number;
+    weight?: number;
     quantity: number;
     selectedVariant?: string;
     selectedColor?: string;
@@ -1156,10 +1966,11 @@ export interface ICart extends Document {
 }
 
 const CartItemSchema = new Schema({
-    product:         { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+    product:         { type: Schema.Types.Mixed, required: true },
     name:            { type: String, required: true },
     image:           { type: String, default: '' },
     price:           { type: Number, required: true },
+    weight:          { type: Number, default: 0 },
     quantity:        { type: Number, required: true, min: 1, default: 1 },
     selectedVariant: { type: String, default: '' },
     selectedColor:   { type: String, default: '' },
@@ -1186,6 +1997,7 @@ export interface ICollection extends Document {
     description?: string;
     metaDescription?: string; // SEO optimization
     image?: string;
+    parent: mongoose.Types.ObjectId | null; // null => top-level category
     isActive: boolean;
     createdAt: Date;
 }
@@ -1196,12 +2008,60 @@ const CollectionSchema: Schema = new Schema({
     description: { type: String },
     metaDescription: { type: String },
     image: { type: String },
+    parent: { type: Schema.Types.ObjectId, ref: 'Collection', default: null },
     isActive: { type: Boolean, default: true },
 }, {
     timestamps: true
 });
 
 export default mongoose.model<ICollection>('Collection', CollectionSchema);
+```
+
+## File: `backend/src/models/HomepageSettings.ts`
+
+```typescript
+import mongoose, { Schema, Document } from 'mongoose';
+
+export interface ISeasonalSection {
+    _id?: mongoose.Types.ObjectId;
+    name: string;
+    enabled: boolean;
+    badge: string;
+    heading: string;
+    description: string;
+    collectionIds: mongoose.Types.ObjectId[];
+    occasionIds: mongoose.Types.ObjectId[];
+}
+
+export interface IHomepageSettings extends Document {
+    key: string;
+    seasonalSections: ISeasonalSection[];
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+const SeasonalSectionSchema: Schema = new Schema({
+    name: { type: String, default: 'Seasonal Section' },
+    enabled: { type: Boolean, default: false },
+    badge: { type: String, default: '🪔 Festive Special' },
+    heading: { type: String, default: 'Seasonal Collection' },
+    description: { type: String, default: 'Explore our latest seasonal items.' },
+    collectionIds: [{ type: Schema.Types.ObjectId, ref: 'Collection' }],
+    occasionIds: [{ type: Schema.Types.ObjectId, ref: 'Occasion' }]
+});
+
+const HomepageSettingsSchema: Schema = new Schema({
+    key: { type: String, required: true, unique: true, default: 'homepage' },
+    seasonalSections: {
+        type: [SeasonalSectionSchema],
+        default: []
+    }
+}, {
+    timestamps: true
+});
+
+export default mongoose.model<IHomepageSettings>('HomepageSettings', HomepageSettingsSchema);
+
 
 ```
 
@@ -1241,6 +2101,37 @@ export default mongoose.model<IInquiry>('Inquiry', InquirySchema);
 
 ```
 
+## File: `backend/src/models/Occasion.ts`
+
+```typescript
+import mongoose, { Schema, Document } from 'mongoose';
+
+export interface IOccasion extends Document {
+    name: string;
+    slug: string;
+    description?: string;
+    metaDescription?: string; // SEO optimization
+    image?: string;
+    parent: mongoose.Types.ObjectId | null; // null => top-level occasion
+    isActive: boolean;
+    createdAt: Date;
+}
+
+const OccasionSchema: Schema = new Schema({
+    name: { type: String, required: true, trim: true, unique: true },
+    slug: { type: String, required: true, unique: true, index: true },
+    description: { type: String },
+    metaDescription: { type: String },
+    image: { type: String },
+    parent: { type: Schema.Types.ObjectId, ref: 'Occasion', default: null },
+    isActive: { type: Boolean, default: true },
+}, {
+    timestamps: true
+});
+
+export default mongoose.model<IOccasion>('Occasion', OccasionSchema);
+```
+
 ## File: `backend/src/models/Order.ts`
 
 ```typescript
@@ -1253,7 +2144,8 @@ export interface IOrder extends Document {
         qty: number;
         image: string;
         price: number;
-        product: mongoose.Types.ObjectId;
+        weight?: number;
+        product: mongoose.Types.ObjectId | string;
         selectedVariant?: string;
         selectedColor?: string;
         customerImage?: string;
@@ -1268,10 +2160,14 @@ export interface IOrder extends Document {
         zip: string;
         phone: string;
     };
+    itemsPrice: number;
+    shippingPrice: number;
     totalPrice: number;
     isPaid: boolean;
     paidAt?: Date;
     status: 'Pending' | 'Handcrafting' | 'Quality Check' | 'Dispatched' | 'Delivered' | 'Cancelled';
+    source?: 'checkout' | 'admin-custom' | 'guest';
+    paymentToken?: string;
     trackingNumber?: string;
     deliveryNote?: string;
     razorpayOrderId?: string;
@@ -1285,9 +2181,10 @@ const OrderSchema: Schema = new Schema({
     orderItems: [{
         name: { type: String, required: true },
         qty: { type: Number, required: true },
-        image: { type: String, required: true },
+        image: { type: String, default: '' },
         price: { type: Number, required: true },
-        product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+        weight: { type: Number, default: 0 },
+        product: { type: mongoose.Schema.Types.Mixed, required: true },
         selectedVariant: { type: String, default: '' },
         selectedColor: { type: String, default: '' },
         customerImage: { type: String, default: '' }
@@ -1295,13 +2192,15 @@ const OrderSchema: Schema = new Schema({
     shippingAddress: {
         label: { type: String, default: 'Home' },
         name: { type: String, required: true },
-        email: { type: String, required: true },
-        street: { type: String, required: true },
-        city: { type: String, required: true },
-        state: { type: String, required: true },
-        zip: { type: String, required: true },
+        email: { type: String, default: '' },
+        street: { type: String, default: '' },
+        city: { type: String, default: '' },
+        state: { type: String, default: '' },
+        zip: { type: String, default: '' },
         phone: { type: String, required: true }
     },
+    itemsPrice: { type: Number, required: true, default: 0.0 },
+    shippingPrice: { type: Number, required: true, default: 0.0 },
     totalPrice: { type: Number, required: true, default: 0.0 },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
@@ -1311,6 +2210,12 @@ const OrderSchema: Schema = new Schema({
         enum: ['Pending', 'Handcrafting', 'Quality Check', 'Dispatched', 'Delivered', 'Cancelled'],
         default: 'Pending'
     },
+    source: {
+        type: String,
+        enum: ['checkout', 'admin-custom', 'guest'],
+        default: 'checkout'
+    },
+    paymentToken: { type: String, index: true, sparse: true },
     trackingNumber: { type: String },
     deliveryNote: { type: String },
     razorpayOrderId: { type: String },
@@ -1333,8 +2238,16 @@ export interface IProduct extends Document {
     name: string;
     slug: string;
     category: string;
+    categories?: string[];
+    subcategory?: string;
+    subcategories?: string[];
+    occasion?: string;      // Main occasion name (e.g. "Birthday")
+    occasions?: string[];   // Multiple occasions
+    occasionSub?: string;   // Occasion subcategory (e.g. "Wedding")
+    occasionSubs?: string[]; // Multiple occasion subcategories
     price: number;
     mrp: number; // For discount calculation
+    weight: number; // Weight in grams
     story: string; // The inspiration
     details: string; // The technical specs
     metaDescription?: string; // SEO optimization
@@ -1345,6 +2258,7 @@ export interface IProduct extends Document {
     }[];
     stockStatus: string;
     requiresImage: boolean;
+    isBestseller: boolean;
     createdAt: Date;
 }
 
@@ -1352,8 +2266,16 @@ const ProductSchema: Schema = new Schema({
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, index: true },
     category: { type: String, required: true, index: true },
+    categories: [{ type: String, index: true }],
+    subcategory: { type: String, default: '', index: true },
+    subcategories: [{ type: String, index: true }],
+    occasion: { type: String, default: '', index: true },
+    occasions: [{ type: String, index: true }],
+    occasionSub: { type: String, default: '', index: true },
+    occasionSubs: [{ type: String, index: true }],
     price: { type: Number, required: true },
     mrp: { type: Number, default: 0 },
+    weight: { type: Number, default: 0 },
     story: { type: String, required: true },
     details: { type: String, required: true },
     metaDescription: { type: String },
@@ -1367,7 +2289,8 @@ const ProductSchema: Schema = new Schema({
         enum: ['in-stock', 'out-of-stock', 'made-to-order'], 
         default: 'made-to-order' 
     },
-    requiresImage: { type: Boolean, default: false }
+    requiresImage: { type: Boolean, default: false },
+    isBestseller: { type: Boolean, default: false, index: true }
 }, {
     timestamps: true
 });
@@ -1478,7 +2401,7 @@ export default router;
 
 ```typescript
 import { Router } from 'express';
-import { getCollections, createCollection, deleteCollection } from '../controllers/collectionController';
+import { getCollections, createCollection, updateCollection, deleteCollection } from '../controllers/collectionController';
 import { protect, admin } from '../middlewares/authMiddleware';
 import upload from '../middlewares/uploadMiddleware';
 
@@ -1489,7 +2412,23 @@ router.get('/', getCollections);
 
 // Admin Routes
 router.post('/', protect, admin, upload.single('image'), createCollection);
+router.put('/:id', protect, admin, upload.single('image'), updateCollection);
 router.delete('/:id', protect, admin, deleteCollection);
+
+export default router;
+```
+
+## File: `backend/src/routes/homepageSettingsRoutes.ts`
+
+```typescript
+import { Router } from 'express';
+import { getHomepageSettings, updateHomepageSettings } from '../controllers/homepageSettingsController';
+import { protect, admin } from '../middlewares/authMiddleware';
+
+const router = Router();
+
+router.get('/', getHomepageSettings);
+router.put('/', protect, admin, updateHomepageSettings);
 
 export default router;
 
@@ -1517,14 +2456,51 @@ export default router;
 
 ```
 
+## File: `backend/src/routes/occasionRoutes.ts`
+
+```typescript
+import { Router } from 'express';
+import { getOccasions, createOccasion, updateOccasion, deleteOccasion } from '../controllers/occasionController';
+import { protect, admin } from '../middlewares/authMiddleware';
+import upload from '../middlewares/uploadMiddleware';
+
+const router = Router();
+
+// Public Routes
+router.get('/', getOccasions);
+
+// Admin Routes
+router.post('/', protect, admin, upload.single('image'), createOccasion);
+router.put('/:id', protect, admin, upload.single('image'), updateOccasion);
+router.delete('/:id', protect, admin, deleteOccasion);
+
+export default router;
+```
+
 ## File: `backend/src/routes/orderRoutes.ts`
 
 ```typescript
 import { Router } from 'express';
 import { addOrderItems, getOrderById, updateOrderStatus, getOrders, getMyOrders } from '../controllers/orderController';
+import {
+    createAdminCustomOrder,
+    getAdminCustomOrder,
+    getPublicOrderForPayment,
+    createPublicRazorpayOrder,
+    verifyPublicRazorpayPayment,
+} from '../controllers/customOrderController';
 import { protect, admin, optionalAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
+
+// NOTE: these must stay above '/:id' so they are not swallowed by the id param route.
+router.get('/public/pay/:id', getPublicOrderForPayment);
+router.post('/public/pay/:id/razorpay/create', createPublicRazorpayOrder);
+router.post('/public/pay/:id/razorpay/verify', verifyPublicRazorpayPayment);
+
+// Admin — bespoke order with a shareable payment link
+router.post('/admin/custom', protect, admin, createAdminCustomOrder);
+router.get('/admin/custom/:id', protect, admin, getAdminCustomOrder);
 
 router.post('/',        optionalAuth, addOrderItems);    // Public (Guest) / Auth checkout
 router.get('/',         protect, admin, getOrders);      // Admin list
@@ -1568,8 +2544,8 @@ router.get('/', getProducts);
 router.get('/:slug', getProductBySlug);
 
 // Admin Routes
-router.post('/', protect, admin, upload.array('images', 5), createProduct);
-router.put('/:id', protect, admin, upload.array('images', 5), updateProduct);
+router.post('/', protect, admin, upload.array('images', 10), createProduct);
+router.put('/:id', protect, admin, upload.array('images', 10), updateProduct);
 router.delete('/:id', protect, admin, deleteProduct);
 
 export default router;
@@ -1639,158 +2615,1221 @@ import dotenv from 'dotenv';
 import connectDB from './config/db';
 import Product from './models/Product';
 import Collection from './models/Collection';
+import Occasion from './models/Occasion';
 
 dotenv.config();
 
 connectDB();
 
-const collections = [
+type CategorySeed = {
+    name: string;
+    slug: string;
+    description?: string;
+    metaDescription?: string;
+    image?: string;
+    subcategories?: { name: string; slug: string; image?: string }[];
+};
+
+const categorySeed: CategorySeed[] = [
     {
-        name: 'Miniatures',
-        slug: 'miniatures',
-        description: 'Lifelike artisanal clay replicas of your favorite food and cultural aspects.',
-        metaDescription: 'Shop handcrafted miniature clay art.',
-        image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=800'
+        name: 'Navaratri Miniature Shops',
+        slug: 'miniature-shops',
+        description: 'Traditional South Indian street stalls and culinary shops sculpted by hand in polymer clay and wood.',
+        metaDescription: 'Shop handcrafted Navaratri miniature shops and heritage stalls.',
+        image: '/Miniature shops/jigardhanda.png',
+        subcategories: [
+            { name: 'Miniature Shops', slug: 'miniature-shops-sub', image: '/Miniature shops/idlykadai.png' }
+        ]
     },
     {
-        name: 'Clocks',
-        slug: 'clocks',
-        description: 'Bespoke sculptural timepieces capturing heritage and culinary art.',
-        metaDescription: 'Shop artisanal designer clocks.',
-        image: 'https://images.unsplash.com/photo-1563861826-1efe393625ef?auto=format&fit=crop&q=80&w=800'
+        name: 'Miniature Fruit Baskets',
+        slug: 'fruit-baskets',
+        description: 'Exquisite hand-sculpted clay fruit baskets in woven hampers. Perfect for Golu market scenes and collectors.',
+        metaDescription: 'Shop miniature fruit baskets in clay.',
+        image: '/Fruit baskets/apple.png',
+        subcategories: [
+            { name: 'Handcrafted Fruit Baskets', slug: 'fruit-baskets-sub', image: '/Fruit baskets/Banana.png' }
+        ]
     },
     {
-        name: 'Magnets',
-        slug: 'magnets',
-        description: 'Tiny detailed magnetic art for your fridge.',
+        name: 'Miniature Vegetable Crates',
+        slug: 'vegetable-crates',
+        description: 'Realistic South Indian farm vegetables in miniature pine wood crates. Handcrafted with love at â‚¹199 each.',
+        metaDescription: 'Shop miniature vegetable crates.',
+        image: '/Vegetable Baskets/carrot.png',
+        subcategories: [
+            { name: 'Handcrafted Vegetable Crates', slug: 'vegetable-crates-sub', image: '/Vegetable Baskets/potato.png' }
+        ]
+    },
+    {
+        name: 'Navaratri Thamboolam Collections',
+        slug: 'navaratri-thamboolam',
+        description: 'Auspicious miniature return gifts featuring betel leaves, supari, and coconuts in decorative trays.',
+        metaDescription: 'Shop Navaratri Thamboolam miniature return gifts.',
+        image: '/Navarathri Thamboolam/Navaratri Thamboolam 1.png',
+        subcategories: [
+            { name: 'Navaratri Thamboolam Gifts', slug: 'thamboolam-gifts-sub', image: '/Navarathri Thamboolam/Navaratri Thamboolam 2.png' }
+        ]
+    },
+    {
+        name: 'Custom Miniature Wall Clocks',
+        slug: 'wall-clocks',
+        description: 'Bespoke sculptural timepieces capturing heritage and culinary art. Sabi food-themed clocks, custom scenes and personalized name clocks.',
+        metaDescription: 'Shop handcrafted custom miniature wall clocks.',
+        image: '/chef-damu-clock.jpg',
+        subcategories: [
+            { name: 'Personalized Food-Themed Clocks', slug: 'food-themed-clocks', image: '/chef-damu-clock.jpg' },
+            { name: 'Custom Miniature Scenes', slug: 'custom-scenes', image: '/Miniature shops/dosashop.png' },
+            { name: 'Name / Personalized Clocks', slug: 'name-clocks', image: '/chef-damu-clock.jpg' },
+        ]
+    },
+    {
+        name: 'Miniature Art & Wall Décor',
+        slug: 'wall-decor',
+        description: 'Miniature art pieces and wall décor crafted with air-dry clay — spatulas, kitchen themes and decorative miniatures.',
+        metaDescription: 'Shop miniature wall décor and art.',
+        image: '/souvenirs/Karnataka yakshagana and oota.png',
+        subcategories: [
+            { name: 'Miniature Wall Décor', slug: 'mini-wall-decor', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+            { name: 'Miniature Spatulas', slug: 'mini-spatulas', image: '/souvenirs/Kerala Sadya.png' },
+            { name: 'Kitchen-Themed Miniatures', slug: 'kitchen-miniatures', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'Other Decorative Miniatures', slug: 'decorative-miniatures', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
+            { name: 'Cultural Souvenirs', slug: 'cultural-souvenirs', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+        ]
+    },
+    {
+        name: 'Miniature Shops & Scenes',
+        slug: 'shops-scenes',
+        description: 'Lifelike standalone miniature shops and street scenes â€” saree shops, flower shops, food stalls and festival setups.',
+        metaDescription: 'Shop miniature shops and street scenes.',
+        image: '/Miniature shops/sungudi.png',
+        subcategories: [
+            { name: 'Individual Miniature Shops', slug: 'individual-shops', image: '/Miniature shops/jigardhanda.png' },
+            { name: 'Sungudi Saree Shop', slug: 'sungudi-saree-shop', image: '/Miniature shops/sungudi.png' },
+            { name: 'Flower Shop', slug: 'flower-shop', image: '/Miniature shops/Malligaipoo.png' },
+            { name: 'Food Shops', slug: 'food-shops', image: '/Miniature shops/dosashop.png' },
+            { name: 'Festival Stalls', slug: 'festival-stalls', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Other Standalone Miniature Setups', slug: 'standalone-setups', image: '/Miniature shops/tendercoconut.png' },
+        ]
+    },
+    {
+        name: 'Golu & Navaratri Collections',
+        slug: 'golu-navaratri',
+        description: 'Navaratri Thamboolam gifts and Golu themes â€” Sai Baba sets, Madurai Nagaram, village and temple festival themes, custom Golu scenes.',
+        metaDescription: 'Shop Golu and Navaratri themed miniatures.',
+        image: '/Navarathri Thamboolam/Navaratri Thamboolam 13.png',
+        subcategories: [
+            { name: 'Golu Thamboolam Sets', slug: 'golu-thamboolam-sets', image: '/Navarathri Thamboolam/Navaratri Thamboolam 13.png' },
+            { name: 'Golu Themes', slug: 'golu-themes', image: '/Navarathri Thamboolam/Navaratri Thamboolam 2.png' },
+            { name: 'Sai Baba Set', slug: 'sai-baba-set', image: '/Miniature shops/idlykadai.png' },
+            { name: 'Madurai Nagaram', slug: 'madurai-nagaram', image: '/Miniature shops/jigardhanda.png' },
+            { name: 'Village Theme', slug: 'village-theme', image: '/Miniature shops/Sugarcane.png' },
+            { name: 'Temple Festival Theme', slug: 'temple-festival-theme', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Custom Golu Scenes', slug: 'custom-golu-scenes', image: '/Miniature shops/Paanipoori.png' },
+        ]
+    },
+    {
+        name: 'Miniature Dolls & Figures',
+        slug: 'dolls-figures',
+        description: 'Acrylic dolls, miniature characters and festival and cultural figures hand-finished for your Golu and displays.',
+        metaDescription: 'Shop miniature dolls and figures.',
+        image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png',
+        subcategories: [
+            { name: 'Acrylic Dolls', slug: 'acrylic-dolls', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
+            { name: 'Miniature Characters', slug: 'mini-characters', image: '/Miniature shops/tendercoconut.png' },
+            { name: 'Festival and Cultural Figures', slug: 'cultural-figures', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+        ]
+    },
+    {
+        name: 'Fridge Magnets',
+        slug: 'fridge-magnets',
+        description: 'Tiny detailed magnetic art for your fridge â€” miniature food magnets, customized magnets and theme-based magnets.',
         metaDescription: 'Shop handcrafted clay fridge magnets.',
-        image: 'https://images.unsplash.com/photo-1628157588553-5eeea00af15c?auto=format&fit=crop&q=80&w=800'
-    }
+        image: '/Fridge Magnets/Banana leaf thali with mdf base.png',
+        subcategories: [
+            { name: 'Miniature Food Magnets', slug: 'food-magnets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'Customized Magnets', slug: 'custom-magnets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'Theme-Based Magnets', slug: 'theme-magnets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+        ]
+    },
+    {
+        name: 'Clay & Miniature-Making Supplies',
+        slug: 'supplies',
+        description: 'Everything for miniature making â€” air-dry clay, miniature-making materials, tools and accessories.',
+        metaDescription: 'Shop clay and miniature-making supplies.',
+        image: '/Miniature shops/tiffen.png',
+        subcategories: [
+            { name: 'Clay', slug: 'clay', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Miniature-Making Materials', slug: 'materials', image: '/Miniature shops/Limesoda.png' },
+            { name: 'Tools', slug: 'tools', image: '/Miniature shops/Sugarcane.png' },
+            { name: 'Accessories', slug: 'accessories', image: '/Miniature shops/Malligaipoo.png' },
+        ]
+    },
+];
+
+type OccasionSeed = {
+    name: string;
+    slug: string;
+    description?: string;
+    metaDescription?: string;
+    image?: string;
+    subcategories?: { name: string; slug: string; image?: string }[];
+};
+
+const occasionSeed: OccasionSeed[] = [
+    {
+        name: 'Birthday',
+        slug: 'birthday',
+        description: 'Handcrafted miniatures that make birthdays personal â€” themed scenes, kids\' parties and custom birthday gifts.',
+        metaDescription: 'Shop miniature birthday gifts and themed scenes.',
+        image: '/Miniature shops/sweetcorn.png',
+        subcategories: [
+            { name: 'Theme-Based Birthday Scenes', slug: 'theme-birthday-scenes', image: '/Miniature shops/sweetcorn.png' },
+            { name: 'Kids\' Birthday Themes', slug: 'kids-birthday', image: '/Miniature shops/Paanipoori.png' },
+            { name: 'Custom Birthday Gifts', slug: 'custom-birthday-gifts', image: '/chef-damu-clock.jpg' },
+        ]
+    },
+    {
+        name: 'Wedding',
+        slug: 'wedding',
+        description: 'Wedding-day miniatures and keepsakes â€” couple figurines, decor and traditional Tamil wedding themes.',
+        metaDescription: 'Shop miniature wedding decor and keepsakes.',
+        image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png',
+        subcategories: [
+            { name: 'Couple Miniatures', slug: 'couple-miniatures', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
+            { name: 'Wedding Day DÃ©cor', slug: 'wedding-day-decor', image: '/souvenirs/Kerala Sadya.png' },
+            { name: 'Traditional Tamil Wedding Themes', slug: 'tamil-wedding-themes', image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png' },
+        ]
+    },
+    {
+        name: 'Anniversary',
+        slug: 'anniversary',
+        description: 'Celebrate milestones with personalised couple themes and anniversary keepsakes.',
+        metaDescription: 'Shop miniature anniversary gifts.',
+        image: '/chef-damu-clock.jpg',
+        subcategories: [
+            { name: 'Couple Celebration Themes', slug: 'couple-anniversary-themes', image: '/chef-damu-clock.jpg' },
+            { name: 'Milestone Year Gifts', slug: 'milestone-year-gifts', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+        ]
+    },
+    {
+        name: 'Festivals & Religious Events',
+        slug: 'festivals',
+        description: 'Festive miniatures for Navaratri, Diwali, Christmas, Pongal and temple and cultural celebrations.',
+        metaDescription: 'Shop festival themed miniature decor and gifts.',
+        image: '/Navarathri Thamboolam/Navaratri Thamboolam 1.png',
+        subcategories: [
+            { name: 'Navaratri / Golu', slug: 'navaratri-golu', image: '/Navarathri Thamboolam/Navaratri Thamboolam 1.png' },
+            { name: 'Diwali', slug: 'diwali', image: '/Navarathri Thamboolam/Navaratri Thamboolam 2.png' },
+            { name: 'Christmas', slug: 'christmas', image: '/Fruit baskets/apple.png' },
+            { name: 'Pongal & Harvest', slug: 'pongal', image: '/Vegetable Baskets/banana stem.png' },
+            { name: 'Temple & Cultural Events', slug: 'temple-cultural-events', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+        ]
+    },
+    {
+        name: 'Housewarming',
+        slug: 'housewarming',
+        description: 'Griha Pravesham and new home miniatures â€” auspicious themes, home dÃ©cor and gift sets.',
+        metaDescription: 'Shop miniature housewarming gifts and dÃ©cor.',
+        image: '/Fridge Magnets/Banana leaf thali with mdf base.png',
+        subcategories: [
+            { name: 'Griha Pravesham Themes', slug: 'griha-pravesham', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+            { name: 'New Home DÃ©cor', slug: 'new-home-decor', image: '/chef-damu-clock.jpg' },
+            { name: 'Housewarming Gift Sets', slug: 'housewarming-gift-sets', image: '/Fridge Magnets/Banana leaf thali with mdf base.png' },
+        ]
+    },
+    {
+        name: 'Naming Ceremony',
+        slug: 'naming-ceremony',
+        description: 'Traditional naming ceremony miniatures â€” lamps, dÃ©cor and baby celebration themes.',
+        metaDescription: 'Shop naming ceremony miniature dÃ©cor.',
+        image: '/Fruit baskets/Banana.png',
+        subcategories: [
+            { name: 'Traditional Lamp & DÃ©cor', slug: 'naming-decor', image: '/Navarathri Thamboolam/Navaratri Thamboolam 13.png' },
+            { name: 'Baby Celebration Themes', slug: 'naming-baby-themes', image: '/Fruit baskets/strawberry.png' },
+        ]
+    },
+    {
+        name: 'Baby Shower',
+        slug: 'baby-shower',
+        description: 'Cute and pastel miniatures for baby showers and new beginnings.',
+        metaDescription: 'Shop baby shower themed miniatures.',
+        image: '/Fruit baskets/strawberry.png',
+        subcategories: [
+            { name: 'Cute Baby Themes', slug: 'cute-baby-themes', image: '/Fruit baskets/strawberry.png' },
+            { name: 'Pastel Miniatures', slug: 'pastel-miniatures', image: '/Fruit baskets/papaya.png' },
+        ]
+    },
+    {
+        name: 'Congratulations',
+        slug: 'congratulations',
+        description: 'Graduation and achievement themed miniatures to celebrate every milestone.',
+        metaDescription: 'Shop graduation and achievement miniature gifts.',
+        image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png',
+        subcategories: [
+            { name: 'Graduation Gifts', slug: 'graduation-gifts', image: '/souvenirs/Karnataka yakshagana and oota.png' },
+            { name: 'Achievement Themes', slug: 'achievement-themes', image: '/chef-damu-clock.jpg' },
+        ]
+    },
 ];
 
 const products = [
     {
-        name: 'Traditional Samosa Miniature Clock',
-        slug: 'traditional-samosa-miniature-clock',
-        category: 'Clocks',
+        name: 'Traditional Jigarthanda Shop Miniature',
+        slug: 'traditional-jigarthanda-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
         price: 2499,
-        mrp: 3200,
-        story: 'Inspired by the vibrant streets of Mumbai, this clock captures the essence of a warm chai and samosa evening.',
-        details: 'Hand sculpted with premium polymer clay. Mounted on a 10-inch wooden base. Silent sweep mechanism.',
-        metaDescription: 'Buy handcrafted samosa and chai miniature wall clock.',
+        mrp: 4499,
+        weight: 650,
+        story: 'A handcrafted miniature Jigarthanda shop inspired by traditional Tamil Nadu drink stalls, created for Golu and Navaratri displays.',
+        details: 'Bring the charm of a traditional Tamil Nadu Jigarthanda shop to your Golu display with this detailed handmade miniature scene. The shop features a rustic tiled roof, wooden-style counter, miniature storage containers, serving vessels and a shopkeeper serving the drink. A customer figure adds life and storytelling to the scene. Display it as a standalone Golu decoration or combine it with other Mythris Gleams miniature shops to create a traditional street or Madurai-themed scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade Jigarthanda shop miniature for Golu and Navaratri. Add a traditional Tamil Nadu street-shop feel to your miniature display.',
         images: [
-            'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&q=80&w=800',
-            'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?auto=format&fit=crop&q=80&w=800'
+            '/Miniature shops/jigardhanda.png'
         ],
-        variants: [{ type: 'Size', options: ['Small (8 inch)', 'Large (10 inch)'] }],
-        stockStatus: 'made-to-order',
-        rating: 4.8,
-        reviewCount: 12
-    },
-    {
-        name: 'South Indian Filter Coffee Magnet',
-        slug: 'south-indian-filter-coffee-magnet',
-        category: 'Magnets',
-        price: 499,
-        mrp: 650,
-        story: 'A miniature tribute to the quintessential morning ritual of South India. Complete with a tiny brass dabarah set.',
-        details: 'Air-dry clay base with acrylic detailing. High-grade neodymium magnet attached.',
-        metaDescription: 'Handcrafted South Indian Filter Coffee Fridge Magnet.',
-        images: [
-            'https://images.unsplash.com/photo-1611162458324-aae1eb4129a4?auto=format&fit=crop&q=80&w=800'
-        ],
-        variants: [{ type: 'Size', options: ['Standard'] }],
-        stockStatus: 'in-stock',
-        rating: 5.0,
-        reviewCount: 45
-    },
-    {
-        name: 'Biryani Handi Miniature',
-        slug: 'biryani-handi-miniature',
-        category: 'Miniatures',
-        price: 1899,
-        mrp: 2500,
-        story: 'A hyper-realistic clay sculpture of Hyderabadi Dum Biryani, complete with individual rice grains and a traditional copper handi.',
-        details: 'Meticulously shaped using dental tools for precision. Set in resin broth.',
-        metaDescription: 'Realistic clay miniature of Biryani in a copper handi.',
-        images: [
-            'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=800'
-        ],
-        variants: [{ type: 'Scale', options: ['1:12 Scale', '1:6 Scale'] }],
+        variants: [],
         stockStatus: 'made-to-order',
         rating: 4.9,
-        reviewCount: 8
+        reviewCount: 33
     },
     {
-        name: 'Masala Dosa Platter Miniature',
-        slug: 'masala-dosa-platter-miniature',
-        category: 'Miniatures',
-        price: 1299,
-        mrp: 1800,
-        story: 'The quintessential South Indian breakfast platter, featuring crispy dosa, three types of chutney, and sambar on a banana leaf.',
-        details: 'Hand-painted banana leaf made from polymer clay. Sambar crafted with colored resin.',
-        metaDescription: 'Handmade Masala Dosa Platter miniature art.',
+        name: 'Traditional Idly Shop Miniature',
+        slug: 'traditional-idly-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A detailed handmade miniature Idly shop with traditional vessels, food, customers and a shopkeeper, perfect for Golu and Navaratri displays.',
+        details: 'Create a nostalgic South Indian food-stall scene with this handmade miniature Idly shop. The scene includes a traditional shop structure, miniature cooking and serving vessels, idlis, accompaniments, a shopkeeper and seated customers enjoying their food. Every small element helps recreate the familiar feeling of a local Tamil Nadu tiffin shop. Use it as a standalone Golu piece or place it alongside other miniature shops to build a lively traditional street scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade South Indian Idly shop miniature with tiny food, vessels and figures. Perfect for Golu, Navaratri displays and miniature collections.',
         images: [
-            'https://images.unsplash.com/photo-1589301760014-d929f39ce9b1?auto=format&fit=crop&q=80&w=800'
+            '/Miniature shops/idlykadai.png'
         ],
-        variants: [{ type: 'Base', options: ['Banana Leaf', 'Silver Plate'] }],
-        stockStatus: 'in-stock',
-        rating: 4.7,
-        reviewCount: 22
-    },
-    {
-        name: 'Vintage Camera Miniature Desk Art',
-        slug: 'vintage-camera-miniature-desk-art',
-        category: 'Miniatures',
-        price: 3499,
-        mrp: 4200,
-        story: 'For the photography enthusiast. A nostalgic ode to vintage twin-lens reflex cameras.',
-        details: 'Crafted with black polymer clay and brushed metallic accents. Perfect for office desks.',
-        metaDescription: 'Vintage Camera miniature sculpture for desk decor.',
-        images: [
-            'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=800'
-        ],
-        variants: [{ type: 'Style', options: ['Black & Silver', 'Vintage Brown'] }],
+        variants: [],
         stockStatus: 'made-to-order',
-        rating: 5.0,
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Traditional Dosa Shop Miniature',
+        slug: 'traditional-dosa-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A handcrafted miniature Dosa shop inspired by a traditional South Indian tiffin stall, made for Golu, Navaratri and miniature street displays.',
+        details: 'Recreate the warmth of a traditional South Indian tiffin shop with this detailed handmade Dosa shop miniature. The scene features a miniature dosa on the cooking surface, serving vessels, food accessories, a shopkeeper and a customer seated at the stall. The rustic shop structure and tiny details make it a beautiful storytelling piece for Golu displays. Pair it with other Mythris Gleams miniature shops to create a complete Tamil Nadu food-street or village-style scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade Dosa shop miniature inspired by a traditional South Indian tiffin stall. Ideal for Golu, Navaratri and miniature street displays.',
+        images: [
+            '/Miniature shops/dosashop.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Traditional Sungudi Saree Shop Miniature',
+        slug: 'traditional-sungudi-saree-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A colourful handmade miniature Sungudi saree shop featuring tiny sarees, a shopkeeper and customers, inspired by traditional textile shopping streets of Tamil Nadu.',
+        details: 'Add the colour and charm of a traditional Tamil Nadu textile shop to your Golu display with this handmade Sungudi saree shop miniature. The scene features miniature sarees displayed across the shop, folded sarees on the counter, a seated shopkeeper and customers browsing the collection. The bright fabrics and detailed arrangement make this a beautiful cultural miniature for a traditional street, Madurai or Tamil Nadu-themed Golu setup. Material: Clay, miniature modelling materials, fabric-like miniature elements and decorative materials Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Colourful handmade Sungudi saree shop miniature with tiny sarees and figures. Perfect for Golu, Navaratri and Tamil Nadu themed displays.',
+        images: [
+            '/Miniature shops/sungudi.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
         reviewCount: 15
     },
     {
-        name: 'Idli Sambar Wall Clock',
-        slug: 'idli-sambar-wall-clock',
-        category: 'Clocks',
-        price: 2899,
-        mrp: 3500,
-        story: 'Start your day on time and with an appetite! A delightful kitchen clock featuring South India\'s beloved breakfast.',
-        details: '12-inch diameter. Requires 1 AA battery. Vibrant non-fade acrylics.',
-        metaDescription: 'Idli Sambar themed handmade kitchen wall clock.',
+        name: 'Traditional Malligai Poo Shop Miniature',
+        slug: 'traditional-malligai-poo-shop-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 2499,
+        mrp: 4499,
+        weight: 650,
+        story: 'A beautiful handmade Malligai Poo shop miniature with flower garlands, baskets, flower sellers and a customer, perfect for a traditional Golu display.',
+        details: 'Bring the beauty of a traditional Tamil Nadu flower market into your Golu display with this detailed Malligai Poo shop miniature. The scene shows a flower stall filled with tiny jasmine and colourful flower garlands, baskets of flowers, a seated flower seller preparing flowers and a customer buying them. The layered baskets, garlands and figures create a lively everyday-market scene that can be displayed on its own or combined with other miniature shops to build a complete traditional street. Material: Clay, miniature modelling materials and decorative flower elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade Malligai Poo flower shop miniature with jasmine garlands, baskets and figures. Perfect for Golu, Navaratri and traditional displays.',
         images: [
-            'https://images.unsplash.com/photo-1626082895617-2c6b4122d3d3?auto=format&fit=crop&q=80&w=800'
+            '/Miniature shops/Malligaipoo.png'
         ],
-        variants: [{ type: 'Size', options: ['12 inch', '14 inch'] }],
-        stockStatus: 'in-stock',
-        rating: 4.6,
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 34
+    },
+    {
+        name: 'Traditional Sugarcane Juice Cart Miniature',
+        slug: 'traditional-sugarcane-juice-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1699,
+        mrp: 4199,
+        weight: 650,
+        story: 'A handmade miniature sugarcane juice cart with a traditional juicing machine and vendor, perfect for a Tamil Nadu village, street or Golu display.',
+        details: 'Recreate the familiar sight of a traditional sugarcane juice cart with this detailed handmade miniature. The scene features a wheeled wooden-style cart, a miniature sugarcane juice machine, sugarcane pieces and a vendor operating the setup. It is a charming standalone piece for Navaratri Golu and works beautifully when placed alongside other food carts and miniature shops to create a lively South Indian street scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade sugarcane juice cart miniature with vendor and traditional juicing machine. Perfect for Golu, Navaratri and Tamil Nadu street scenes.',
+        images: [
+            '/Miniature shops/Sugarcane.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 17
+    },
+    {
+        name: 'Traditional Lemon Soda Cart Miniature',
+        slug: 'traditional-lemon-soda-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1799,
+        mrp: 4499,
+        weight: 650,
+        story: 'A colourful handmade lemon soda cart miniature with bottles, lemons, a vendor and customer, inspired by traditional roadside drink carts.',
+        details: 'Add a fun roadside drink-stall scene to your Golu display with this handmade lemon soda cart miniature. The colourful wheeled cart is arranged with miniature bottles, lemons, a drink machine and a vendor serving a customer. Its bright details and everyday street-market feel make it a great standalone Golu piece or a perfect addition to a larger Tamil Nadu village, market or festival scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Colourful handmade lemon soda cart miniature with bottles, vendor and customer. Ideal for Golu, Navaratri and traditional street scenes.',
+        images: [
+            '/Miniature shops/Limesoda.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 32
+    },
+    {
+        name: 'Traditional Tender Coconut Seller Bicycle Miniature',
+        slug: 'tender-coconut-seller-bicycle-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1299,
+        mrp: 3799,
+        weight: 650,
+        story: 'A handmade miniature tender coconut seller with a bicycle, coconuts and a traditional roadside-selling scene for Golu displays.',
+        details: 'Capture the charm of a traditional roadside tender coconut seller with this detailed miniature scene. The miniature features a bicycle loaded with tender coconuts and a seller holding a coconut ready to serve. This compact cultural piece brings an everyday Tamil Nadu street moment into your Golu display and pairs beautifully with other miniature carts, shops and village-market scenes. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade tender coconut seller miniature with bicycle and coconuts. A charming Tamil Nadu street scene for Golu and Navaratri displays.',
+        images: [
+            '/Miniature shops/tendercoconut.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Traditional South Indian Tiffin Stall Miniature',
+        slug: 'traditional-south-indian-tiffin-stall-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1999,
+        mrp: 4299,
+        weight: 650,
+        story: 'A detailed handmade South Indian tiffin stall miniature with idlis, vadas, chutneys, banana leaves, cooking vessels and a woman serving food.',
+        details: 'Bring a traditional South Indian breakfast scene to your Golu display with this detailed handmade tiffin stall miniature. The scene features idlis, vadas, chutneys, banana leaves, serving vessels and a woman holding a plate of food. Every tiny food element is arranged to recreate the warmth of a local breakfast stall. Display it independently or combine it with other Mythris Gleams miniature shops and carts for a complete food-street scene. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade South Indian tiffin stall miniature with idli, vada, chutney and banana leaves. Perfect for Golu and Navaratri displays.',
+        images: [
+            '/Miniature shops/tiffen.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 22
+    },
+    {
+        name: 'Traditional Street Sweet Corn Cart Miniature',
+        slug: 'traditional-street-vegetable-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1999,
+        mrp: 4499,
+        weight: 650,
+        story: 'A colourful handmade miniature street sweet corn cart with a vendor and fresh produce, perfect for traditional Golu and village-market scenes.',
+        details: 'Add the charm of a traditional roadside sweet corn cart to your Golu display with this handmade miniature. The wheeled red cart is arranged with miniature sweet corn and a vendor standing behind the cart, creating a simple and familiar everyday-market scene. It works beautifully as a standalone miniature or as part of a larger Tamil Nadu village, market or festival-themed Golu setup. Material: Clay, miniature modelling materials and decorative elements Care: Keep away from water, direct moisture and rough handling. Dust gently with a soft dry brush or cloth.',
+        metaDescription: 'Handmade street vegetable cart miniature with vendor and colourful vegetables. Perfect for Golu, Navaratri and Tamil Nadu village scenes.',
+        images: [
+            '/Miniature shops/sweetcorn.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 19
+    },
+    {
+        name: 'Miniature Apple Fruit Basket',
+        slug: 'miniature-apple-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature apple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Apple Fruit Basket from Mythris Gleams. The basket is carefully created with tiny apple miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature apple fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/apple.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Banana Fruit Basket',
+        slug: 'miniature-banana-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature banana basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Banana Fruit Basket from Mythris Gleams. The basket is carefully created with tiny banana miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature banana fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/Banana.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 24
+    },
+    {
+        name: 'Miniature Mango Fruit Basket',
+        slug: 'miniature-mango-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature mango basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Mango Fruit Basket from Mythris Gleams. The basket is carefully created with tiny mango miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature mango fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/mango.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Papaya Fruit Basket',
+        slug: 'miniature-papaya-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature papaya basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Papaya Fruit Basket from Mythris Gleams. The basket is carefully created with tiny papaya miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature papaya fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/papaya.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 24
+    },
+    {
+        name: 'Miniature Strawberry Fruit Basket',
+        slug: 'miniature-strawberry-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature strawberry basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Strawberry Fruit Basket from Mythris Gleams. The basket is carefully created with tiny strawberry miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature strawberry fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/strawberry.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+    {
+        name: 'Miniature Pineapple Fruit Basket',
+        slug: 'miniature-pineapple-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature pineapple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Pineapple Fruit Basket from Mythris Gleams. The basket is carefully created with tiny pineapple miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature pineapple fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/Orange.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+
+    {
+        name: 'Miniature Pear Fruit Basket',
+        slug: 'miniature-pear-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature pear basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Pear Fruit Basket from Mythris Gleams. The basket is carefully created with tiny pear miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature pear fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/pears.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 22
+    },
+    {
+        name: 'Miniature Watermelon Fruit Basket',
+        slug: 'miniature-watermelon-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature watermelon basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Watermelon Fruit Basket from Mythris Gleams. The basket is carefully created with tiny watermelon miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature watermelon fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/watermelon.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+    {
+        name: 'Miniature Jamun Fruit Basket',
+        slug: 'miniature-jamun-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature jamun basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Jamun Fruit Basket from Mythris Gleams. The basket is carefully created with tiny jamun miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature jamun fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/pears.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Custard Apple Fruit Basket',
+        slug: 'miniature-custard-apple-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature custard apple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Custard Apple Fruit Basket from Mythris Gleams. The basket is carefully created with tiny custard apple miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature custard apple fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/apple.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 31
+    },
+    {
+        name: 'Miniature Guava Fruit Basket',
+        slug: 'miniature-guava-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature guava basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Guava Fruit Basket from Mythris Gleams. The basket is carefully created with tiny guava miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature guava fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/apple.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 23
+    },
+    {
+        name: 'Miniature Muskmelon Fruit Basket',
+        slug: 'miniature-muskmelon-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature muskmelon basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Muskmelon Fruit Basket from Mythris Gleams. The basket is carefully created with tiny muskmelon miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature muskmelon fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/watermelon.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Dragon Fruit Fruit Basket',
+        slug: 'miniature-dragon-fruit-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature dragon fruit basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Dragon Fruit Fruit Basket from Mythris Gleams. The basket is carefully created with tiny dragon fruit miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature dragon fruit fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/strawberry.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
         reviewCount: 30
+    },
+    {
+        name: 'Miniature Jackfruit Fruit Basket',
+        slug: 'miniature-jackfruit-fruit-basket',
+        category: 'Miniature Fruit Baskets',
+        subcategory: 'Handcrafted Fruit Baskets',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature jackfruit basket made with detailed clay fruit miniatures in a charming traditional basket.',
+        details: 'Bring the charm of a traditional fruit basket into your miniature collection with this handcrafted Miniature Jackfruit Fruit Basket from Mythris Gleams. The basket is carefully created with tiny jackfruit miniatures, detailed and arranged to look like a real fruit basket in miniature. It is a lovely addition to Golu and Navaratri displays, miniature shop setups, village themes, miniature kitchens, dioramas and craft collections. Each piece is handmade and may have tiny natural variations that make it unique. Material: Clay / polymer clay miniature fruit, miniature basket and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny fruits and basket carefully.',
+        metaDescription: 'Shop a handcrafted miniature jackfruit fruit basket from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops and dioramas.',
+        images: [
+            '/Fruit baskets/papaya.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+
+    {
+        name: 'Miniature Potato Vegetable Crate',
+        slug: 'miniature-potato-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature potato crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Potato Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny potato miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature potato vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/potato.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Brinjal Vegetable Crate',
+        slug: 'miniature-brinjal-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature brinjal crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Brinjal Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny brinjal miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature brinjal vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/brinjal.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+
+    {
+        name: 'Miniature Drumstick Vegetable Crate',
+        slug: 'miniature-drumstick-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature drumstick crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Drumstick Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny drumstick miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature drumstick vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/drumstick.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 30
+    },
+    {
+        name: 'Miniature Banana Stem Vegetable Crate',
+        slug: 'miniature-banana-stem-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature banana stem crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Banana Stem Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny banana stem miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature banana stem vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/banana stem.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 32
+    },
+    {
+        name: 'Miniature Carrot Vegetable Crate',
+        slug: 'miniature-carrot-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature carrot crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Carrot Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny carrot miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature carrot vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/carrot.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Radish Vegetable Crate',
+        slug: 'miniature-radish-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature radish crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Radish Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny radish miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature radish vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/raddish.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 27
+    },
+    {
+        name: 'Miniature Beetroot Vegetable Crate',
+        slug: 'miniature-beetroot-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature beetroot crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Beetroot Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny beetroot miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature beetroot vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/beetroot.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 29
+    },
+    {
+        name: 'Miniature Lemon Vegetable Crate',
+        slug: 'miniature-lemon-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature lemon crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Lemon Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny lemon miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature lemon vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/lemon.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Miniature Pumpkin Vegetable Crate',
+        slug: 'miniature-pumpkin-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature pumpkin crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Pumpkin Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny pumpkin miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature pumpkin vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/pumkin.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 28
+    },
+    {
+        name: 'Miniature Cucumber Vegetable Crate',
+        slug: 'miniature-cucumber-vegetable-crate',
+        category: 'Miniature Vegetable Crates',
+        subcategory: 'Handcrafted Vegetable Crates',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 199,
+        mrp: 300,
+        weight: 120,
+        story: 'Handcrafted miniature cucumber crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+        details: 'Bring the charm of a traditional vegetable market into your miniature collection with this handcrafted Miniature Cucumber Vegetable Crate from Mythris Gleams. The crate is carefully created with tiny cucumber miniatures and arranged to look like a real vegetable crate in miniature. Perfect for Navaratri Golu displays, miniature vegetable shops, village themes, market scenes, dioramas, miniature kitchens and craft collections. Each piece is handmade, so tiny variations in colour, shape and arrangement may occur. Material: Clay / polymer clay miniature vegetables, miniature crate and craft materials Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the tiny vegetables and crate carefully.',
+        metaDescription: 'Shop a handcrafted miniature cucumber vegetable crate from Mythris Gleams. Perfect for Golu, Navaratri décor, miniature shops, village scenes and dioramas.',
+        images: [
+            '/Vegetable Baskets/cucumber.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 33
+    },
+    {
+        name: 'Navaratri Miniature Thamboolam – Real Cloth Edition',
+        slug: 'navaratri-miniature-thamboolam-real-cloth',
+        category: 'Navaratri Thamboolam Collections',
+        subcategory: 'Navaratri Thamboolam Gifts',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 350,
+        mrp: 700,
+        weight: 180,
+        story: 'A beautifully handcrafted Navaratri Thamboolam gift set featuring a real miniature cloth, traditional festive essentials and a decorative gold-toned tray.',
+        details: 'Celebrate the tradition of Navaratri Thamboolam with this beautifully handcrafted miniature return-gift set from Mythris Gleams. This edition features a real miniature cloth, carefully arranged with traditional festive elements on a decorative tray. The miniature set includes traditional Thamboolam-inspired details such as fruits, betel leaf and festive items, presented as a charming keepsake. A thoughtful choice for Navaratri return gifts, Golu gatherings, festive décor and miniature collectors. Material: Miniature craft materials, real fabric cloth and decorative tray Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the miniature cloth and small decorative elements carefully.',
+        metaDescription: 'Handcrafted Navaratri miniature Thamboolam with real miniature cloth and traditional festive details. A unique Golu and return gift idea.',
+        images: [
+            '/Navarathri Thamboolam/Navaratri Thamboolam 13.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 26
+    },
+    {
+        name: 'Navaratri Miniature Thamboolam – Clay Cloth Tray Edition',
+        slug: 'navaratri-miniature-thamboolam-clay-cloth-tray',
+        category: 'Navaratri Thamboolam Collections',
+        subcategory: 'Navaratri Thamboolam Gifts',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 250,
+        mrp: 350,
+        weight: 180,
+        story: 'A handcrafted Navaratri miniature Thamboolam arranged on a decorative tray, featuring a miniature cloth recreated in clay and traditional festive elements.',
+        details: 'Add a unique miniature touch to your Navaratri celebrations with this handcrafted Thamboolam set from Mythris Gleams. This edition features a decorative tray with a miniature cloth recreated in clay, along with traditional festive elements arranged in a beautiful Thamboolam-style presentation. The clay-made details make this a lasting miniature keepsake that can be displayed as part of a Golu setup or treasured as a festive collectible. It is designed to capture the beauty of traditional South Indian festive gifting in miniature form. Material: Clay, miniature modelling materials and decorative tray Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the miniature cloth and small decorative elements carefully.',
+        metaDescription: 'Handmade Navaratri miniature Thamboolam with a clay-made miniature cloth and festive details. Perfect for Golu and traditional décor.',
+        images: [
+            '/Navarathri Thamboolam/Navaratri Thamboolam 2.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 31
+    },
+    {
+        name: 'Navaratri Miniature Thamboolam – Ornate Clay Cloth Edition',
+        slug: 'navaratri-miniature-thamboolam-ornate-clay-cloth',
+        category: 'Navaratri Thamboolam Collections',
+        subcategory: 'Navaratri Thamboolam Gifts',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 250,
+        mrp: 350,
+        weight: 180,
+        story: 'A traditional-style Navaratri miniature Thamboolam with an ornate decorative base, clay-made miniature cloth and festive return-gift elements.',
+        details: 'This handcrafted Navaratri Miniature Thamboolam combines traditional festive gifting with detailed miniature art. The set features an ornate decorative base, a miniature cloth recreated in clay and carefully arranged festive elements including fruits, betel leaf and other traditional Thamboolam details. Designed as a beautiful Navaratri keepsake, it can be used for Golu décor, festive gifting or as part of a miniature collection. Its ornate presentation makes it a special choice for festive display and traditional gifting. Material: Clay, miniature modelling materials and decorative tray Care: Keep away from water, moisture and direct sunlight. Dust gently with a soft dry brush or cloth. Handle the miniature cloth and small decorative elements carefully.',
+        metaDescription: 'Handcrafted ornate Navaratri miniature Thamboolam with clay-made miniature cloth and traditional festive details for Golu and gifting.',
+        images: [
+            '/Navarathri Thamboolam/Navaratri Thamboolam 1.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 33
+    },
+    {
+        name: 'Traditional Pani Puri Cart Miniature',
+        slug: 'traditional-pani-puri-cart-miniature',
+        category: 'Navaratri Miniature Shops',
+        subcategory: 'Miniature Shops',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Navaratri / Golu',
+        price: 1799,
+        mrp: 3499,
+        weight: 650,
+        story: 'A colourful handmade miniature Pani Puri and chaat cart with tiny puris, flavoured water pots, vendor and customer for Golu and street displays.',
+        details: 'Handcrafted in clay and wood. Includes clay chaat pots, miniature puris, vendor figurine and decorative stall structure. Keep dry and dust with a soft cloth.',
+        metaDescription: 'Buy handcrafted traditional Pani Puri chaat cart miniature for Golu by Mythris Gleams.',
+        images: [
+            '/Miniature shops/Paanipoori.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 24
+    },
+    {
+        name: 'South Indian Banana Leaf Thali Fridge Magnet',
+        slug: 'south-indian-banana-leaf-thali-fridge-magnet',
+        category: 'Fridge Magnets',
+        subcategory: 'Miniature Food Magnets',
+        occasion: 'Housewarming',
+        occasionSub: 'Housewarming Gift Sets',
+        price: 499,
+        mrp: 699,
+        weight: 120,
+        story: 'A delicious South Indian feast miniature mounted on an MDF base with a strong neodymium magnet.',
+        details: 'Air-dry polymer clay, hand-painted details with rice, sambar, rasam, kootu, poriyal, payasam and appalam. Neodymium magnet on back.',
+        metaDescription: 'Buy South Indian Banana Leaf Thali fridge magnet handcrafted in clay.',
+        images: [
+            '/Fridge Magnets/Banana leaf thali with mdf base.png'
+        ],
+        variants: [],
+        stockStatus: 'in-stock',
+        rating: 4.9,
+        reviewCount: 38
+    },
+    {
+        name: 'Karnataka Yakshagana & Oota Heritage Souvenir',
+        slug: 'karnataka-yakshagana-and-oota-heritage-souvenir',
+        category: 'Miniature Art & Wall DÃ©cor',
+        subcategory: 'Cultural Souvenirs',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Diwali',
+        price: 1499,
+        mrp: 2499,
+        weight: 350,
+        story: 'A magnificent South Indian cultural souvenir capturing Karnataka\'s iconic Yakshagana performer and traditional meal platter in handcrafted clay.',
+        details: 'Handcrafted polymer clay art mounted on a polished display plaque. Ideal for cultural gifting, living rooms and office showcases.',
+        metaDescription: 'Buy handcrafted Karnataka Yakshagana & Oota Heritage Souvenir by Mythris Gleams.',
+        images: [
+            '/souvenirs/Karnataka yakshagana and oota.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 29
+    },
+    {
+        name: 'Kerala Onam Sadya Miniature Souvenir',
+        slug: 'kerala-onam-sadya-miniature-souvenir',
+        category: 'Miniature Art & Wall DÃ©cor',
+        subcategory: 'Cultural Souvenirs',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Diwali',
+        price: 1499,
+        mrp: 2499,
+        weight: 350,
+        story: 'An artisanal miniature tribute to Kerala\'s celebrated Grand Sadya feast with traditional side dishes on a banana leaf.',
+        details: 'Handcrafted polymer clay art mounted on a polished display plaque. Ideal for cultural gifting, living rooms and office showcases.',
+        metaDescription: 'Buy handcrafted Kerala Onam Sadya Miniature Souvenir by Mythris Gleams.',
+        images: [
+            '/souvenirs/Kerala Sadya.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 29
+    },
+    {
+        name: 'Tamil Nadu Bharatanatyam & Vazhaillai Sapadu Souvenir',
+        slug: 'tamil-nadu-bharatanatyam-vazhaillai-sapadu-souvenir',
+        category: 'Miniature Art & Wall DÃ©cor',
+        subcategory: 'Cultural Souvenirs',
+        occasion: 'Festivals & Religious Events',
+        occasionSub: 'Diwali',
+        price: 1499,
+        mrp: 2499,
+        weight: 350,
+        story: 'A celebration of Tamil culture depicting a classical Bharatanatyam dancer alongside an authentic Vazhaillai virundhu sapadu.',
+        details: 'Handcrafted polymer clay art mounted on a polished display plaque. Ideal for cultural gifting, living rooms and office showcases.',
+        metaDescription: 'Buy handcrafted Tamil Nadu Bharatanatyam & Vazhaillai Sapadu Souvenir by Mythris Gleams.',
+        images: [
+            '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png'
+        ],
+        variants: [],
+        stockStatus: 'made-to-order',
+        rating: 4.9,
+        reviewCount: 29
     }
 ];
 
 const importData = async () => {
     try {
         await Collection.deleteMany();
+        await Occasion.deleteMany();
         await Product.deleteMany();
 
-        console.log('🧹 Cleared existing database records.');
+        console.log('ðŸ§¹ Cleared existing database records.');
 
-        const createdCollections = await Collection.insertMany(collections);
-        console.log('✅ Collections Seeded: ', createdCollections.length);
+        const createdCollections = await Collection.insertMany(categorySeed.map(c => ({
+            name: c.name,
+            slug: c.slug,
+            description: c.description,
+            metaDescription: c.metaDescription,
+            image: c.image
+        })));
+        console.log('âœ… Top-level collections seeded: ', createdCollections.length);
+
+        // Seed subcategories with parent references
+        let subcategoryCount = 0;
+        const subcategoryDocs: any[] = [];
+        categorySeed.forEach((cat, i) => {
+            (cat.subcategories || []).forEach(sc => {
+                subcategoryDocs.push({
+                    name: sc.name,
+                    slug: sc.slug,
+                    description: sc.name + ' - a subcategory of ' + cat.name,
+                    image: sc.image,
+                    parent: createdCollections[i]._id
+                });
+                subcategoryCount++;
+            });
+        });
+        await Collection.insertMany(subcategoryDocs);
+        console.log('âœ… Subcategories seeded: ', subcategoryCount);
+
+        const createdOccasions = await Occasion.insertMany(occasionSeed.map(o => ({
+            name: o.name,
+            slug: o.slug,
+            description: o.description,
+            metaDescription: o.metaDescription,
+            image: o.image
+        })));
+        console.log('âœ… Top-level occasions seeded: ', createdOccasions.length);
+
+        // Seed occasion subcategories with parent references
+        let occasionSubCount = 0;
+        const occasionSubDocs: any[] = [];
+        occasionSeed.forEach((occ, i) => {
+            (occ.subcategories || []).forEach(sc => {
+                occasionSubDocs.push({
+                    name: sc.name,
+                    slug: sc.slug,
+                    description: sc.name + ' - a subcategory of ' + occ.name,
+                    image: sc.image,
+                    parent: createdOccasions[i]._id
+                });
+                occasionSubCount++;
+            });
+        });
+        await Occasion.insertMany(occasionSubDocs);
+        console.log('âœ… Occasion subcategories seeded: ', occasionSubCount);
 
         const createdProducts = await Product.insertMany(products);
-        console.log('✅ Products Seeded: ', createdProducts.length);
+        console.log('âœ… Products Seeded: ', createdProducts.length);
 
-        console.log('🎉 Data Import Successful!');
+        console.log('ðŸŽ‰ Data Import Successful!');
         process.exit();
     } catch (error) {
-        console.error('❌ Error during seeding: ', error);
+        console.error('âŒ Error during seeding: ', error);
         process.exit(1);
     }
 };
@@ -1798,12 +3837,13 @@ const importData = async () => {
 const destroyData = async () => {
     try {
         await Collection.deleteMany();
+        await Occasion.deleteMany();
         await Product.deleteMany();
 
-        console.log('💥 Data Destroyed!');
+        console.log('ðŸ’¥ Data Destroyed!');
         process.exit();
     } catch (error) {
-        console.error('❌ Error during destruction: ', error);
+        console.error('âŒ Error during destruction: ', error);
         process.exit(1);
     }
 };
@@ -1813,7 +3853,6 @@ if (process.argv[2] === '-d') {
 } else {
     importData();
 }
-
 ```
 
 ## File: `backend/src/server.ts`
@@ -1848,12 +3887,15 @@ const server = app.listen(PORT, () => {
     console.log(`🚀 Mythris Gleams Server running in ${process.env.NODE_ENV || 'production'} mode on http://localhost:${PORT}`);
 }); 
 
-// Background job to clean up pending (unpaid) orders older than 20 minutes
+// Background job to clean up pending (unpaid) orders older than 20 minutes.
+// Admin-created custom orders are excluded: they are paid on the customer's schedule,
+// not at checkout, so a 20 minute TTL would destroy live payment links.
 const cleanPendingOrders = async () => {
     try {
         const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
         const result = await Order.deleteMany({
             isPaid: false,
+            source: { $ne: 'admin-custom' },
             createdAt: { $lt: twentyMinutesAgo }
         });
         if (result.deletedCount > 0) {
@@ -1990,6 +4032,17 @@ export default sendEmail;
 
 ```
 
+## File: `backend/src/utils/shipping.ts`
+
+```typescript
+export const FREE_SHIPPING_THRESHOLD = 4999;
+export const SHIPPING_FEE = 200;
+
+export const calculateShipping = (itemsPrice: number): number =>
+    itemsPrice >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE;
+
+```
+
 ## File: `backend/tsconfig.json`
 
 ```json
@@ -1997,7 +4050,7 @@ export default sendEmail;
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
@@ -2005,11 +4058,7 @@ export default sendEmail;
     "strict": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": false,
-    "allowSyntheticDefaultImports": true,
-    "baseUrl": ".",
-    "paths": {
-      "*": ["node_modules/*"]
-    }
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
@@ -2020,8 +4069,8 @@ export default sendEmail;
 ## File: `frontend/.env`
 
 ```
-NEXT_PUBLIC_API_URL=https://mythrisgleams.com/api
-
+# NEXT_PUBLIC_API_URL=https://mythrisgleams.com/api
+ NEXT_PUBLIC_API_URL=http://localhost:5010/api
 ```
 
 ## File: `frontend/AGENTS.md`
@@ -2071,7 +4120,7 @@ export default eslintConfig;
 ```typescript
 /// <reference types="next" />
 /// <reference types="next/image-types/global" />
-import "./.next/dev/types/routes.d.ts";
+import "./.next/types/routes.d.ts";
 
 // NOTE: This file should not be edited
 // see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
@@ -2096,7 +4145,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/uploads/:path*",
-        destination: "http://localhost:5000/uploads/:path*", // Proxy to Backend
+        destination: "http://localhost:5010/uploads/:path*", // Proxy to Backend
       },
     ];
   },
@@ -2123,6 +4172,8 @@ export default nextConfig;
     "@hookform/resolvers": "^5.2.2",
     "@reduxjs/toolkit": "^2.11.2",
     "axios": "^1.14.0",
+    "embla-carousel-autoplay": "^8.6.0",
+    "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
@@ -2249,11 +4300,11 @@ export default function MyOrdersPage() {
     <div className="min-h-screen bg-[#fdfdfb]">
       <Breadcrumb items={[{ label: "Account", href: "/account" }, { label: "My Orders" }]} />
 
-      <div className="max-w-[1000px] mx-auto px-6 py-12 lg:py-20">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#e8e4db] pb-6 mb-10">
+      <div className="max-w-[1000px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#e8e4db] pb-6 mb-8 sm:mb-10">
           <div>
-            <h1 className="text-3xl font-serif text-[#3d332a]">Order History</h1>
-            <p className="text-[13px] text-[#8c8273] mt-2 font-light tracking-wide">
+            <h1 className="text-2xl sm:text-3xl font-serif text-[#3d332a]">Order History</h1>
+            <p className="text-[12px] sm:text-[13px] text-[#8c8273] mt-1.5 sm:mt-2 font-light tracking-wide">
               Track and manage your artisan pieces
             </p>
           </div>
@@ -2627,11 +4678,11 @@ export default function OrderDetailsPage() {
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between text-[#8c8273]">
                     <span>Items Total</span>
-                    <span>₹{order.totalPrice.toLocaleString()}</span>
+                    <span>₹{(order.itemsPrice ?? order.totalPrice).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between text-[#8c8273]">
                     <span>Shipping</span>
-                    <span>Free</span>
+                    <span>{order.shippingPrice ? `₹${order.shippingPrice.toLocaleString()}` : 'Free'}</span>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-[#e8e4db] mt-2">
                     <span className="font-serif text-[16px] text-[#3d332a]">Grand Total</span>
@@ -2735,10 +4786,12 @@ export default function AccountPage() {
   useEffect(() => {
     if (userInfo) {
       dispatch(fetchCart());
-      if (isNewRegistration) {
-        const searchParams = new URLSearchParams(window.location.search);
-        const redirect = searchParams.get('redirect');
-        router.replace(`/account/profile${redirect ? `?redirect=${redirect}` : ''}`);
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirect = searchParams.get('redirect');
+      if (redirect) {
+        router.replace(redirect);
+      } else if (isNewRegistration) {
+        router.replace('/account/profile');
       }
     }
   }, [userInfo, isNewRegistration, dispatch, router]);
@@ -2795,18 +4848,18 @@ export default function AccountPage() {
     return (
       <div className="min-h-screen bg-[var(--bg)]">
         <BreadcrumbHero items={[{ label: "Account" }]} eyebrow="Member Area" title="My Account" />
-        <div className="max-w-[1200px] mx-auto px-6 py-12 lg:py-20">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16">
           
-          <div className="flex flex-col md:flex-row gap-12">
+          <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
             {/* Sidebar / User Info */}
-            <div className="md:w-[350px] shrink-0">
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="bg-white rounded-[2.5rem] border border-[var(--border)] p-10 shadow-xl shadow-[var(--text)]/5 sticky top-24">
+            <div className="md:w-[320px] lg:w-[350px] shrink-0">
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[var(--border)] p-6 sm:p-10 shadow-xl shadow-[var(--text)]/5 md:sticky md:top-24">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-24 h-24 rounded-[2.5rem] bg-[var(--text)] text-white flex items-center justify-center text-3xl  mb-6 shadow-xl shadow-[var(--text)]/20">
-                    {userInfo.name?.[0] || <User size={40} />}
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-[2.5rem] bg-[var(--text)] text-white flex items-center justify-center text-2xl sm:text-3xl mb-4 sm:mb-6 shadow-xl shadow-[var(--text)]/20">
+                    {userInfo.name?.[0] || <User size={36} />}
                   </div>
-                  <h1 className="text-2xl  text-[var(--text)] mb-1">{userInfo.name}</h1>
-                  <p className="text-[13px] text-[var(--text-muted)] font-light mb-8">{userInfo.email}</p>
+                  <h1 className="text-xl sm:text-2xl text-[var(--text)] mb-1">{userInfo.name}</h1>
+                  <p className="text-[13px] text-[var(--text-muted)] font-light mb-6 sm:mb-8">{userInfo.email}</p>
                   
                   <div className="w-full flex flex-col gap-3 pt-6 border-t border-[var(--bg-muted)]">
                     <Link href="/account/profile" className="flex items-center justify-between p-4 bg-[var(--bg-subtle)] rounded-2xl text-[13px] text-[var(--text-muted)] hover:bg-[var(--bg-muted)] transition-colors group">
@@ -2828,49 +4881,49 @@ export default function AccountPage() {
 
             {/* Main Content Area */}
             <div className="flex-grow flex flex-col gap-10">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                 <Link href="/account/orders" className="bg-[var(--text)] rounded-[2.5rem] p-10 text-white flex flex-col justify-between h-[280px] group shadow-xl shadow-[var(--text)]/10 hover:-translate-y-1 transition-all">
-                    <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center">
-                      <Package size={28} strokeWidth={1.5} />
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                 <Link href="/account/orders" className="bg-[var(--text)] rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-10 text-white flex flex-col justify-between min-h-[240px] sm:h-[280px] group shadow-xl shadow-[var(--text)]/10 hover:-translate-y-1 transition-all">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/10 flex items-center justify-center">
+                      <Package size={24} className="sm:w-7 sm:h-7" strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h2 className="text-2xl  mb-2">My Collective</h2>
-                      <p className="text-white/60 text-[13px] font-light leading-relaxed">Track your artisanal pieces through every stage of creation and delivery.</p>
-                      <div className="mt-6 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">
+                      <h2 className="text-xl sm:text-2xl mb-1.5 sm:mb-2">My Collective</h2>
+                      <p className="text-white/60 text-[12px] sm:text-[13px] font-light leading-relaxed">Track your artisanal pieces through every stage of creation and delivery.</p>
+                      <div className="mt-4 sm:mt-6 flex items-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-white/40 group-hover:text-white transition-colors">
                         View Order Details <ChevronRight size={14} />
                       </div>
                     </div>
                  </Link>
 
-                 <div className="bg-white rounded-[2.5rem] border border-[var(--border)] p-10 flex flex-col justify-between h-[280px] group shadow-sm hover:shadow-xl hover:shadow-[var(--text)]/5 transition-all">
-                    <div className="w-14 h-14 rounded-2xl bg-[var(--bg-subtle)] text-[var(--accent)] flex items-center justify-center">
-                      <ShoppingBag size={28} strokeWidth={1.5} />
+                 <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[var(--border)] p-6 sm:p-10 flex flex-col justify-between min-h-[240px] sm:h-[280px] group shadow-sm hover:shadow-xl hover:shadow-[var(--text)]/5 transition-all">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[var(--bg-subtle)] text-[var(--accent)] flex items-center justify-center">
+                      <ShoppingBag size={24} className="sm:w-7 sm:h-7" strokeWidth={1.5} />
                     </div>
                     <div>
-                      <h2 className="text-2xl  text-[var(--text)] mb-2">Back to the Vault</h2>
-                      <p className="text-[var(--text-muted)] text-[13px] font-light leading-relaxed">Your journey has just begun. Explore the latest additions to our artifact collections.</p>
-                      <Link href="/category/all" className="mt-6 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[var(--accent)] group-hover:text-[var(--text-muted)] transition-colors">
+                      <h2 className="text-xl sm:text-2xl text-[var(--text)] mb-1.5 sm:mb-2">Back to the Vault</h2>
+                      <p className="text-[var(--text-muted)] text-[12px] sm:text-[13px] font-light leading-relaxed">Your journey has just begun. Explore the latest additions to our artifact collections.</p>
+                      <Link href="/category/all" className="mt-4 sm:mt-6 flex items-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-[var(--accent)] group-hover:text-[var(--text-muted)] transition-colors">
                         Explore Treasures <ChevronRight size={14} />
                       </Link>
                     </div>
                  </div>
               </motion.div>
 
-              <div className="bg-white rounded-[2.5rem] border border-[var(--border)] p-8 md:p-12">
-                <div className="flex items-center gap-3 mb-8">
+              <div className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[var(--border)] p-6 sm:p-10 md:p-12">
+                <div className="flex items-center gap-3 mb-6 sm:mb-8">
                   <Sparkles size={18} className="text-[var(--accent)]" />
-                  <h3 className=" text-xl text-[var(--text)]">Quick Access</h3>
+                  <h3 className="text-lg sm:text-xl text-[var(--text)]">Quick Access</h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   {[
                     { label: "Shipping Addresses", icon: MapPin, href: "/account/profile" },
                     { label: "Wishlist Artifacts", icon: Heart, href: "/#products" },
                   ].map((item, i) => (
-                    <Link key={i} href={item.href} className="flex items-center gap-4 p-5 rounded-2xl bg-[var(--bg-subtle)]/50 border border-[var(--bg-muted)] hover:bg-white hover:shadow-lg hover:shadow-[var(--text)]/5 transition-all group">
-                      <div className="w-10 h-10 rounded-xl bg-white border border-[var(--border)] flex items-center justify-center text-[var(--accent)] group-hover:bg-[var(--text)] group-hover:text-white transition-all">
-                        <item.icon size={18} strokeWidth={1.5} />
+                    <Link key={i} href={item.href} className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl bg-[var(--bg-subtle)]/50 border border-[var(--bg-muted)] hover:bg-white hover:shadow-lg hover:shadow-[var(--text)]/5 transition-all group">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-[var(--border)] flex items-center justify-center text-[var(--accent)] group-hover:bg-[var(--text)] group-hover:text-white transition-all shrink-0">
+                        <item.icon size={16} className="sm:w-[18px] sm:h-[18px]" strokeWidth={1.5} />
                       </div>
-                      <span className="text-[14px] text-[var(--text-muted)] font-medium">{item.label}</span>
+                      <span className="text-[13px] sm:text-[14px] text-[var(--text-muted)] font-medium">{item.label}</span>
                     </Link>
                   ))}
                 </div>
@@ -2886,23 +4939,23 @@ export default function AccountPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)] flex flex-col">
       <BreadcrumbHero items={[{ label: "Account" }]} eyebrow="Member Area" title="My Account" />
-      <div className="relative flex-1 flex items-center justify-center px-4 py-20">
+      <div className="relative flex-1 flex items-center justify-center px-4 py-12 sm:py-20">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--bg-subtle),_var(--bg)_60%)] pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full max-w-[480px] bg-white rounded-[2.5rem] shadow-xl shadow-[var(--text)]/5 border border-[var(--border)] overflow-hidden"
+        className="relative z-10 w-full max-w-[480px] bg-white rounded-2xl sm:rounded-[2.5rem] shadow-xl shadow-[var(--text)]/5 border border-[var(--border)] overflow-hidden"
       >
-        <div className="pt-10 pb-8 px-10 text-center border-b border-[var(--border)]">
-          <div className="inline-flex items-center gap-2 px-5 py-1.5 rounded-full border border-[var(--border)] bg-[var(--bg-subtle)] text-[10px] uppercase tracking-[0.2em] text-[var(--accent)] font-medium mb-5">
+        <div className="pt-8 pb-6 px-6 sm:px-10 text-center border-b border-[var(--border)]">
+          <div className="inline-flex items-center gap-2 px-4 sm:px-5 py-1.5 rounded-full border border-[var(--border)] bg-[var(--bg-subtle)] text-[10px] uppercase tracking-[0.2em] text-[var(--accent)] font-medium mb-4 sm:mb-5">
             <Sparkles size={12} /> Mythris Gleams
           </div>
-          <h1 className="text-3xl  text-[var(--text)] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl text-[var(--text)] tracking-tight">
             {tab === "login" ? "Welcome Back" : "Create Account"}
           </h1>
-          <p className="text-[13px] text-[var(--text-muted)] font-light mt-2">
+          <p className="text-[12px] sm:text-[13px] text-[var(--text-muted)] font-light mt-1.5 sm:mt-2">
             {tab === "login" ? "Sign in to access your cart and orders." : "Join our artisan community today."}
           </p>
         </div>
@@ -2912,7 +4965,7 @@ export default function AccountPage() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-4 text-[12px] font-medium uppercase tracking-[0.15em] transition-colors relative ${
+              className={`flex-1 py-3.5 sm:py-4 text-[11px] sm:text-[12px] font-medium uppercase tracking-[0.15em] transition-colors relative ${
                 tab === t ? "text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"
               }`}
             >
@@ -2924,7 +4977,7 @@ export default function AccountPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="px-10 py-8 flex flex-col gap-5" noValidate>
+        <form onSubmit={handleSubmit} className="px-6 sm:px-10 py-6 sm:py-8 flex flex-col gap-4 sm:gap-5" noValidate>
           <AnimatePresence mode="wait">
             {tab === "register" && (
               <motion.div key="name" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
@@ -3170,15 +5223,15 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-[#fdfdfb]">
       <Breadcrumb items={[{ label: "Account", href: "/account" }, { label: "Profile Settings" }]} />
       
-      <div className="max-w-[900px] mx-auto px-6 py-12 lg:py-16">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2.5rem] border border-[#e8e4db] shadow-xl shadow-[#3d332a]/5 overflow-hidden">
+      <div className="max-w-[900px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl sm:rounded-[2.5rem] border border-[#e8e4db] shadow-xl shadow-[#3d332a]/5 overflow-hidden">
           
-          <div className="p-10 border-b border-[#e8e4db] text-center bg-[#f8f6f3]/30">
-            <h1 className="text-3xl font-serif text-[#3d332a]">Manage Your Identity</h1>
-            <p className="text-[13px] text-[#8c8273] mt-2 font-light">Keep your profile current for faster checkout and exclusive artisan previews.</p>
+          <div className="p-6 sm:p-10 border-b border-[#e8e4db] text-center bg-[#f8f6f3]/30">
+            <h1 className="text-2xl sm:text-3xl font-serif text-[#3d332a]">Manage Your Identity</h1>
+            <p className="text-[12px] sm:text-[13px] text-[#8c8273] mt-1.5 sm:mt-2 font-light">Keep your profile current for faster checkout and exclusive artisan previews.</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-10 flex flex-col gap-10">
+          <form onSubmit={handleSubmit} className="p-6 sm:p-10 flex flex-col gap-8 sm:gap-10">
             {/* Core Details */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="flex flex-col gap-2">
@@ -3301,7 +5354,7 @@ export default function ProfilePage() {
 
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-import { fetchCollections, createCollection, deleteCollection, resetCollectionState } from '@/redux/slices/collectionSlice';
+import { fetchCollections, createCollection, updateCollection, deleteCollection, resetCollectionState, type CollectionItem } from '@/redux/slices/collectionSlice';
 import { 
     Layers, 
     Plus, 
@@ -3310,21 +5363,18 @@ import {
     Loader2,
     X,
     Save,
-    Sparkles,
-    Search,
     Hash,
     Database,
     Download,
-    ExternalLink,
     ChevronRight,
-    MapPin,
-    Clock
+    Edit,
+    FolderTree,
+    Search
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { RootState } from '@/redux/store';
-import EmptyState from '@/components/admin/EmptyState';
 import Modal from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -3333,6 +5383,7 @@ import { getImageUrl } from '@/utils/getImageUrl';
 const collectionSchema = z.object({
     name: z.string().min(2, "Collection name required"),
     slug: z.string().min(2, "Slug is required"),
+    parent: z.string().optional(),
     description: z.string().optional(),
     metaDescription: z.string().max(160, "SEO description must be concise").optional(),
 });
@@ -3345,22 +5396,35 @@ const CollectionManagement = () => {
     
     // UI State
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [inspectedCollection, setInspectedCollection] = useState<any>(null);
+    const [editingCollection, setEditingCollection] = useState<CollectionItem | null>(null);
+    const [inspectedCollection, setInspectedCollection] = useState<CollectionItem | null>(null);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [image, setImage] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
 
-    const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CollectionForm>({
+    const { register, handleSubmit, reset, watch, setValue } = useForm<CollectionForm>({
         resolver: zodResolver(collectionSchema)
     });
 
+    const getParentId = (c: { parent?: CollectionItem['parent'] | null }) =>
+        typeof c.parent === 'object' && c.parent ? c.parent._id : c.parent;
+
+    // Derive hierarchy from flat list
+    const mainCollections = collections.filter(c => !c.parent).sort((a, b) => a.name.localeCompare(b.name));
+    const subCollectionsOf = (main: CollectionItem) => collections.filter(c => getParentId(c) === main._id);
+    const parentNameOf = (col: CollectionItem) => {
+        if (!col.parent) return null;
+        if (typeof col.parent === 'object') return col.parent.name;
+        return collections.find(c => c._id === col.parent)?.name || 'Parent';
+    };
+
     const galleryName = watch('name');
     useEffect(() => {
-        if (galleryName) {
+        if (galleryName && !editingCollection) {
             const generatedSlug = galleryName.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
             setValue('slug', generatedSlug);
         }
-    }, [galleryName, setValue]);
+    }, [galleryName, setValue, editingCollection]);
 
     useEffect(() => {
         dispatch(fetchCollections());
@@ -3370,6 +5434,7 @@ const CollectionManagement = () => {
         if (success) {
             toast.success("Collections Updated");
             setIsAddModalOpen(false);
+            setEditingCollection(null);
             setInspectedCollection(null);
             reset();
             setImage(null);
@@ -3377,12 +5442,39 @@ const CollectionManagement = () => {
             dispatch(resetCollectionState());
             dispatch(fetchCollections());
         }
-    }, [success, reset, dispatch]);
+        if (error) {
+            toast.error(error);
+            dispatch(resetCollectionState());
+        }
+    }, [success, error, reset, dispatch]);
+
+    const openAddModal = () => {
+        setEditingCollection(null);
+        reset({ name: '', slug: '', parent: '', description: '', metaDescription: '' });
+        setImage(null);
+        setPreview(null);
+        setIsAddModalOpen(true);
+    };
+
+    const openEditModal = (col: CollectionItem) => {
+        setEditingCollection(col);
+        reset({
+            name: col.name,
+            slug: col.slug,
+            parent: col.parent && typeof col.parent === 'object' ? col.parent._id : (col.parent || ''),
+            description: col.description || '',
+            metaDescription: col.metaDescription || '',
+        });
+        setImage(null);
+        const existingImage = typeof col.image === 'string' ? col.image : '';
+        setPreview(existingImage ? getImageUrl(existingImage) : null);
+        setIsAddModalOpen(true);
+    };
 
     const exportToExcel = () => {
         if (collections.length === 0) return toast.error("No data to export");
-        const headers = ["ID", "Name", "Slug", "Description"];
-        const rows = collections.map(c => [c._id, c.name, c.slug, c.description || ""]);
+        const headers = ["ID", "Name", "Slug", "Parent", "Type", "Description"];
+        const rows = collections.map(c => [c._id, c.name, c.slug, parentNameOf(c) || "", parentNameOf(c) ? "Subcategory" : "Main Category", c.description || ""]);
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
@@ -3398,60 +5490,166 @@ const CollectionManagement = () => {
         }
     };
 
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const handleFormSubmit = (data: CollectionForm) => {
+        const formData = new FormData();
+        formData.append('name', data.name.trim());
+        formData.append('slug', data.slug.trim());
+        formData.append('parent', data.parent || '');
+        if (data.description) formData.append('description', data.description);
+        if (data.metaDescription) formData.append('metaDescription', data.metaDescription);
+        if (image) formData.append('image', image);
+        if (editingCollection) {
+            dispatch(updateCollection({ id: editingCollection._id, formData }));
+        } else {
+            dispatch(createCollection(formData));
+        }
+    };
+
+    // Filter main collections and subs by search query
+    const filteredCollections = mainCollections.filter(col => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase().trim();
+        const matchesMain = col.name.toLowerCase().includes(q) || col.slug.toLowerCase().includes(q);
+        const subs = subCollectionsOf(col);
+        const matchesSub = subs.some(s => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q));
+        return matchesMain || matchesSub;
+    });
+
+    const totalSubcategories = collections.length - mainCollections.length;
+
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen">
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
             {/* Professional Header Area */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-5 sm:pb-6">
                 <div>
                     <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Collections Management</h1>
-                    <p className="text-xs text-zinc-500 font-medium">Manage your site's product collections and categories.</p>
+                    <p className="text-xs text-zinc-500 font-medium">Manage your product categories and subcategories ({mainCollections.length} Categories, {totalSubcategories} Subcategories).</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={exportToExcel} className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
                         <Download size={14} />
-                        <span>Export Excel</span>
+                        <span>Export</span>
                     </button>
-                    <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-2 bg-zinc-900 text-white px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all">
+                    <button onClick={openAddModal} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-900 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all shadow-sm">
                         <Plus size={14} />
                         <span>Add Collection</span>
                     </button>
                 </div>
             </div>
 
-            {/* Gallery Registry (Table) */}
+            {/* Quick Stats & Search Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                <div className="sm:col-span-2 relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Search collections or subcategories..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-10 pr-10 py-2.5 sm:py-3 text-xs font-medium focus:bg-white focus:border-zinc-900 outline-none transition-all"
+                    />
+                    {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex items-center justify-between">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Categories</span>
+                    <span className="text-base font-extrabold text-zinc-900">{mainCollections.length}</span>
+                </div>
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex items-center justify-between">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Subcategories</span>
+                    <span className="text-base font-extrabold text-zinc-900">{totalSubcategories}</span>
+                </div>
+            </div>
+
+            {/* Hierarchy Overview */}
             <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
                 {loading && collections.length === 0 ? (
                     <div className="py-20 flex flex-col items-center gap-3">
                         <Loader2 className="w-6 h-6 animate-spin text-zinc-200" />
                         <p className="text-[10px] uppercase font-bold text-zinc-300 tracking-widest">Loading Collections</p>
                     </div>
+                ) : filteredCollections.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center gap-3">
+                        <FolderTree className="w-8 h-8 text-zinc-200" />
+                        <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-widest">
+                            {searchQuery ? `No collections match "${searchQuery}"` : "No Categories Yet"}
+                        </p>
+                    </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[550px]">
                             <thead>
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                                    <th className="px-6 py-4">Image</th>
-                                    <th className="px-6 py-4">Collection Name</th>
+                                    <th className="px-6 py-4">Category Tree</th>
                                     <th className="px-6 py-4">Slug</th>
-                                    <th className="px-6 py-4 text-right">Status</th>
+                                    <th className="px-6 py-4 text-right">Type</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-zinc-100">
-                                {collections.map((col: any) => (
-                                    <tr key={col._id} onClick={() => setInspectedCollection(col)} className="hover:bg-zinc-50/50 transition-all text-xs cursor-pointer group">
-                                        <td className="px-6 py-4">
-                                            <div className="w-10 h-10 rounded border border-zinc-100 bg-zinc-50 overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-500">
-                                                {col.image ? <img src={getImageUrl(col.image)} className="w-full h-full object-cover" /> : <Layers className="text-zinc-200 m-auto" size={16} />}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-zinc-900">{col.name}</div>
-                                            <div className="text-[10px] text-zinc-400 mt-1 italic line-clamp-1">{col.description || "No narrative established."}</div>
-                                        </td>
-                                        <td className="px-6 py-4 font-mono text-[9px] text-zinc-400 font-bold uppercase">/{col.slug}</td>
-                                        <td className="px-6 py-4 text-right"><span className="px-2 py-0.5 rounded border border-zinc-200 text-[9px] font-bold uppercase text-zinc-500 bg-zinc-50">Authorized</span></td>
-                                    </tr>
-                                ))}
+                                {filteredCollections.map((col) => {
+                                    const subs = subCollectionsOf(col);
+                                    return (
+                                        <React.Fragment key={col._id}>
+                                            <tr onClick={() => setInspectedCollection(col)} className="hover:bg-zinc-50/50 transition-all text-xs cursor-pointer group">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded border border-zinc-100 bg-zinc-50 overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-500 relative flex items-center justify-center">
+                                                            <Layers className="text-zinc-300 absolute" size={16} />
+                                                            {col.image && (
+                                                                <img 
+                                                                    src={getImageUrl(col.image)} 
+                                                                    alt={col.name}
+                                                                    className="w-full h-full object-cover relative z-10" 
+                                                                    onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-zinc-900">{col.name}</div>
+                                                            <div className="text-[10px] text-zinc-400 mt-1 italic line-clamp-1">{col.description || "No narrative established."}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-[9px] text-zinc-400 font-bold uppercase">/{col.slug}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <span className="px-2 py-0.5 rounded-full border border-zinc-900/10 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-900/5">
+                                                        {subs.length} Subcategories
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            {subs.map((sub) => (
+                                                <tr key={sub._id} onClick={() => setInspectedCollection(sub)} className="hover:bg-zinc-50/40 transition-all text-xs cursor-pointer group bg-zinc-50/30">
+                                                    <td className="px-6 py-3">
+                                                        <div className="flex items-center gap-4 pl-8">
+                                                            <ChevronRight size={12} className="text-zinc-300 shrink-0" />
+                                                            <div className="w-8 h-8 rounded border border-zinc-100 bg-white overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-500 relative flex items-center justify-center">
+                                                                <Layers className="text-zinc-300 absolute" size={12} />
+                                                                {sub.image && (
+                                                                    <img 
+                                                                        src={getImageUrl(sub.image)} 
+                                                                        alt={sub.name}
+                                                                        className="w-full h-full object-cover relative z-10" 
+                                                                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                            <div className="font-bold text-zinc-700">{sub.name}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-3 font-mono text-[9px] text-zinc-400 font-bold uppercase pl-16">/{sub.slug}</td>
+                                                    <td className="px-6 py-3 text-right">
+                                                        <span className="px-2 py-0.5 rounded-full border border-zinc-200 text-[9px] font-bold uppercase text-zinc-400 bg-white">Subcategory</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -3461,25 +5659,30 @@ const CollectionManagement = () => {
             {/* Details Modal */}
             <AnimatePresence>
                 {inspectedCollection && (
-                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInspectedCollection(null)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
                         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden">
-                            <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                            <div className="p-4 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
                                 <h3 className="font-bold text-zinc-900 flex items-center gap-2">Collection Details</h3>
                                 <button onClick={() => setInspectedCollection(null)} className="text-zinc-400 hover:text-zinc-900 transition-colors"><X size={20} /></button>
                             </div>
-                            <div className="p-8 space-y-8">
-                                <div className="flex gap-6">
-                                    <div className="w-24 h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shadow-inner shrink-0">
-                                        {inspectedCollection.image ? <img src={getImageUrl(inspectedCollection.image)} className="w-full h-full object-cover" /> : <Layers className="text-zinc-200 m-auto mt-7" size={24} />}
+                            <div className="p-4 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+                                <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start sm:items-stretch">
+                                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shadow-inner shrink-0 mx-auto sm:mx-0">
+                                        {inspectedCollection.image ? <img src={getImageUrl(inspectedCollection.image)} className="w-full h-full object-cover" /> : <Layers className="text-zinc-200 m-auto mt-6" size={24} />}
                                     </div>
-                                    <div className="space-y-2 flex-1">
-                                        <h4 className="text-xl font-bold text-zinc-900 tracking-tight">{inspectedCollection.name}</h4>
-                                        <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-2"><Hash size={10}/> {inspectedCollection.slug}</div>
-                                        <p className="text-xs text-zinc-600 leading-relaxed italic mt-2">"{inspectedCollection.description || "No narrative established for this classifying node."}"</p>
+                                    <div className="space-y-2 flex-1 w-full">
+                                        <h4 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight break-words">{inspectedCollection.name}</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1"><Hash size={10}/> {inspectedCollection.slug}</span>
+                                            {parentNameOf(inspectedCollection) && (
+                                                <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1"><FolderTree size={10}/> Under: {parentNameOf(inspectedCollection)}</span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-zinc-600 leading-relaxed italic mt-2">{`"${inspectedCollection.description || "No narrative established for this classifying node."}"`}</p>
                                     </div>
                                 </div>
-                                <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-3">
+                                <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-2 sm:space-y-3">
                                     <div className="flex justify-between items-center text-[9px] font-bold text-zinc-400 uppercase tracking-[0.2em]">
                                         <span>Node Metadata</span>
                                         <span className="text-emerald-500 flex items-center gap-1"><Database size={10}/> Synchronized</span>
@@ -3489,50 +5692,57 @@ const CollectionManagement = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between">
-                                <button onClick={() => setDeleteModalOpen(true)} className="flex items-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all"><Trash2 size={16}/> Delete Collection</button>
-                                <button onClick={() => setInspectedCollection(null)} className="px-8 py-2.5 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition-all">Close</button>
+                            <div className="p-4 sm:p-6 bg-zinc-50 border-t border-zinc-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                <button onClick={() => setDeleteModalOpen(true)} className="flex items-center justify-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all py-2"><Trash2 size={16}/> Delete</button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { openEditModal(inspectedCollection); setInspectedCollection(null); }} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-zinc-300 transition-all"><Edit size={12} className="inline mr-1.5" />Edit</button>
+                                    <button onClick={() => setInspectedCollection(null)} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition-all">Close</button>
+                                </div>
                             </div>
                         </motion.div>
                     </div>
                 )}
             </AnimatePresence>
 
-            {/* Initialize Modal */}
+            {/* Create / Edit Modal */}
             {isAddModalOpen && (
-                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
                     <div onClick={() => setIsAddModalOpen(false)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
-                    <div className="relative w-full max-w-lg bg-white rounded-2xl p-8 overflow-hidden shadow-2xl border border-zinc-200">
-                        <div className="flex items-center justify-between mb-8 pb-4 border-b border-zinc-100">
-                            <div><h2 className="text-lg font-bold text-zinc-900 tracking-tight">New Collection</h2><p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">Add a new category to the site</p></div>
+                    <div className="relative w-full max-w-lg bg-white rounded-2xl p-5 sm:p-8 overflow-y-auto max-h-[90vh] shadow-2xl border border-zinc-200">
+                        <div className="flex items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-zinc-100">
+                            <div>
+                                <h2 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight">{editingCollection ? "Edit Collection" : "New Collection"}</h2>
+                                <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">{editingCollection ? "Revise this category node" : "Add a category or subcategory to the site"}</p>
+                            </div>
                             <button onClick={() => setIsAddModalOpen(false)} className="text-zinc-400 hover:text-zinc-900"><X size={20} /></button>
                         </div>
-                        <form onSubmit={handleSubmit((data) => {
-                            const formData = new FormData();
-                            formData.append('name', data.name); formData.append('slug', data.slug);
-                            if (data.description) formData.append('description', data.description);
-                            if (data.metaDescription) formData.append('metaDescription', data.metaDescription);
-                            if (image) formData.append('image', image);
-                            dispatch(createCollection(formData));
-                        })} className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Name</label><input {...register('name')} placeholder="Collection Name" className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-xs font-bold focus:border-zinc-900 outline-none" /></div>
-                                <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Slug</label><input {...register('slug')} placeholder="url-slug" className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-[10px] font-mono focus:border-zinc-900 outline-none" /></div>
+                        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4 sm:space-y-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Name</label><input {...register('name')} placeholder="Collection Name" className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-xs font-bold focus:border-zinc-900 outline-none" /></div>
+                                <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Slug</label><input {...register('slug')} placeholder="url-slug" className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-[10px] font-mono focus:border-zinc-900 outline-none" /></div>
                             </div>
-                            <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Description</label><textarea {...register('description')} rows={3} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-xs focus:border-zinc-900 outline-none resize-none" /></div>
-                            <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Image</label><div className="flex items-center gap-4"><label className="flex-1 border-2 border-dashed border-zinc-100 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-zinc-50"><ImageIcon size={20} className="text-zinc-300"/><input type="file" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setImage(file); setPreview(URL.createObjectURL(file)); } }} className="hidden" accept="image/*" /></label>{preview && <div className="w-20 h-20 rounded-xl overflow-hidden border border-zinc-100"><img src={preview} className="w-full h-full object-cover" /></div>}</div></div>
-                            <button type="submit" disabled={loading} className="w-full bg-zinc-900 text-white font-bold py-3.5 rounded-lg active:scale-95 flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">{loading ? <Loader2 className="animate-spin" size={16} /> : <><Save size={16} />Create Collection</>}</button>
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Parent Category (leave blank for top-level)</label>
+                                <select {...register('parent')} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-xs font-bold focus:border-zinc-900 outline-none appearance-none cursor-pointer">
+                                    <option value="">— Top-level Category —</option>
+                                    {mainCollections.map((main) => (
+                                        <option key={main._id} value={main._id}>{main.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Description</label><textarea {...register('description')} rows={3} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-xs focus:border-zinc-900 outline-none resize-none" /></div>
+                            <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Image</label><div className="flex items-center gap-4"><label className="flex-1 border-2 border-dashed border-zinc-100 rounded-xl p-4 sm:p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-zinc-50"><ImageIcon size={20} className="text-zinc-300"/><span className="text-[9px] font-bold uppercase tracking-widest text-zinc-300">{editingCollection?.image ? "Replace image" : "Upload image"}</span><input type="file" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setImage(file); setPreview(URL.createObjectURL(file)); } }} className="hidden" accept="image/*" /></label>{preview && <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-zinc-100 shrink-0"><img src={preview} className="w-full h-full object-cover" /></div>}</div></div>
+                            <button type="submit" disabled={loading} className="w-full bg-zinc-900 text-white font-bold py-3.5 rounded-lg active:scale-95 flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">{loading ? <Loader2 className="animate-spin" size={16} /> : <><Save size={16} />{editingCollection ? "Save Changes" : "Create Collection"}</>}</button>
                         </form>
                     </div>
                 </div>
             )}
-            <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={confirmDelete} title="Confirm Delete" message="Are you sure you want to delete this collection?" type="confirm" />
+            <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={confirmDelete} title="Confirm Delete" message="Deleting a category also removes its subcategories and linked products will remain unlinked. Proceed?" type="confirm" />
         </div>
     );
 };
 
 export default CollectionManagement;
-
 ```
 
 ## File: `frontend/src/app/admin/customers/page.tsx`
@@ -3988,28 +6198,36 @@ export default InquiryManagement;
 ```typescript
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import { useAppSelector } from '@/redux/hooks';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import { motion } from 'framer-motion';
+import { Menu, ShieldCheck, Globe } from 'lucide-react';
 
 export default function AdminLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const [mounted, setMounted] = React.useState(false);
+    const [mounted, setMounted] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const { userInfo } = useAppSelector((state) => state.auth);
     const router = useRouter();
     const pathname = usePathname();
 
-    React.useEffect(() => {
+    useEffect(() => {
         setMounted(true);
         if (!pathname.includes('/admin/login') && (!userInfo || userInfo.role !== 'admin')) {
             router.push('/admin/login');
         }
     }, [userInfo, router, pathname]);
+
+    useEffect(() => {
+        setSidebarOpen(false);
+    }, [pathname]);
 
     if (!mounted) {
         return null; 
@@ -4025,9 +6243,45 @@ export default function AdminLayout({
     }
 
     return (
-        <div className="flex h-screen bg-zinc-50 text-zinc-900 overflow-hidden">
-            <AdminSidebar />
-            <main className="flex-1 overflow-y-auto px-12 py-12 scroll-smooth">
+        <div className="flex flex-col lg:flex-row h-screen bg-zinc-50 text-zinc-900 overflow-hidden">
+            {/* Mobile Top Navigation Header */}
+            <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-zinc-200 z-30 shrink-0">
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setSidebarOpen(true)}
+                        className="p-2 -ml-1 rounded-lg text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
+                        aria-label="Open menu"
+                    >
+                        <Menu size={20} />
+                    </button>
+                    <div className="flex items-center gap-2">
+                        <div className="relative w-7 h-7 rounded-full overflow-hidden border border-[var(--accent-gold)] bg-black shadow-xs shrink-0">
+                            <Image src="/logo.png" alt="Logo" fill sizes="28px" className="object-cover" />
+                        </div>
+                        <div>
+                            <span className="font-bold text-xs uppercase tracking-tight text-zinc-900 leading-tight block">Mythris Admin</span>
+                            <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest leading-none flex items-center gap-0.5">
+                                <ShieldCheck size={8} /> Active
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <Link
+                    href="/"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 text-[10px] font-bold uppercase tracking-wider text-zinc-600 hover:text-zinc-900 transition-colors"
+                >
+                    <Globe size={12} />
+                    <span>Store</span>
+                </Link>
+            </header>
+
+            {/* Sidebar (Desktop Persistent + Mobile Drawer) */}
+            <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+            {/* Main Content Area */}
+            <main className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-8 lg:py-12 scroll-smooth">
                 <motion.div 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -4173,6 +6427,932 @@ export default AdminLoginPage;
 
 ```
 
+## File: `frontend/src/app/admin/occasions/page.tsx`
+
+```typescript
+"use client";
+
+import React, { useEffect, useState } from 'react';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { fetchOccasions, createOccasion, updateOccasion, deleteOccasion, resetOccasionState, type OccasionItem } from '@/redux/slices/occasionSlice';
+import { 
+    Gift, 
+    Plus, 
+    Trash2, 
+    Image as ImageIcon,
+    Loader2,
+    X,
+    Save,
+    Hash,
+    Database,
+    Download,
+    ChevronRight,
+    Edit,
+    FolderTree,
+    Search
+} from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { RootState } from '@/redux/store';
+import Modal from '@/components/ui/Modal';
+import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getImageUrl } from '@/utils/getImageUrl';
+
+const occasionSchema = z.object({
+    name: z.string().min(2, "Occasion name required"),
+    slug: z.string().min(2, "Slug is required"),
+    parent: z.string().optional(),
+    description: z.string().optional(),
+    metaDescription: z.string().max(160, "SEO description must be concise").optional(),
+});
+
+type OccasionForm = z.infer<typeof occasionSchema>;
+
+const OccasionManagement = () => {
+    const dispatch = useAppDispatch();
+    const { occasions, loading, success, error } = useAppSelector((state: RootState) => state.occasions);
+    
+    // UI State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [editingOccasion, setEditingOccasion] = useState<OccasionItem | null>(null);
+    const [inspectedOccasion, setInspectedOccasion] = useState<OccasionItem | null>(null);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [image, setImage] = useState<File | null>(null);
+    const [preview, setPreview] = useState<string | null>(null);
+
+    const { register, handleSubmit, reset, watch, setValue } = useForm<OccasionForm>({
+        resolver: zodResolver(occasionSchema)
+    });
+
+    const getParentId = (o: { parent?: OccasionItem['parent'] | null }) =>
+        typeof o.parent === 'object' && o.parent ? o.parent._id : o.parent;
+
+    // Derive hierarchy from flat list
+    const mainOccasions = occasions.filter(o => !o.parent).sort((a, b) => a.name.localeCompare(b.name));
+    const subOccasionsOf = (main: OccasionItem) => occasions.filter(o => getParentId(o) === main._id);
+    const parentNameOf = (occ: OccasionItem) => {
+        if (!occ.parent) return null;
+        if (typeof occ.parent === 'object') return occ.parent.name;
+        return occasions.find(o => o._id === occ.parent)?.name || 'Parent';
+    };
+
+    const occasionName = watch('name');
+    useEffect(() => {
+        if (occasionName && !editingOccasion) {
+            const generatedSlug = occasionName.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
+            setValue('slug', generatedSlug);
+        }
+    }, [occasionName, setValue, editingOccasion]);
+
+    useEffect(() => {
+        dispatch(fetchOccasions());
+    }, [dispatch]);
+
+    useEffect(() => {
+        if (success) {
+            toast.success("Occasions Updated");
+            setIsAddModalOpen(false);
+            setEditingOccasion(null);
+            setInspectedOccasion(null);
+            reset();
+            setImage(null);
+            setPreview(null);
+            dispatch(resetOccasionState());
+            dispatch(fetchOccasions());
+        }
+        if (error) {
+            toast.error(error);
+            dispatch(resetOccasionState());
+        }
+    }, [success, error, reset, dispatch]);
+
+    const openAddModal = () => {
+        setEditingOccasion(null);
+        reset({ name: '', slug: '', parent: '', description: '', metaDescription: '' });
+        setImage(null);
+        setPreview(null);
+        setIsAddModalOpen(true);
+    };
+
+    const openEditModal = (occ: OccasionItem) => {
+        setEditingOccasion(occ);
+        reset({
+            name: occ.name,
+            slug: occ.slug,
+            parent: occ.parent && typeof occ.parent === 'object' ? occ.parent._id : (occ.parent || ''),
+            description: occ.description || '',
+            metaDescription: occ.metaDescription || '',
+        });
+        setImage(null);
+        const existingImage = typeof occ.image === 'string' ? occ.image : '';
+        setPreview(existingImage ? getImageUrl(existingImage) : null);
+        setIsAddModalOpen(true);
+    };
+
+    const exportToExcel = () => {
+        if (occasions.length === 0) return toast.error("No data to export");
+        const headers = ["ID", "Name", "Slug", "Parent", "Type", "Description"];
+        const rows = occasions.map(o => [o._id, o.name, o.slug, parentNameOf(o) || "", parentNameOf(o) ? "Sub-occasion" : "Main Occasion", o.description || ""]);
+        const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", `Mythris_Occasions_${new Date().toISOString().split('T')[0]}.csv`);
+        link.click();
+        toast.success("Excel Export Initialized");
+    };
+
+    const confirmDelete = () => {
+        if (inspectedOccasion) {
+            dispatch(deleteOccasion(inspectedOccasion._id));
+            setDeleteModalOpen(false);
+        }
+    };
+
+    const handleFormSubmit = (data: OccasionForm) => {
+        const formData = new FormData();
+        formData.append('name', data.name);
+        formData.append('slug', data.slug);
+        formData.append('parent', data.parent || '');
+        if (data.description) formData.append('description', data.description);
+        if (data.metaDescription) formData.append('metaDescription', data.metaDescription);
+        if (image) formData.append('image', image);
+        if (editingOccasion) {
+            dispatch(updateOccasion({ id: editingOccasion._id, formData }));
+        } else {
+            dispatch(createOccasion(formData));
+        }
+    };
+
+    // Filter main occasions and subs by search query
+    const filteredOccasions = mainOccasions.filter(occ => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase().trim();
+        const matchesMain = occ.name.toLowerCase().includes(q) || occ.slug.toLowerCase().includes(q);
+        const subs = subOccasionsOf(occ);
+        const matchesSub = subs.some(s => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q));
+        return matchesMain || matchesSub;
+    });
+
+    const totalSuboccasions = occasions.length - mainOccasions.length;
+
+    return (
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
+            {/* Professional Header Area */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-5 sm:pb-6">
+                <div>
+                    <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Occasions Management</h1>
+                    <p className="text-xs text-zinc-500 font-medium">Manage occasions — festivals, parties and special events ({mainOccasions.length} Occasions, {totalSuboccasions} Sub-occasions).</p>
+                </div>
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
+                        <Download size={14} />
+                        <span>Export</span>
+                    </button>
+                    <button onClick={openAddModal} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-900 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all shadow-sm">
+                        <Plus size={14} />
+                        <span>Add Occasion</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Quick Stats & Search Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                <div className="sm:col-span-2 relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Search occasions or sub-occasions..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-10 pr-10 py-2.5 sm:py-3 text-xs font-medium focus:bg-white focus:border-zinc-900 outline-none transition-all"
+                    />
+                    {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex items-center justify-between">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Occasions</span>
+                    <span className="text-base font-extrabold text-zinc-900">{mainOccasions.length}</span>
+                </div>
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex items-center justify-between">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Sub-occasions</span>
+                    <span className="text-base font-extrabold text-zinc-900">{totalSuboccasions}</span>
+                </div>
+            </div>
+
+            {/* Hierarchy Overview */}
+            <div className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+                {loading && occasions.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center gap-3">
+                        <Loader2 className="w-6 h-6 animate-spin text-zinc-200" />
+                        <p className="text-[10px] uppercase font-bold text-zinc-300 tracking-widest">Loading Occasions</p>
+                    </div>
+                ) : filteredOccasions.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center gap-3">
+                        <Gift className="w-8 h-8 text-zinc-200" />
+                        <p className="text-[10px] uppercase font-bold text-zinc-300 tracking-widest">
+                            {searchQuery ? "No matching occasions found" : "No Occasions Yet"}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse min-w-[550px]">
+                            <thead>
+                                <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                                    <th className="px-6 py-4">Occasion Tree</th>
+                                    <th className="px-6 py-4">Slug</th>
+                                    <th className="px-6 py-4 text-right">Type</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100">
+                                {filteredOccasions.map((occ) => {
+                                    const subs = subOccasionsOf(occ);
+                                    return (
+                                        <React.Fragment key={occ._id}>
+                                            <tr onClick={() => setInspectedOccasion(occ)} className="hover:bg-zinc-50/50 transition-all text-xs cursor-pointer group">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded border border-zinc-100 bg-zinc-50 overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-500 relative flex items-center justify-center">
+                                                            <Gift className="text-zinc-300 absolute" size={16} />
+                                                            {occ.image && (
+                                                                <img 
+                                                                    src={getImageUrl(occ.image)} 
+                                                                    alt={occ.name}
+                                                                    className="w-full h-full object-cover relative z-10" 
+                                                                    onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-zinc-900">{occ.name}</div>
+                                                            <div className="text-[10px] text-zinc-400 mt-1 italic line-clamp-1">{occ.description || "No narrative established."}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-[9px] text-zinc-400 font-bold uppercase">/{occ.slug}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <span className="px-2 py-0.5 rounded-full border border-zinc-900/10 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-900/5">
+                                                        {subs.length} Sub-occasions
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            {subs.map((sub) => (
+                                                <tr key={sub._id} onClick={() => setInspectedOccasion(sub)} className="hover:bg-zinc-50/40 transition-all text-xs cursor-pointer group bg-zinc-50/30">
+                                                    <td className="px-6 py-3">
+                                                        <div className="flex items-center gap-4 pl-8">
+                                                            <ChevronRight size={12} className="text-zinc-300 shrink-0" />
+                                                            <div className="w-8 h-8 rounded border border-zinc-100 bg-white overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-500 relative flex items-center justify-center">
+                                                                <Gift className="text-zinc-300 absolute" size={12} />
+                                                                {sub.image && (
+                                                                    <img 
+                                                                        src={getImageUrl(sub.image)} 
+                                                                        alt={sub.name}
+                                                                        className="w-full h-full object-cover relative z-10" 
+                                                                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                            <div className="font-bold text-zinc-700">{sub.name}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-3 font-mono text-[9px] text-zinc-400 font-bold uppercase pl-16">/{sub.slug}</td>
+                                                    <td className="px-6 py-3 text-right">
+                                                        <span className="px-2 py-0.5 rounded-full border border-zinc-200 text-[9px] font-bold uppercase text-zinc-400 bg-white">Sub-occasion</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* Details Modal */}
+            <AnimatePresence>
+                {inspectedOccasion && (
+                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInspectedOccasion(null)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden">
+                            <div className="p-4 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                                <h3 className="font-bold text-zinc-900 flex items-center gap-2">Occasion Details</h3>
+                                <button onClick={() => setInspectedOccasion(null)} className="text-zinc-400 hover:text-zinc-900 transition-colors"><X size={20} /></button>
+                            </div>
+                            <div className="p-4 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+                                <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start sm:items-stretch">
+                                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border border-zinc-200 overflow-hidden bg-zinc-50 shadow-inner shrink-0 relative flex items-center justify-center mx-auto sm:mx-0">
+                                        <Gift className="text-zinc-300 absolute" size={24} />
+                                        {inspectedOccasion.image && (
+                                            <img 
+                                                src={getImageUrl(inspectedOccasion.image)} 
+                                                alt={inspectedOccasion.name}
+                                                className="w-full h-full object-cover relative z-10" 
+                                                onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="space-y-2 flex-1 w-full">
+                                        <h4 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight break-words">{inspectedOccasion.name}</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest flex items-center gap-1"><Hash size={10}/> {inspectedOccasion.slug}</span>
+                                            {parentNameOf(inspectedOccasion) && (
+                                                <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1"><FolderTree size={10}/> Under: {parentNameOf(inspectedOccasion)}</span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-zinc-600 leading-relaxed italic mt-2">{`"${inspectedOccasion.description || "No narrative established for this occasion node."}"`}</p>
+                                    </div>
+                                </div>
+                                <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-2 sm:space-y-3">
+                                    <div className="flex justify-between items-center text-[9px] font-bold text-zinc-400 uppercase tracking-[0.2em]">
+                                        <span>Node Metadata</span>
+                                        <span className="text-emerald-500 flex items-center gap-1"><Database size={10}/> Synchronized</span>
+                                    </div>
+                                    <div className="text-[11px] text-zinc-500 font-medium">
+                                        {inspectedOccasion.metaDescription || "No localized SEO metadata detected for this occasion entry."}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-4 sm:p-6 bg-zinc-50 border-t border-zinc-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                <button onClick={() => setDeleteModalOpen(true)} className="flex items-center justify-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all py-2"><Trash2 size={16}/> Delete</button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { openEditModal(inspectedOccasion); setInspectedOccasion(null); }} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-zinc-300 transition-all"><Edit size={12} className="inline mr-1.5" />Edit</button>
+                                    <button onClick={() => setInspectedOccasion(null)} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition-all">Close</button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Create / Edit Modal */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
+                    <div onClick={() => setIsAddModalOpen(false)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
+                    <div className="relative w-full max-w-lg bg-white rounded-2xl p-5 sm:p-8 overflow-y-auto max-h-[90vh] shadow-2xl border border-zinc-200">
+                        <div className="flex items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-zinc-100">
+                            <div>
+                                <h2 className="text-base sm:text-lg font-bold text-zinc-900 tracking-tight">{editingOccasion ? "Edit Occasion" : "New Occasion"}</h2>
+                                <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest">{editingOccasion ? "Revise this occasion node" : "Add an occasion or sub-occasion to the site"}</p>
+                            </div>
+                            <button onClick={() => setIsAddModalOpen(false)} className="text-zinc-400 hover:text-zinc-900"><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4 sm:space-y-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Name</label><input {...register('name')} placeholder="Occasion Name" className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-xs font-bold focus:border-zinc-900 outline-none" /></div>
+                                <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Slug</label><input {...register('slug')} placeholder="url-slug" className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-[10px] font-mono focus:border-zinc-900 outline-none" /></div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Parent Occasion (leave blank for top-level)</label>
+                                <select {...register('parent')} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-xs font-bold focus:border-zinc-900 outline-none appearance-none cursor-pointer">
+                                    <option value="">— Top-level Occasion —</option>
+                                    {mainOccasions.map((main) => (
+                                        <option key={main._id} value={main._id}>{main.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Description</label><textarea {...register('description')} rows={3} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 sm:p-3 text-xs focus:border-zinc-900 outline-none resize-none" /></div>
+                            <div className="space-y-1.5"><label className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Image</label><div className="flex items-center gap-4"><label className="flex-1 border-2 border-dashed border-zinc-100 rounded-xl p-4 sm:p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-zinc-50"><ImageIcon size={20} className="text-zinc-300"/><span className="text-[9px] font-bold uppercase tracking-widest text-zinc-300">{editingOccasion?.image ? "Replace image" : "Upload image"}</span><input type="file" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setImage(file); setPreview(URL.createObjectURL(file)); } }} className="hidden" accept="image/*" /></label>{preview && <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-zinc-100 shrink-0"><img src={preview} className="w-full h-full object-cover" /></div>}</div></div>
+                            <button type="submit" disabled={loading} className="w-full bg-zinc-900 text-white font-bold py-3.5 rounded-lg active:scale-95 flex items-center justify-center gap-2 uppercase tracking-widest text-[10px]">{loading ? <Loader2 className="animate-spin" size={16} /> : <><Save size={16} />{editingOccasion ? "Save Changes" : "Create Occasion"}</>}</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+            <Modal isOpen={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} onConfirm={confirmDelete} title="Confirm Delete" message="Deleting an occasion also removes its sub-occasions and linked products will remain unlinked. Proceed?" type="confirm" />
+        </div>
+    );
+};
+
+export default OccasionManagement;
+```
+
+## File: `frontend/src/app/admin/orders/create-custom/page.tsx`
+
+```typescript
+"use client";
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { createAdminCustomOrder, clearCustomOrder } from '@/redux/slices/orderSlice';
+import { RootState } from '@/redux/store';
+import api from '@/utils/api';
+import {
+    ArrowLeft,
+    User,
+    Mail,
+    Phone,
+    MapPin,
+    IndianRupee,
+    FileText,
+    Link2,
+    Copy,
+    Check,
+    Loader2,
+    Sparkles,
+    Scale,
+    ImageIcon,
+    ExternalLink,
+    X,
+    CheckCircle2,
+    RefreshCw,
+    Hourglass
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const STORAGE_KEY = 'mg_pending_custom_orders';
+const POLL_INTERVAL = 8000;
+const PAID_FLASH_MS = 7000;
+
+const EMPTY_FORM = {
+    customerName: '',
+    customerEmail: '',
+    customerPhone: '',
+    customerStreet: '',
+    customerCity: '',
+    customerState: '',
+    customerZip: '',
+    amount: '',
+    title: '',
+    description: '',
+    image: '',
+    weight: '',
+};
+
+type CustomOrder = {
+    orderId: string;
+    orderCode: string;
+    paymentToken: string;
+    totalPrice: number;
+    payUrl: string;
+    absoluteUrl: string;
+    customerName: string;
+    title: string;
+    createdAt: string;
+    paidAt?: string | null;
+};
+
+type CustomOrderStatus = {
+    _id: string;
+    orderCode: string;
+    customerName: string;
+    title: string;
+    totalPrice: number;
+    isPaid: boolean;
+    status: string;
+    paidAt: string | null;
+    createdAt: string;
+};
+
+const inputClass =
+    'w-full bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white outline-none transition-all';
+
+const SectionLabel = ({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) => (
+    <h2 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+        {icon}
+        {children}
+    </h2>
+);
+
+const loadStoredOrders = (): CustomOrder[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? (parsed as CustomOrder[]) : [];
+    } catch {
+        return [];
+    }
+};
+
+const formatTimestamp = (value: string) =>
+    new Date(value).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+
+const CreateCustomOrderPage = () => {
+    const dispatch = useAppDispatch();
+    const router = useRouter();
+    const { loading } = useAppSelector((state: RootState) => state.orders);
+
+    const [form, setForm] = useState({ ...EMPTY_FORM });
+    // Pending cards survive refreshes: the admin must not lose a link they already sent.
+    const [orders, setOrders] = useState<CustomOrder[]>(loadStoredOrders);
+    const [checking, setChecking] = useState(false);
+    const [copied, setCopied] = useState<string | null>(null);
+
+    const cardsRef = useRef<HTMLDivElement | null>(null);
+    const ordersRef = useRef<CustomOrder[]>([]);
+
+    useEffect(() => {
+        ordersRef.current = orders;
+    }, [orders]);
+
+    useEffect(() => {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    }, [orders]);
+
+    // A paid card stays visible for a few seconds as confirmation, then clears itself.
+    const markAsPaid = useCallback((paid: CustomOrder[]) => {
+        if (paid.length === 0) return;
+        paid.forEach((o) => toast.success(`Payment received — order #${o.orderCode} is paid.`));
+        const paidIds = paid.map((o) => o.orderId);
+        window.setTimeout(() => {
+            setOrders((current) => current.filter((o) => !paidIds.includes(o.orderId)));
+        }, PAID_FLASH_MS);
+    }, []);
+
+    const refreshStatuses = useCallback(async () => {
+        const current = ordersRef.current;
+        if (current.length === 0) return;
+
+        setChecking(true);
+        const statuses = await Promise.all(
+            current.map(async (o) => {
+                try {
+                    const { data } = await api.get<{ data: CustomOrderStatus }>(`/orders/admin/custom/${o.orderId}`);
+                    return { id: o.orderId, status: data.data };
+                } catch {
+                    // 404 means the order was removed server-side; drop the card silently.
+                    return { id: o.orderId, status: null };
+                }
+            })
+        );
+        setChecking(false);
+
+        const goneIds = statuses.filter((s) => !s.status).map((s) => s.id);
+        const paidIds = statuses.filter((s) => s.status?.isPaid).map((s) => s.id);
+
+        setOrders((prev) =>
+            prev
+                .filter((o) => !goneIds.includes(o.orderId))
+                .map((o) => {
+                    const match = statuses.find((s) => s.id === o.orderId);
+                    return match?.status
+                        ? {
+                              ...o,
+                              title: match.status.title,
+                              customerName: match.status.customerName || o.customerName,
+                              totalPrice: match.status.totalPrice,
+                              paidAt: match.status.paidAt,
+                          }
+                        : o;
+                })
+        );
+
+        if (paidIds.length) markAsPaid(current.filter((o) => paidIds.includes(o.orderId)));
+    }, [markAsPaid]);
+
+    // Poll so the card flips to "paid" the moment the customer completes checkout.
+    useEffect(() => {
+        const initialCheck = window.setTimeout(refreshStatuses, 400);
+        const interval = window.setInterval(refreshStatuses, POLL_INTERVAL);
+        return () => {
+            window.clearTimeout(initialCheck);
+            window.clearInterval(interval);
+        };
+    }, [refreshStatuses]);
+
+    const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!form.customerName.trim()) return toast.error("Customer name is required.");
+        if (!form.customerPhone.trim()) return toast.error("Phone number is required.");
+        if (form.customerEmail && !/^\S+@\S+\.\S+$/.test(form.customerEmail)) return toast.error("Enter a valid email address.");
+
+        const amount = Number(form.amount);
+        if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter an amount greater than zero.");
+
+        try {
+            const res = await dispatch(
+                createAdminCustomOrder({
+                    customerName: form.customerName.trim(),
+                    customerEmail: form.customerEmail.trim(),
+                    customerPhone: form.customerPhone.trim(),
+                    customerStreet: form.customerStreet.trim(),
+                    customerCity: form.customerCity.trim(),
+                    customerState: form.customerState.trim(),
+                    customerZip: form.customerZip.trim(),
+                    amount,
+                    title: form.title.trim(),
+                    description: form.description.trim(),
+                    image: form.image.trim(),
+                    weight: form.weight ? Number(form.weight) : 0,
+                })
+            ).unwrap();
+
+            const created = res as {
+                orderId: string;
+                orderCode: string;
+                paymentToken: string;
+                totalPrice: number;
+                payUrl: string;
+            };
+
+            setOrders((prev) => [
+                {
+                    ...created,
+                    absoluteUrl: `${window.location.origin}${created.payUrl}`,
+                    customerName: form.customerName.trim(),
+                    title: form.title.trim() || 'Custom Order',
+                    createdAt: new Date().toISOString(),
+                    paidAt: null,
+                },
+                ...prev,
+            ]);
+            setForm({ ...EMPTY_FORM });
+            dispatch(clearCustomOrder());
+            toast.success("Payment link generated — send it to the customer.");
+            window.setTimeout(() => cardsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+        } catch (err: unknown) {
+            toast.error(typeof err === 'string' ? err : "Failed to create the custom order.");
+        }
+    };
+
+    const copy = async (key: string, label: string, value: string) => {
+        try {
+            await navigator.clipboard.writeText(value);
+            setCopied(key);
+            toast.success(`${label} copied`);
+            window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 2000);
+        } catch {
+            toast.error("Copy failed — please copy manually.");
+        }
+    };
+
+    const hideCard = (order: CustomOrder) => {
+        setOrders((prev) => prev.filter((o) => o.orderId !== order.orderId));
+        toast("Card hidden — the payment link stays active until it is used.");
+    };
+
+    return (
+        <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
+            <div className="flex items-center gap-4 border-b border-zinc-200 pb-5">
+                <button
+                    type="button"
+                    onClick={() => router.push('/admin/orders')}
+                    className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500 transition-colors"
+                    aria-label="Back to orders"
+                >
+                    <ArrowLeft size={18} />
+                </button>
+                <div>
+                    <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Create Custom Order</h1>
+                    <p className="text-xs text-zinc-500 font-medium">
+                        Generate a payment link, send it to the customer. The link stays on this page until the payment lands.
+                    </p>
+                </div>
+            </div>
+
+            {/* Payment links awaiting settlement */}
+            <div ref={cardsRef} className="space-y-3">
+                {orders.length > 0 && (
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                            <Hourglass size={12} /> Awaiting payment ({orders.length})
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={refreshStatuses}
+                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors"
+                        >
+                            <RefreshCw size={11} className={checking ? 'animate-spin' : ''} />
+                            {checking ? 'Checking' : 'Check now'}
+                        </button>
+                    </div>
+                )}
+
+                {orders.map((order) => {
+                    const isPaid = !!order.paidAt;
+                    return (
+                        <motion.div
+                            key={order.orderId}
+                            layout
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`rounded-2xl border p-4 sm:p-5 space-y-3 ${
+                                isPaid ? 'bg-emerald-50 border-emerald-200' : 'bg-zinc-50 border-zinc-200'
+                            }`}
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="font-mono font-bold text-sm text-zinc-900">#{order.orderCode}</span>
+                                    {isPaid ? (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase border bg-emerald-100 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                                            <CheckCircle2 size={11} /> Paid
+                                        </span>
+                                    ) : (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Awaiting payment
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-lg font-bold text-zinc-900 tabular-nums">₹{order.totalPrice.toLocaleString()}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => hideCard(order)}
+                                        className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-200 hover:text-zinc-900 transition-colors"
+                                        aria-label="Hide card"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500">
+                                <span className="flex items-center gap-1.5">
+                                    <User size={11} /> {order.customerName}
+                                </span>
+                                <span className="text-zinc-300">|</span>
+                                <span className="truncate max-w-[220px]">{order.title}</span>
+                                <span className="text-zinc-300">|</span>
+                                <span>Created {formatTimestamp(order.createdAt)}</span>
+                            </div>
+
+                            {isPaid ? (
+                                <p className="text-[11px] text-emerald-700">
+                                    Paid {order.paidAt ? formatTimestamp(order.paidAt) : 'just now'} — this order is now in Order Management.
+                                </p>
+                            ) : (
+                                <div className="flex items-stretch gap-2">
+                                    <div className="flex-1 flex items-center gap-2 bg-white border border-zinc-200 rounded-lg px-3 py-2.5 overflow-x-auto">
+                                        <Link2 size={13} className="text-zinc-400 shrink-0" />
+                                        <span className="text-[11px] font-mono text-zinc-700 whitespace-nowrap">{order.absoluteUrl}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => copy(order.orderId, 'Payment link', order.absoluteUrl)}
+                                        className="px-4 bg-zinc-900 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-black transition-all flex items-center gap-2"
+                                    >
+                                        {copied === order.orderId ? <Check size={14} /> : <Copy size={14} />}
+                                        {copied === order.orderId ? 'Copied' : 'Copy'}
+                                    </button>
+                                </div>
+                            )}
+
+                            {!isPaid && (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <Link
+                                        href={order.payUrl}
+                                        target="_blank"
+                                        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors"
+                                    >
+                                        <ExternalLink size={12} /> Preview pay page
+                                    </Link>
+                                    <span className="text-[10px] text-zinc-400">Auto-checks every {POLL_INTERVAL / 1000}s</span>
+                                </div>
+                            )}
+                        </motion.div>
+                    );
+                })}
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-7 border-t border-zinc-100 pt-6">
+                <section className="space-y-4">
+                    <SectionLabel icon={<User size={12} />}>Customer Details</SectionLabel>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input
+                            name="customerName"
+                            value={form.customerName}
+                            onChange={onChange}
+                            placeholder="Customer Name *"
+                            className={inputClass}
+                            required
+                        />
+                        <div className="relative">
+                            <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                name="customerPhone"
+                                value={form.customerPhone}
+                                onChange={onChange}
+                                placeholder="Phone Number *"
+                                className={`${inputClass} pl-10`}
+                                required
+                            />
+                        </div>
+                        <div className="relative md:col-span-2">
+                            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                name="customerEmail"
+                                type="email"
+                                value={form.customerEmail}
+                                onChange={onChange}
+                                placeholder="Email (optional — enables payment confirmation + account linking)"
+                                className={`${inputClass} pl-10`}
+                            />
+                        </div>
+                    </div>
+                </section>
+
+                <section className="space-y-4">
+                    <SectionLabel icon={<MapPin size={12} />}>Shipping Address (optional)</SectionLabel>
+                    <input
+                        name="customerStreet"
+                        value={form.customerStreet}
+                        onChange={onChange}
+                        placeholder="Street address"
+                        className={inputClass}
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <input name="customerCity" value={form.customerCity} onChange={onChange} placeholder="City" className={inputClass} />
+                        <input name="customerState" value={form.customerState} onChange={onChange} placeholder="State" className={inputClass} />
+                        <input name="customerZip" value={form.customerZip} onChange={onChange} placeholder="PIN code" className={inputClass} />
+                    </div>
+                </section>
+
+                <section className="space-y-4">
+                    <SectionLabel icon={<FileText size={12} />}>Order Details</SectionLabel>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input
+                            name="title"
+                            value={form.title}
+                            onChange={onChange}
+                            placeholder="Order title shown to customer (e.g. Navaratri Thamboolam Set)"
+                            className={inputClass}
+                        />
+                        <div className="relative">
+                            <IndianRupee size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                name="amount"
+                                type="number"
+                                min="1"
+                                step="0.01"
+                                value={form.amount}
+                                onChange={onChange}
+                                placeholder="Amount to be paid *"
+                                className={`${inputClass} pl-10`}
+                                required
+                            />
+                        </div>
+                        <div className="relative">
+                            <Scale size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                name="weight"
+                                type="number"
+                                min="0"
+                                value={form.weight}
+                                onChange={onChange}
+                                placeholder="Total weight in grams (optional)"
+                                className={`${inputClass} pl-10`}
+                            />
+                        </div>
+                        <div className="relative">
+                            <ImageIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                name="image"
+                                value={form.image}
+                                onChange={onChange}
+                                placeholder="Image URL (optional)"
+                                className={`${inputClass} pl-10`}
+                            />
+                        </div>
+                    </div>
+                    <textarea
+                        name="description"
+                        rows={3}
+                        value={form.description}
+                        onChange={onChange}
+                        placeholder="Notes shown on the payment page (optional)"
+                        className={`${inputClass} resize-none`}
+                    />
+                </section>
+
+                <div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full sm:w-auto px-8 py-3.5 bg-zinc-900 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                        {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        Generate Payment Link
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
+export default CreateCustomOrderPage;
+
+```
+
 ## File: `frontend/src/app/admin/orders/page.tsx`
 
 ```typescript
@@ -4181,6 +7361,7 @@ export default AdminLoginPage;
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { fetchOrders, updateOrderStatus, resetOrderSuccess } from '@/redux/slices/orderSlice';
 import { 
     ShoppingBag, 
@@ -4200,13 +7381,15 @@ import {
     Zap,
     Truck,
     Clock,
-    MoreHorizontal
+    MoreHorizontal,
+    Plus
 } from 'lucide-react';
 import { RootState } from '@/redux/store';
 import Modal from '@/components/ui/Modal';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { getImageUrl } from '@/utils/getImageUrl';
+import { formatWeight } from '@/utils/formatWeight';
 
 const OrderManagement = () => {
     const dispatch = useAppDispatch();
@@ -4256,8 +7439,8 @@ const OrderManagement = () => {
 
     const exportToExcel = () => {
         if (orders.length === 0) return toast.error("No orders to export");
-        const headers = ["Order ID", "Customer", "Email", "Amount", "Paid", "Status", "Date"];
-        const rows = orders.map(o => [o._id, o.shippingAddress?.name, o.shippingAddress?.email, o.totalPrice, o.isPaid ? 'YES' : 'NO', o.status, new Date(o.createdAt).toISOString().split('T')[0]]);
+        const headers = ["Order ID", "Customer", "Email", "Amount", "Weight", "Paid", "Status", "Date"];
+        const rows = orders.map(o => [o._id, o.shippingAddress?.name, o.shippingAddress?.email, o.totalPrice, orderWeight(o), o.isPaid ? 'YES' : 'NO', o.status, new Date(o.createdAt).toISOString().split('T')[0]]);
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
@@ -4267,6 +7450,8 @@ const OrderManagement = () => {
     };
 
     const orderStatuses = ['Pending', 'Handcrafting', 'Quality Check', 'Dispatched', 'Delivered', 'Cancelled'];
+
+    const orderWeight = (o: { orderItems?: { weight?: number; qty?: number }[] }) => (o.orderItems || []).reduce((s: number, it: { weight?: number; qty?: number }) => s + (it.weight || 0) * (it.qty || 1), 0);
 
     const getStatusStyles = (status: string) => {
         switch(status) {
@@ -4297,31 +7482,38 @@ const OrderManagement = () => {
     }, [orders, userId, searchTerm]);
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen">
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
             {/* Professional Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-zinc-200 pb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-200 pb-5 sm:pb-6">
                 <div>
                     <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Orders</h1>
                     <p className="text-xs text-zinc-500 font-medium">View and manage customer orders and fulfillment.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={exportToExcel} className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <Link
+                        href="/admin/orders/create-custom"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-zinc-900 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all shadow-sm"
+                    >
+                        <Plus size={14} />
+                        <span>Create Custom</span>
+                    </Link>
+                    <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
                         <Download size={14} />
-                        <span>Export Excel</span>
+                        <span>Export</span>
                     </button>
                     <div className="flex bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-                        <button className="bg-zinc-900 text-white shadow-sm px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all">Paid Only</button>
+                        <button className="bg-zinc-900 text-white shadow-sm px-3 sm:px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all">Paid Only</button>
                     </div>
                 </div>
             </div>
 
             {/* Toolbar */}
-            <div className="flex flex-col xl:flex-row items-center justify-between gap-4 border border-zinc-200 bg-zinc-50/50 p-2 rounded-xl">
-                <div className="relative w-full xl:w-96">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 border border-zinc-200 bg-zinc-50/50 p-2 sm:p-2.5 rounded-xl">
+                <div className="relative w-full sm:w-80">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
                     <input type="text" placeholder="Search orders..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg py-2 pl-9 pr-4 text-xs focus:border-zinc-900 outline-none transition-all" />
                 </div>
-                <div className="text-[10px] font-bold text-zinc-900 bg-white px-4 py-2 rounded-lg border border-zinc-200">Total Revenue: ₹{orders.filter(o => o.isPaid).reduce((acc, o) => acc + o.totalPrice, 0).toLocaleString()}</div>
+                <div className="text-[10px] font-bold text-zinc-900 bg-white px-3 sm:px-4 py-2 rounded-lg border border-zinc-200 text-center">Total Revenue: ₹{orders.filter(o => o.isPaid).reduce((acc, o) => acc + o.totalPrice, 0).toLocaleString()}</div>
             </div>
 
             {/* Order Table */}
@@ -4330,13 +7522,14 @@ const OrderManagement = () => {
                     <div className="py-20 flex flex-col items-center gap-3"><Loader2 className="w-6 h-6 animate-spin text-zinc-200" /><p className="text-[10px] uppercase font-bold text-zinc-300">Loading Orders</p></div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[650px]">
                             <thead>
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Order Info</th>
                                     <th className="px-6 py-4">Customer</th>
                                     <th className="px-6 py-4">Payment</th>
                                     <th className="px-6 py-4">Total</th>
+                                    <th className="px-6 py-4">Weight</th>
                                     <th className="px-6 py-4 text-right">Status</th>
                                 </tr>
                             </thead>
@@ -4357,6 +7550,9 @@ const OrderManagement = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-5 font-bold text-zinc-900 tabular-nums">₹{order.totalPrice.toLocaleString()}</td>
+                                        <td className="px-6 py-5">
+                                            <span className="text-[11px] font-bold text-zinc-700 tabular-nums">{formatWeight(orderWeight(order)) || "—"}</span>
+                                        </td>
                                         <td className="px-6 py-5 text-right"><span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase border ${getStatusStyles(order.status)}`}>{order.status}</span></td>
                                     </tr>
                                 ))}
@@ -4369,27 +7565,27 @@ const OrderManagement = () => {
             {/* Details Modal */}
             <AnimatePresence>
                 {inspectedOrder && (
-                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInspectedOrder(null)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
                         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden flex flex-col max-h-[90vh]">
-                            <div className="px-8 py-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                            <div className="px-4 sm:px-8 py-4 sm:py-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
                                 <div>
-                                    <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-3">Order Details: #{inspectedOrder._id.substring(inspectedOrder._id.length-8).toUpperCase()}</h2>
-                                    <div className="flex items-center gap-4 mt-1">
-                                        <div className="text-[9px] text-zinc-400 font-bold uppercase">Manage this order</div>
-                                        <div className="text-[9px] text-zinc-500 font-bold uppercase flex items-center gap-1.5 border-l border-zinc-200 pl-4">
+                                    <h2 className="text-base sm:text-lg font-bold text-zinc-900 flex items-center gap-2 sm:gap-3">Order #{inspectedOrder._id.substring(inspectedOrder._id.length-8).toUpperCase()}</h2>
+                                    <div className="flex items-center gap-2 sm:gap-4 mt-0.5 sm:mt-1 flex-wrap">
+                                        <div className="text-[9px] text-zinc-400 font-bold uppercase">Order Details</div>
+                                        <div className="text-[9px] text-zinc-500 font-bold uppercase flex items-center gap-1.5 border-l border-zinc-200 pl-2 sm:pl-4">
                                             <Calendar size={10} /> {new Date(inspectedOrder.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
                                         </div>
                                     </div>
                                 </div>
                                 <button onClick={() => setInspectedOrder(null)} className="p-2 hover:bg-zinc-200 rounded-lg text-zinc-400 transition-all"><X size={20} /></button>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    <div className="lg:col-span-2 space-y-8">
-                                        <div className="bg-zinc-50 border border-zinc-100 p-6 rounded-xl space-y-5">
+                            <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                                    <div className="lg:col-span-2 space-y-6 sm:space-y-8">
+                                        <div className="bg-zinc-50 border border-zinc-100 p-4 sm:p-6 rounded-xl space-y-4 sm:space-y-5">
                                             <h3 className="font-bold text-[10px] uppercase text-zinc-500 tracking-wider flex items-center gap-2"><Hammer size={14} /> Update Order Status</h3>
-                                            <div className="grid grid-cols-3 gap-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                 {orderStatuses.map(status => (
                                                     <button key={status} onClick={() => { if (status === 'Dispatched') { handleActionInitiation(inspectedOrder._id, status, dispatchData.tracking, dispatchData.note); } else { handleActionInitiation(inspectedOrder._id, status); } }} className={`px-3 py-2.5 rounded-lg text-[9px] font-bold uppercase border transition-all ${inspectedOrder.status === status ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 hover:border-zinc-900 hover:text-zinc-900'}`}>{status}</button>
                                                 ))}
@@ -4409,7 +7605,7 @@ const OrderManagement = () => {
                                             <div className="border border-zinc-200 rounded-xl overflow-hidden bg-white">
                                                 <table className="w-full text-left text-[11px]">
                                                     <thead className="bg-zinc-50 border-b border-zinc-100 font-bold text-zinc-400 uppercase text-[8px]">
-                                                        <tr><th className="px-6 py-3">Item</th><th className="px-6 py-3 text-center">Qty</th><th className="px-6 py-3 text-right">Total</th></tr>
+                                                        <tr><th className="px-6 py-3">Item</th><th className="px-6 py-3 text-center">Qty</th><th className="px-6 py-3 text-right">Weight</th><th className="px-6 py-3 text-right">Total</th></tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-zinc-100">
                                                         {inspectedOrder.orderItems.map((item: any, i: number) => (
@@ -4430,6 +7626,7 @@ const OrderManagement = () => {
                                                                      </div>
                                                                  </td>
                                                                 <td className="px-6 py-4 text-center font-bold">x{item.qty}</td>
+                                                                <td className="px-6 py-4 text-right font-bold tabular-nums">{formatWeight((item.weight || 0) * item.qty) || "—"}</td>
                                                                 <td className="px-6 py-4 text-right font-bold">₹{(item.qty * item.price).toLocaleString()}</td>
                                                             </tr>
                                                         ))}
@@ -4459,6 +7656,10 @@ const OrderManagement = () => {
                                                 <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase border ${inspectedOrder.isPaid ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>{inspectedOrder.isPaid ? 'Paid' : 'Unpaid'}</span>
                                             </div>
                                             <div className="text-2xl font-bold">₹{inspectedOrder.totalPrice.toLocaleString()}</div>
+                                            <div className="pt-4 border-t border-white/10 flex justify-between items-center">
+                                                <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Total Weight</span>
+                                                <span className="text-[11px] font-bold text-zinc-200 tabular-nums">{formatWeight(orderWeight(inspectedOrder)) || "—"}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -4538,22 +7739,22 @@ const AdminDashboard = () => {
     }
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-8 bg-white min-h-screen">
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 sm:space-y-8 bg-white min-h-screen rounded-2xl border border-zinc-200">
             {/* Header Area */}
-            <div className="flex justify-between items-center border-b border-zinc-200 pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 pb-5 sm:pb-6">
                 <div>
                     <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Admin Dashboard</h1>
                     <p className="text-xs text-zinc-500 font-medium">Monitor your store's performance and manage various sections.</p>
                 </div>
-                <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100 flex items-center gap-2">
+                <div className="self-start sm:self-auto text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-3.5 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-2">
                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div> System Active
                 </div>
             </div>
 
             {/* Performance Matrix */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {stats.map((stat) => (
-                    <div key={stat.name} className="p-6 bg-white rounded-xl border border-zinc-200 hover:border-zinc-900 transition-all shadow-sm">
+                    <div key={stat.name} className="p-5 sm:p-6 bg-white rounded-xl border border-zinc-200 hover:border-zinc-900 transition-all shadow-sm">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-center text-zinc-400">
                                 {stat.icon}
@@ -4581,8 +7782,9 @@ const AdminDashboard = () => {
                     </div>
                     
                     <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden shadow-sm">
-                        <table className="w-full text-left">
-                            <thead className="bg-zinc-50 border-b border-zinc-200">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left min-w-[500px]">
+                                <thead className="bg-zinc-50 border-b border-zinc-200">
                                 <tr className="text-[9px] font-bold uppercase text-zinc-500 tracking-widest">
                                     <th className="px-6 py-4">Order ID</th>
                                     <th className="px-6 py-4">Customer</th>
@@ -4614,6 +7816,7 @@ const AdminDashboard = () => {
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 </div>
 
@@ -4674,6 +7877,7 @@ import {
     X,
     Hash,
     Tag,
+    TrendingUp,
     Layers,
     Archive,
     Image as ImageIcon,
@@ -4719,8 +7923,14 @@ const ProductManagement = () => {
 
     const exportToExcel = () => {
         if (products.length === 0) return toast.error("No data available to export");
-        const headers = ["ID", "Name", "Slug", "Category", "Price", "Stock Status"];
-        const rows = products.map(p => [p._id, p.name, p.slug, p.category, p.price, p.stockStatus]);
+        const headers = ["ID", "Name", "Slug", "Collections", "Subcategories", "Occasions", "Occasion Subcategories", "Price", "Weight (g)", "Stock Status"];
+        const rows = products.map(p => {
+            const cats = p.categories && p.categories.length > 0 ? p.categories.join("; ") : (p.category || '');
+            const subs = p.subcategories && p.subcategories.length > 0 ? p.subcategories.join("; ") : (p.subcategory || '');
+            const occs = p.occasions && p.occasions.length > 0 ? p.occasions.join("; ") : (p.occasion || '');
+            const occSubs = p.occasionSubs && p.occasionSubs.length > 0 ? p.occasionSubs.join("; ") : (p.occasionSub || '');
+            return [p._id, p.name, p.slug, cats, subs, occs, occSubs, p.price, p.weight || 0, p.stockStatus];
+        });
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
@@ -4737,10 +7947,21 @@ const ProductManagement = () => {
         }
     };
 
-    const filteredProducts = products.filter((p: any) => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProducts = products.filter((p: any) => {
+        const q = searchTerm.toLowerCase();
+        const allCats = [p.category, ...(p.categories || [])].filter(Boolean).join(" ").toLowerCase();
+        const allSubs = [p.subcategory, ...(p.subcategories || [])].filter(Boolean).join(" ").toLowerCase();
+        const allOccs = [p.occasion, ...(p.occasions || [])].filter(Boolean).join(" ").toLowerCase();
+        const allOccSubs = [p.occasionSub, ...(p.occasionSubs || [])].filter(Boolean).join(" ").toLowerCase();
+        return (
+            p.name.toLowerCase().includes(q) ||
+            p.slug.toLowerCase().includes(q) ||
+            allCats.includes(q) ||
+            allSubs.includes(q) ||
+            allOccs.includes(q) ||
+            allOccSubs.includes(q)
+        );
+    });
 
     const handleFormSubmit = (formData: FormData) => {
         if (selectedProduct) {
@@ -4751,21 +7972,21 @@ const ProductManagement = () => {
     };
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen">
+        <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
             {/* Professional Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-5 sm:pb-6">
                 <div>
                     <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Product Management</h1>
                     <p className="text-xs text-zinc-500 font-medium">Manage your store's inventory and product details.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button onClick={exportToExcel} className="flex items-center gap-2 bg-zinc-100 text-zinc-900 px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
                         <Download size={14} />
-                        <span>Export Excel</span>
+                        <span>Export</span>
                     </button>
                     <button 
                         onClick={() => { setSelectedProduct(null); setAddModalOpen(true); }}
-                        className="flex items-center gap-2 bg-zinc-900 text-white px-4 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-zinc-900 text-white px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all shadow-sm"
                     >
                         <Plus size={14} />
                         <span>New Entry</span>
@@ -4774,8 +7995,8 @@ const ProductManagement = () => {
             </div>
 
             {/* Precision Toolbar */}
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between border border-zinc-200 bg-zinc-50/50 p-2 rounded-xl">
-                <div className="relative w-full md:w-80">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between border border-zinc-200 bg-zinc-50/50 p-2 sm:p-2.5 rounded-xl">
+                <div className="relative w-full sm:w-80">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
                     <input 
                         type="text" 
@@ -4797,7 +8018,7 @@ const ProductManagement = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse min-w-[650px]">
                             <thead>
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Product</th>
@@ -4825,13 +8046,45 @@ const ProductManagement = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="px-2 py-0.5 rounded border border-zinc-200 text-[9px] font-bold uppercase text-zinc-500 bg-zinc-50">{product.category}</span>
+                                            <div className="flex flex-wrap gap-1 max-w-xs">
+                                                {/* Collections / Categories */}
+                                                {(product.categories && product.categories.length > 0 ? product.categories : [product.category]).filter(Boolean).map((cat: string) => (
+                                                    <span key={cat} className="px-2 py-0.5 rounded border border-zinc-200 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-50">
+                                                        {cat}
+                                                    </span>
+                                                ))}
+                                                {/* Subcategories */}
+                                                {(product.subcategories && product.subcategories.length > 0 ? product.subcategories : [product.subcategory]).filter(Boolean).map((sub: string) => (
+                                                    <span key={sub} className="px-2 py-0.5 rounded border border-zinc-100 text-[9px] font-bold uppercase text-zinc-400 bg-white">
+                                                        {sub}
+                                                    </span>
+                                                ))}
+                                                {/* Occasions */}
+                                                {(product.occasions && product.occasions.length > 0 ? product.occasions : [product.occasion]).filter(Boolean).map((occ: string) => (
+                                                    <span key={occ} className="px-2 py-0.5 rounded border border-rose-100 text-[9px] font-bold uppercase text-rose-600 bg-rose-50">
+                                                        {occ}
+                                                    </span>
+                                                ))}
+                                                {/* Occasion Subcategories */}
+                                                {(product.occasionSubs && product.occasionSubs.length > 0 ? product.occasionSubs : [product.occasionSub]).filter(Boolean).map((occSub: string) => (
+                                                    <span key={occSub} className="px-2 py-0.5 rounded border border-rose-50 text-[9px] font-bold uppercase text-rose-400 bg-white">
+                                                        {occSub}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm ${
-                                                product.stockStatus === 'in-stock' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                product.stockStatus === 'made-to-order' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-zinc-100 text-zinc-400 border-zinc-200'
-                                            }`}>{product.stockStatus}</span>
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border shadow-sm ${
+                                                    product.stockStatus === 'in-stock' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                    product.stockStatus === 'made-to-order' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-zinc-100 text-zinc-400 border-zinc-200'
+                                                }`}>{product.stockStatus}</span>
+                                                {product.isBestseller && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-50 text-amber-600 border border-amber-100">
+                                                        <TrendingUp size={9} /> Bestseller
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right font-bold text-zinc-900 tabular-nums">₹{product.price.toLocaleString()}</td>
                                     </tr>
@@ -4845,21 +8098,21 @@ const ProductManagement = () => {
             {/* Details Modal */}
             <AnimatePresence>
                 {inspectedProduct && (
-                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInspectedProduct(null)} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
                         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden">
-                            <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                            <div className="p-4 sm:p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
                                 <h3 className="font-bold text-zinc-900 flex items-center gap-2">Product Details</h3>
                                 <button onClick={() => setInspectedProduct(null)} className="text-zinc-400 hover:text-zinc-900 transition-colors"><X size={20} /></button>
                             </div>
-                            <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh]">
-                                <div className="flex gap-8">
-                                    <div className="w-40 h-40 rounded-xl border border-zinc-200 overflow-hidden shrink-0 bg-zinc-50">
-                                        {inspectedProduct.images?.[0] ? <img src={getImageUrl(inspectedProduct.images[0])} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto mt-12" size={40} />}
+                            <div className="p-4 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto max-h-[70vh]">
+                                <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 items-start sm:items-stretch">
+                                    <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-xl border border-zinc-200 overflow-hidden shrink-0 bg-zinc-50 mx-auto sm:mx-0">
+                                        {inspectedProduct.images?.[0] ? <img src={getImageUrl(inspectedProduct.images[0])} className="w-full h-full object-cover" /> : <ImageIcon className="text-zinc-200 m-auto mt-10" size={36} />}
                                     </div>
-                                    <div className="space-y-4 flex-1">
+                                    <div className="space-y-3 sm:space-y-4 flex-1 w-full">
                                         <div className="space-y-1">
-                                            <div className="text-xl font-bold text-zinc-900">{inspectedProduct.name}</div>
+                                            <div className="text-lg sm:text-xl font-bold text-zinc-900">{inspectedProduct.name}</div>
                                             <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">UID: {inspectedProduct._id}</div>
                                         </div>
                                         <div className="space-y-3">
@@ -4871,14 +8124,47 @@ const ProductManagement = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
                                         <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><DollarSign size={10}/> Price</div>
-                                        <div className="text-lg font-bold text-zinc-900 tabular-nums">₹{inspectedProduct.price.toLocaleString()}</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 tabular-nums">₹{inspectedProduct.price.toLocaleString()}</div>
                                     </div>
-                                    <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
-                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={10}/> Category</div>
-                                        <div className="text-lg font-bold text-zinc-900 uppercase">{inspectedProduct.category}</div>
+                                    <div className="p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
+                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 flex items-center gap-2"><Box size={10}/> Weight</div>
+                                        <div className="text-base sm:text-lg font-bold text-zinc-900 tabular-nums">{inspectedProduct.weight ? `${inspectedProduct.weight} g` : "—"}</div>
+                                    </div>
+                                    <div className="col-span-2 p-3 sm:p-4 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1.5">
+                                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2"><Tag size={10}/> Collections (Galleries)</div>
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                            {(inspectedProduct.categories && inspectedProduct.categories.length > 0 ? inspectedProduct.categories : [inspectedProduct.category]).filter(Boolean).map((cat: string) => (
+                                                <span key={cat} className="px-2.5 py-1 rounded-lg bg-zinc-900 text-white font-bold text-[10px] uppercase">
+                                                    {cat}
+                                                </span>
+                                            ))}
+                                            {(inspectedProduct.subcategories && inspectedProduct.subcategories.length > 0 ? inspectedProduct.subcategories : [inspectedProduct.subcategory]).filter(Boolean).map((sub: string) => (
+                                                <span key={sub} className="px-2.5 py-1 rounded-lg bg-zinc-200 text-zinc-700 font-bold text-[10px] uppercase">
+                                                    {sub}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2 p-3 sm:p-4 bg-rose-50/50 rounded-xl border border-rose-100 space-y-1.5">
+                                        <div className="text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-2"><Tag size={10}/> Occasions & Festivals</div>
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                            {(inspectedProduct.occasions && inspectedProduct.occasions.length > 0 ? inspectedProduct.occasions : [inspectedProduct.occasion]).filter(Boolean).map((occ: string) => (
+                                                <span key={occ} className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-bold text-[10px] uppercase">
+                                                    {occ}
+                                                </span>
+                                            ))}
+                                            {(inspectedProduct.occasionSubs && inspectedProduct.occasionSubs.length > 0 ? inspectedProduct.occasionSubs : [inspectedProduct.occasionSub]).filter(Boolean).map((occSub: string) => (
+                                                <span key={occSub} className="px-2.5 py-1 rounded-lg bg-rose-200 text-rose-800 font-bold text-[10px] uppercase">
+                                                    {occSub}
+                                                </span>
+                                            ))}
+                                            {(!inspectedProduct.occasion && (!inspectedProduct.occasions || inspectedProduct.occasions.length === 0)) && (
+                                                <span className="text-zinc-400 text-xs">—</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 {(inspectedProduct.variants?.length > 0 || inspectedProduct.requiresImage) && (
@@ -4896,11 +8182,11 @@ const ProductManagement = () => {
                                     </div>
                                 )}
                             </div>
-                             <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between">
-                                <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setDeleteModalOpen(true); }} className="flex items-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all"><Trash2 size={16}/> Delete Product</button>
+                             <div className="p-4 sm:p-6 bg-zinc-50 border-t border-zinc-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setDeleteModalOpen(true); }} className="flex items-center justify-center gap-2 text-rose-500 hover:text-rose-700 font-bold text-[10px] uppercase tracking-widest transition-all py-2"><Trash2 size={16}/> Delete Product</button>
                                 <div className="flex gap-2">
-                                    <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setAddModalOpen(true); }} className="px-6 py-2 bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-zinc-300">Edit Product</button>
-                                    <button onClick={() => setInspectedProduct(null)} className="px-6 py-2 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black">Close</button>
+                                    <button onClick={() => { setSelectedProduct(inspectedProduct); setInspectedProduct(null); setAddModalOpen(true); }} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-zinc-300">Edit</button>
+                                    <button onClick={() => setInspectedProduct(null)} className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-zinc-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black">Close</button>
                                 </div>
                             </div>
                         </motion.div>
@@ -4916,6 +8202,389 @@ const ProductManagement = () => {
 };
 
 export default ProductManagement;
+
+```
+
+## File: `frontend/src/app/admin/settings/page.tsx`
+
+```typescript
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { fetchCollections } from '@/redux/slices/collectionSlice';
+import { fetchOccasions } from '@/redux/slices/occasionSlice';
+import {
+    fetchHomepageSettings,
+    resetHomepageSettingsState,
+    updateHomepageSettings,
+    type HomepageSettingsReferenceValue,
+    type SeasonalSectionPayload
+} from '@/redux/slices/homepageSettingsSlice';
+import { Gift, Layers, Loader2, Save, Settings, Sparkles, Plus, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const DEFAULT_COLLECTION_SLUG = 'navaratri-thamboolam';
+const DEFAULT_OCCASION_SLUG = 'navaratri-golu';
+
+type CatalogItem = {
+    _id: string;
+    name: string;
+    parent?: string | { _id: string; name?: string } | null;
+};
+
+const getReferenceId = (reference: HomepageSettingsReferenceValue | null | undefined) => {
+    if (!reference) return null;
+    return typeof reference === 'string' ? reference : reference._id;
+};
+
+const getAvailableReferenceIds = (
+    references: HomepageSettingsReferenceValue[],
+    catalog: CatalogItem[]
+) => {
+    const availableIds = new Set(catalog.map((item) => item._id));
+    return references
+        .map(getReferenceId)
+        .filter((id): id is string => Boolean(id && availableIds.has(id)));
+};
+
+const getParentId = (item: CatalogItem) =>
+    typeof item.parent === 'string' ? item.parent : item.parent?._id;
+
+const HomepageSettingsPage = () => {
+    const dispatch = useAppDispatch();
+    const { collections, loading: collectionsLoading } = useAppSelector((state) => state.collections);
+    const { occasions, loading: occasionsLoading } = useAppSelector((state) => state.occasions);
+    const {
+        settings,
+        loaded: settingsLoaded,
+        saving,
+        error,
+        fetchError: settingsFetchError,
+        success
+    } = useAppSelector((state) => state.homepageSettings);
+
+    const [seasonalSections, setSeasonalSections] = useState<SeasonalSectionPayload[]>([]);
+    const [activeIndex, setActiveIndex] = useState<number>(0);
+
+    const [catalogsReady, setCatalogsReady] = useState(false);
+    const [catalogsError, setCatalogsError] = useState(false);
+    const initialized = useRef(false);
+
+    useEffect(() => {
+        void dispatch(fetchHomepageSettings());
+    }, [dispatch]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const loadCatalogs = async () => {
+            try {
+                await Promise.all([
+                    dispatch(fetchCollections()).unwrap(),
+                    dispatch(fetchOccasions()).unwrap()
+                ]);
+                if (isActive) setCatalogsError(false);
+            } catch {
+                if (isActive) setCatalogsError(true);
+            } finally {
+                if (isActive) setCatalogsReady(true);
+            }
+        };
+
+        void loadCatalogs();
+        return () => {
+            isActive = false;
+        };
+    }, [dispatch]);
+
+    useEffect(() => {
+        if (initialized.current || !settingsLoaded || !catalogsReady || catalogsError || settingsFetchError) return;
+
+        if (settings?.seasonalSections && settings.seasonalSections.length > 0) {
+            setSeasonalSections(settings.seasonalSections.map(s => ({
+                _id: s._id,
+                name: s.name || 'Seasonal Section',
+                enabled: s.enabled,
+                badge: s.badge || '',
+                heading: s.heading || '',
+                description: s.description || '',
+                collectionIds: getAvailableReferenceIds(s.collectionIds, collections),
+                occasionIds: getAvailableReferenceIds(s.occasionIds, occasions)
+            })));
+        } else {
+            setSeasonalSections([{
+                name: 'New Section',
+                enabled: true,
+                badge: '🪔 Festive Special',
+                heading: 'Navaratri Thamboolam Collections',
+                description: 'Navaratri / Golu - a subcategory of Festivals & Religious Events',
+                collectionIds: collections.filter((collection) => collection.slug === DEFAULT_COLLECTION_SLUG).map((collection) => collection._id),
+                occasionIds: occasions.filter((occasion) => occasion.slug === DEFAULT_OCCASION_SLUG).map((occasion) => occasion._id)
+            }]);
+        }
+        initialized.current = true;
+    }, [catalogsError, catalogsReady, collections, occasions, settings, settingsFetchError, settingsLoaded]);
+
+    useEffect(() => {
+        if (success) {
+            toast.success('Homepage settings updated.');
+            dispatch(resetHomepageSettingsState());
+        }
+    }, [dispatch, success]);
+
+    useEffect(() => {
+        if (error) {
+            toast.error(error);
+            dispatch(resetHomepageSettingsState());
+        }
+    }, [dispatch, error]);
+
+    useEffect(() => {
+        if (settingsFetchError) toast.error(settingsFetchError);
+    }, [settingsFetchError]);
+
+    const sortedCollections = useMemo(
+        () => [...collections].sort((a, b) => {
+            const parentDelta = Number(Boolean(getParentId(a))) - Number(Boolean(getParentId(b)));
+            return parentDelta || a.name.localeCompare(b.name);
+        }),
+        [collections]
+    );
+    const sortedOccasions = useMemo(
+        () => [...occasions].sort((a, b) => {
+            const parentDelta = Number(Boolean(getParentId(a))) - Number(Boolean(getParentId(b)));
+            return parentDelta || a.name.localeCompare(b.name);
+        }),
+        [occasions]
+    );
+
+    const parentName = (item: CatalogItem, catalog: CatalogItem[]) => {
+        const parentId = getParentId(item);
+        if (!parentId) return null;
+        if (item.parent && typeof item.parent === 'object' && item.parent.name) return item.parent.name;
+        return catalog.find((candidate) => candidate._id === parentId)?.name || null;
+    };
+
+    const updateActiveSection = (updates: Partial<SeasonalSectionPayload>) => {
+        setSeasonalSections(curr => {
+            const newSections = [...curr];
+            newSections[activeIndex] = { ...newSections[activeIndex], ...updates };
+            return newSections;
+        });
+    };
+
+    const toggleCollection = (id: string) => {
+        const currentIds = seasonalSections[activeIndex]?.collectionIds || [];
+        const newIds = currentIds.includes(id) ? currentIds.filter((value) => value !== id) : [...currentIds, id];
+        updateActiveSection({ collectionIds: newIds });
+    };
+
+    const toggleOccasion = (id: string) => {
+        const currentIds = seasonalSections[activeIndex]?.occasionIds || [];
+        const newIds = currentIds.includes(id) ? currentIds.filter((value) => value !== id) : [...currentIds, id];
+        updateActiveSection({ occasionIds: newIds });
+    };
+
+    const addSection = () => {
+        setSeasonalSections(curr => [...curr, {
+            name: `Section ${curr.length + 1}`,
+            enabled: false,
+            badge: '',
+            heading: '',
+            description: '',
+            collectionIds: [],
+            occasionIds: []
+        }]);
+        setActiveIndex(seasonalSections.length);
+    };
+
+    const removeSection = (index: number) => {
+        if (seasonalSections.length === 1) {
+            toast.error("Cannot remove the last section");
+            return;
+        }
+        setSeasonalSections(curr => curr.filter((_, i) => i !== index));
+        if (activeIndex >= index && activeIndex > 0) {
+            setActiveIndex(activeIndex - 1);
+        }
+    };
+
+    const saveSettings = () => {
+        dispatch(updateHomepageSettings({
+            seasonalSections
+        }));
+    };
+
+    const isLoading = !catalogsReady || !settingsLoaded || collectionsLoading || occasionsLoading;
+    const hasLoadError = catalogsError || Boolean(settingsFetchError);
+    const isBusy = isLoading || saving || hasLoadError;
+
+    const activeSection = seasonalSections[activeIndex];
+
+    if (isLoading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-zinc-400" /></div>;
+
+    return (
+        <div className="p-4 sm:p-6 max-w-[1200px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-5">
+                <div>
+                    <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Homepage Settings</h1>
+                    <p className="text-xs text-zinc-500 font-medium">Manage seasonal collections on the homepage.</p>
+                </div>
+                <div className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    <Settings size={15} />
+                    Seasonal sections
+                </div>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto pb-2">
+                {seasonalSections.map((section, idx) => (
+                    <div key={idx} className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer border ${idx === activeIndex ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'}`} onClick={() => setActiveIndex(idx)}>
+                        <span className="text-sm font-bold whitespace-nowrap">{section.name || `Section ${idx + 1}`}</span>
+                        {!section.enabled && <span className="text-[10px] bg-zinc-200 text-zinc-500 px-1.5 py-0.5 rounded">Disabled</span>}
+                    </div>
+                ))}
+                <button onClick={addSection} className="flex items-center justify-center w-10 h-10 rounded-lg border border-dashed border-zinc-300 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700">
+                    <Plus size={16} />
+                </button>
+            </div>
+
+            {activeSection && (
+                <div className="space-y-6 bg-zinc-50/50 p-5 rounded-xl border border-zinc-200">
+                    <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-zinc-700 mb-1">Internal Name</label>
+                            <input 
+                                type="text" 
+                                value={activeSection.name} 
+                                onChange={e => updateActiveSection({ name: e.target.value })} 
+                                className="w-full max-w-xs px-3 py-2 text-sm rounded-lg border border-zinc-300 focus:outline-none focus:border-zinc-500" 
+                                placeholder="e.g. Navaratri 2026"
+                            />
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <label className="inline-flex items-center gap-3 cursor-pointer">
+                                <span className="text-sm font-bold text-zinc-700">Enable Section</span>
+                                <input
+                                    type="checkbox"
+                                    checked={activeSection.enabled}
+                                    onChange={(event) => updateActiveSection({ enabled: event.target.checked })}
+                                    className="sr-only"
+                                />
+                                <span className={`relative w-11 h-6 rounded-full transition-colors ${activeSection.enabled ? 'bg-emerald-500' : 'bg-zinc-300'}`}>
+                                    <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${activeSection.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </span>
+                            </label>
+                            <button onClick={() => removeSection(activeIndex)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-zinc-700 mb-1">Badge</label>
+                            <input 
+                                type="text" 
+                                value={activeSection.badge} 
+                                onChange={e => updateActiveSection({ badge: e.target.value })} 
+                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 focus:outline-none focus:border-zinc-500" 
+                                placeholder="e.g. 🪔 Festive Special"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-zinc-700 mb-1">Heading</label>
+                            <input 
+                                type="text" 
+                                value={activeSection.heading} 
+                                onChange={e => updateActiveSection({ heading: e.target.value })} 
+                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 focus:outline-none focus:border-zinc-500" 
+                                placeholder="e.g. Seasonal Collection"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-zinc-700 mb-1">Description</label>
+                            <textarea 
+                                value={activeSection.description} 
+                                onChange={e => updateActiveSection({ description: e.target.value })} 
+                                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 focus:outline-none focus:border-zinc-500 resize-none h-20" 
+                                placeholder="Description text..."
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
+                        <section className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
+                            <div className="p-4 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between gap-3">
+                                <div>
+                                    <h2 className="text-sm font-bold text-zinc-900 flex items-center gap-2"><Layers size={15} /> Collections</h2>
+                                </div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{activeSection.collectionIds.length} selected</span>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto divide-y divide-zinc-100">
+                                {sortedCollections.map((collection) => {
+                                    const isSelected = activeSection.collectionIds.includes(collection._id);
+                                    const parent = parentName(collection, collections);
+                                    return (
+                                        <label key={collection._id} className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-emerald-50' : 'hover:bg-zinc-50'}`}>
+                                            <input type="checkbox" checked={isSelected} onChange={() => toggleCollection(collection._id)} className="accent-emerald-600" />
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block text-xs font-bold text-zinc-800 truncate">{collection.name}</span>
+                                                <span className="block text-[10px] text-zinc-400 mt-0.5">{parent ? `Under ${parent}` : 'Top-level collection'}</span>
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </section>
+
+                        <section className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
+                            <div className="p-4 border-b border-zinc-200 bg-rose-50 flex items-center justify-between gap-3">
+                                <div>
+                                    <h2 className="text-sm font-bold text-zinc-900 flex items-center gap-2"><Gift size={15} /> Occasions</h2>
+                                </div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{activeSection.occasionIds.length} selected</span>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto divide-y divide-zinc-100">
+                                {sortedOccasions.map((occasion) => {
+                                    const isSelected = activeSection.occasionIds.includes(occasion._id);
+                                    const parent = parentName(occasion, occasions);
+                                    return (
+                                        <label key={occasion._id} className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-rose-50' : 'hover:bg-zinc-50'}`}>
+                                            <input type="checkbox" checked={isSelected} onChange={() => toggleOccasion(occasion._id)} className="accent-rose-600" />
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block text-xs font-bold text-zinc-800 truncate">{occasion.name}</span>
+                                                <span className="block text-[10px] text-zinc-400 mt-0.5">{parent ? `Under ${parent}` : 'Top-level occasion'}</span>
+                                            </span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-amber-200 bg-amber-50">
+                <p className="text-xs text-amber-900 leading-relaxed">
+                    <Sparkles size={14} className="inline mr-1" />
+                    Save your settings for them to reflect on the storefront.
+                </p>
+                <button
+                    type="button"
+                    onClick={saveSettings}
+                    disabled={isBusy}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    Save Homepage Settings
+                </button>
+            </div>
+        </div>
+    );
+};
+
+export default HomepageSettingsPage;
 
 ```
 
@@ -5098,20 +8767,51 @@ export default UserManagement;
 ```typescript
 "use client";
 
-import React, { use, useState, useEffect, useMemo } from "react";
+import React, { use, useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProducts } from "@/redux/slices/productSlice";
 import { fetchCollections } from "@/redux/slices/collectionSlice";
 import { RootState } from "@/redux/store";
-import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight } from "lucide-react";
+import { getImageUrl } from "@/utils/getImageUrl";
+import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight, X } from "lucide-react";
 import { Product } from "@/data/products";
+import { EXCEL_PRODUCTS } from "@/data/excelProducts";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params);
+const EXCEL_CATEGORY_META: Record<string, { name: string; description: string; group: string; image: string }> = {
+  "miniature-shops": {
+    name: "Navaratri Miniature Shops",
+    description: "Traditional South Indian street stalls and culinary shops sculpted by hand in polymer clay and wood.",
+    group: "miniature-shops",
+    image: "https://images.unsplash.com/photo-1544851026-5a85d554c5df?auto=format&fit=crop&q=80&w=1200",
+  },
+  "fruit-baskets": {
+    name: "Miniature Fruit Baskets",
+    description: "Exquisite hand-sculpted clay fruit baskets in woven hampers. Perfect for Golu market scenes and collectors.",
+    group: "fruit-baskets",
+    image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&q=80&w=1200",
+  },
+  "vegetable-crates": {
+    name: "Miniature Vegetable Crates",
+    description: "Realistic South Indian farm vegetables in miniature pine wood crates. Handcrafted with love at ₹199 each.",
+    group: "vegetable-crates",
+    image: "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&q=80&w=1200",
+  },
+  "navaratri-thamboolam": {
+    name: "Navaratri Thamboolam Collections",
+    description: "Auspicious miniature return gifts featuring betel leaves, supari, and coconuts in decorative trays.",
+    group: "navaratri-thamboolam",
+    image: "https://images.unsplash.com/photo-1604608672516-f1b9b1a0ef30?auto=format&fit=crop&q=80&w=1200",
+  },
+};
+
+function CategoryContent({ slug }: { slug: string }) {
   const dispatch = useAppDispatch();
+  const searchParams = useSearchParams();
+  const search = searchParams.get("search") || "";
 
   const { collections } = useAppSelector((state: RootState) => state.collections);
   const { products, loading } = useAppSelector((state: RootState) => state.products);
@@ -5119,81 +8819,199 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
   const [maxPrice, setMaxPrice] = useState(100000);
   const [sortBy, setSortBy] = useState("newest");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   useEffect(() => {
     dispatch(fetchCollections());
   }, [dispatch]);
 
-  const currentCollection = (collections as any[]).find(c => c.slug === slug);
+  const getParentId = (c: { parent?: string | { _id: string } | null }) =>
+    typeof c.parent === 'object' && c.parent ? c.parent._id : null;
+
+  const currentCollection = collections.find(c => c.slug === slug);
+  const excelMeta = EXCEL_CATEGORY_META[slug];
+  const isSubcategory = !!currentCollection?.parent;
+
+  // Resolve the top-level category either for this collection or its parent
+  const mainCollection = isSubcategory
+    ? collections.find(c => c._id === getParentId(currentCollection!))
+    : currentCollection;
+
+  const subCategories = collections.filter(c => {
+    if (!c.parent || !mainCollection) return false;
+    return getParentId(c) === mainCollection._id;
+  });
+
+  // Active subcategory: if the current slug IS a subcategory, pre-select it; else "all"
+  const activeSub = isSubcategory ? currentCollection?.slug : "all";
 
   useEffect(() => {
+    const fetchParams: any = { sort: sortBy };
+    if (search) fetchParams.search = search;
+
     if (slug === 'all') {
-      dispatch(fetchProducts({ sort: sortBy }));
-    } else if (currentCollection?.name) {
-      dispatch(fetchProducts({ category: currentCollection.name, sort: sortBy }));
+      dispatch(fetchProducts(fetchParams));
+    } else if (mainCollection?.name) {
+      fetchParams.category = mainCollection.name;
+      const activeSubCategory = subCategories.find(s => s.slug === activeSub);
+      if (activeSub !== 'all' && activeSubCategory) {
+        fetchParams.subcategory = activeSubCategory.name;
+      }
+      dispatch(fetchProducts(fetchParams));
+    } else if (excelMeta) {
+      fetchParams.category = excelMeta.name;
+      dispatch(fetchProducts(fetchParams));
     }
-  }, [dispatch, slug, currentCollection?.name, sortBy]);
+  }, [dispatch, slug, mainCollection?.name, activeSub, sortBy, search, excelMeta]);
+
+  // Combine live products with Excel catalog products for uninterrupted e-commerce experience
+  const displayProducts = useMemo(() => {
+    let list: Product[] = [];
+
+    if (excelMeta) {
+      const matchedDb = (products || []).filter(
+        (p: any) =>
+          p.category === excelMeta.name ||
+          (p.categories && p.categories.includes(excelMeta.name)) ||
+          p.group === excelMeta.group
+      );
+      if (matchedDb.length > 0) {
+        list = matchedDb as Product[];
+      } else {
+        list = EXCEL_PRODUCTS.filter(p => p.group === excelMeta.group).map(p => ({
+          _id: p.sku,
+          id: p.sku,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          price: p.price,
+          mrp: p.mrp,
+          image: p.image,
+          images: [p.image],
+          stockStatus: 'made-to-order',
+          rating: p.rating,
+          reviewCount: p.reviewsCount,
+        })) as any[];
+      }
+    } else if (slug === 'all') {
+      if (products && products.length > 0) {
+        list = products as Product[];
+      } else {
+        list = EXCEL_PRODUCTS.map(p => ({
+          _id: p.sku,
+          id: p.sku,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          price: p.price,
+          mrp: p.mrp,
+          image: p.image,
+          images: [p.image],
+          stockStatus: 'made-to-order',
+          rating: p.rating,
+          reviewCount: p.reviewsCount,
+        })) as any[];
+      }
+    } else {
+      list = (products || []) as Product[];
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p => 
+        p.name.toLowerCase().includes(q) || 
+        (p.category && p.category.toLowerCase().includes(q)) ||
+        ((p as any).story && (p as any).story.toLowerCase().includes(q)) ||
+        ((p as any).details && (p as any).details.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [products, excelMeta, slug, search]);
 
   const filteredProducts = useMemo(() => {
-    return (products as Product[]).filter(p => p.price <= maxPrice);
-  }, [products, maxPrice]);
+    let list = displayProducts.filter(p => p.price <= maxPrice);
+    if (sortBy === 'price-asc' || sortBy === 'price-low') {
+      list = [...list].sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-desc' || sortBy === 'price-high') {
+      list = [...list].sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'rating' || sortBy === 'popular') {
+      list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+    return list;
+  }, [displayProducts, maxPrice, sortBy]);
 
   const resetFilters = () => {
     setMaxPrice(100000);
     setSortBy("newest");
   };
 
-  const pageTitle = currentCollection?.name || (slug === 'all' ? "All Products" : "Collection");
-  const pageDesc = currentCollection?.description || "A mindful exploration of all our handcrafted artifacts. Find pieces that resonate with your space and spirit.";
+  const pageTitle = search 
+    ? `Search: "${search}"`
+    : (currentCollection?.name || excelMeta?.name || (slug === 'all' ? "All Products" : "Collection"));
+
+  const pageDesc = search
+    ? `Browse all handcrafted artifacts matching "${search}".`
+    : (currentCollection?.description || excelMeta?.description || mainCollection?.description || "A mindful exploration of all our handcrafted artifacts. Find pieces that resonate with your space and spirit.");
+
+  const bgImage = getImageUrl(currentCollection?.image || mainCollection?.image) || excelMeta?.image || '/hero-bg.jpg';
 
   return (
     <div className="flex flex-col min-h-screen font-sans bg-[var(--bg)]">
 
       {/* ── BACKGROUND IMAGE BREADCRUMB HERO ── */}
-      <section className="relative w-full h-[340px] md:h-[420px] flex flex-col items-start justify-end overflow-hidden">
+      <section className="relative w-full h-[260px] sm:h-[320px] md:h-[400px] flex flex-col items-start justify-end overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-[1.04]"
-          style={{ backgroundImage: "url('/hero-bg.jpg')" }}
+          style={{ backgroundImage: `url('${bgImage}')` }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/40 to-black/15" />
         <div className="absolute inset-0 bg-[var(--accent)]/10 mix-blend-multiply" />
 
-        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-8 sm:px-12 pb-10 md:pb-14 flex flex-col gap-4">
+        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 pb-6 sm:pb-10 md:pb-12 flex flex-col gap-3 sm:gap-4">
           {/* Breadcrumb */}
           <motion.nav
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             aria-label="Breadcrumb"
-            className="flex items-center gap-2"
+            className="flex items-center gap-1.5 sm:gap-2 flex-wrap"
           >
-            <Link href="/" className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300">
-              <Home size={14} />
+            <Link href="/" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300">
+              <Home size={13} />
             </Link>
-            <ChevronRight size={14} className="text-white/30" />
+            <ChevronRight size={13} className="text-white/30" />
             {slug !== 'all' && (
               <>
-                <Link href="/category/all" className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
+                <Link href="/category/all" className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.15em] sm:tracking-[0.2em] uppercase hover:text-white transition-all">
                   All Products
                 </Link>
-                <ChevronRight size={14} className="text-white/30" />
+                <ChevronRight size={13} className="text-white/30" />
+                {isSubcategory && mainCollection && (
+                  <>
+                    <Link href={`/category/${mainCollection.slug}`} className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.15em] sm:tracking-[0.2em] uppercase hover:text-white transition-all">
+                      {mainCollection.name}
+                    </Link>
+                    <ChevronRight size={13} className="text-white/30" />
+                  </>
+                )}
               </>
             )}
-            <span className="px-4 py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-[10px] font-bold tracking-[0.2em] uppercase">
+            <span className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-[9px] sm:text-[10px] font-bold tracking-[0.15em] sm:tracking-[0.2em] uppercase truncate max-w-[200px]">
               {pageTitle}
             </span>
           </motion.nav>
 
           {/* Page Title */}
           <motion.div
-            initial={{ opacity: 0, y: 25 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.15 }}
+            transition={{ duration: 0.7, delay: 0.15 }}
           >
-            <span className="text-white/70 text-[10px] font-bold tracking-[0.25em] uppercase mb-3 block">
+            <span className="text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase mb-1.5 sm:mb-2 block">
               {filteredProducts.length} Handcrafted Pieces
             </span>
-            <h1 className="text-white text-3xl md:text-4xl lg:text-5xl font-bold leading-[1.2] tracking-tight">
+            <h1 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold leading-[1.2] tracking-tight">
               {pageTitle}
             </h1>
           </motion.div>
@@ -5201,14 +9019,132 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
       </section>
 
       {/* ── SHOP LAYOUT ── */}
-      <div className="max-w-[1440px] mx-auto px-8 sm:px-12 py-12 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-10 lg:gap-16 items-start w-full">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-12 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 lg:gap-16 items-start w-full">
 
-        {/* FILTERS SIDEBAR */}
+        {/* MOBILE FILTER & SORT BAR (Visible on mobile only) */}
+        <div className="lg:hidden flex items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-[var(--border)] shadow-sm">
+          <button
+            onClick={() => setMobileFilterOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[var(--bg-subtle)] text-[var(--text)] text-xs font-bold uppercase tracking-wider border border-[var(--border)] active:scale-95 transition-all"
+          >
+            <Filter size={14} className="text-[var(--accent)]" />
+            <span>Refine ({maxPrice < 100000 ? "Active" : "All"})</span>
+          </button>
+          <div className="relative flex-1">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-xs font-bold text-[var(--text)] outline-none appearance-none cursor-pointer pr-8"
+            >
+              <option value="newest">Latest Arrivals</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="rating">Top Rated</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-faint)]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+        </div>
+
+        {/* MOBILE FILTER DRAWER MODAL */}
+        <AnimatePresence>
+          {mobileFilterOpen && (
+            <div className="fixed inset-0 z-[600] flex justify-end lg:hidden">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setMobileFilterOpen(false)}
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                className="relative w-[320px] max-w-[85vw] h-full bg-white z-10 p-6 flex flex-col justify-between overflow-y-auto"
+              >
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between pb-4 border-b border-[var(--border)]">
+                    <h3 className="text-sm uppercase tracking-wider font-bold text-[var(--text)] flex items-center gap-2">
+                      <Filter size={16} className="text-[var(--accent)]" /> Filter Products
+                    </h3>
+                    <button
+                      onClick={() => setMobileFilterOpen(false)}
+                      className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center text-[var(--text-muted)]"
+                      aria-label="Close filters"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Price Limit Slider */}
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-bold uppercase text-[var(--text-faint)] tracking-[0.15em] block">Price Limit</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100000"
+                      step="500"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(parseInt(e.target.value))}
+                      className="w-full h-1.5 rounded-lg appearance-none cursor-pointer outline-none"
+                      style={{ WebkitAppearance: 'none', background: `linear-gradient(to right, var(--accent) ${(maxPrice / 100000) * 100}%, var(--bg-muted) ${(maxPrice / 100000) * 100}%)` }}
+                    />
+                    <div className="flex justify-between text-xs font-bold text-[var(--text-faint)]">
+                      <span>₹0</span>
+                      <span className="text-[var(--accent)] font-extrabold">₹{maxPrice.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  {/* Sort Selection */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold uppercase text-[var(--text-faint)] tracking-[0.15em] block">Sort By</label>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { val: "newest", label: "Latest Arrivals" },
+                        { val: "price-asc", label: "Price: Low to High" },
+                        { val: "price-desc", label: "Price: High to Low" },
+                        { val: "rating", label: "Top Rated" },
+                      ].map(opt => (
+                        <button
+                          key={opt.val}
+                          onClick={() => setSortBy(opt.val)}
+                          className={`w-full text-left py-2.5 px-3.5 rounded-xl text-xs font-semibold transition-all ${sortBy === opt.val ? 'bg-[var(--accent)] text-white shadow-sm' : 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-[var(--border)] flex gap-3">
+                  <button
+                    onClick={() => { resetFilters(); setMobileFilterOpen(false); }}
+                    className="flex-1 py-3 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-muted)] text-xs font-bold uppercase tracking-wider"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => setMobileFilterOpen(false)}
+                    className="flex-1 py-3 rounded-xl bg-[var(--text)] text-white text-xs font-bold uppercase tracking-wider"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* DESKTOP FILTERS SIDEBAR */}
         <motion.aside
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7 }}
-          className="flex flex-col gap-8 lg:sticky lg:top-[100px]"
+          className="hidden lg:flex flex-col gap-8 lg:sticky lg:top-[100px]"
         >
           <div className="space-y-7 p-7 rounded-[1.5rem] bg-[var(--bg-subtle)] border border-[var(--border)] shadow-sm">
             <div className="flex items-center justify-between pb-4 border-b border-[var(--border)]">
@@ -5227,7 +9163,7 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
                     type="range"
                     min="0"
                     max="100000"
-                    step="1000"
+                    step="500"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(parseInt(e.target.value))}
                     className="w-full h-1 rounded-lg appearance-none cursor-pointer outline-none slider-thumb"
@@ -5272,19 +9208,72 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
 
         {/* PRODUCTS AREA */}
         <div className="flex flex-col gap-6 pb-16">
+
+          {/* Search Active Notification Bar */}
+          {search && (
+            <div className="p-4 sm:p-5 bg-white rounded-2xl border border-[var(--border)] flex items-center justify-between gap-4 shadow-sm">
+              <div>
+                <p className="text-[13px] text-[var(--text)]">
+                  Searching for <span className="font-bold text-[var(--accent)]">"{search}"</span>
+                </p>
+                <p className="text-[11px] text-[var(--text-faint)] mt-0.5">Found {filteredProducts.length} handcrafted pieces</p>
+              </div>
+              <Link
+                href={`/category/${slug}`}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--bg-subtle)] text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors"
+              >
+                <X size={13} /> Clear
+              </Link>
+            </div>
+          )}
+
+          {/* Subcategory Tabs */}
+          {!search && mainCollection && subCategories.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 touch-scroll"
+            >
+              <Link
+                href={`/category/${mainCollection.slug}`}
+                className={`shrink-0 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border text-[10px] sm:text-[11px] font-bold tracking-wide transition-all duration-300 ${
+                  activeSub === "all" || (!isSubcategory && !activeSub)
+                    ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                    : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                }`}
+              >
+                All
+              </Link>
+              {subCategories.map((sub) => (
+                <Link
+                  key={sub._id}
+                  href={`/category/${sub.slug}`}
+                  className={`shrink-0 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border text-[10px] sm:text-[11px] font-bold tracking-wide transition-all duration-300 ${
+                    activeSub === sub.slug
+                      ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                      : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                  }`}
+                >
+                  {sub.name}
+                </Link>
+              ))}
+            </motion.div>
+          )}
+
           {/* Toolbar */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--border)] pb-5"
+            className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-4"
           >
-            <div className="text-[12px] font-bold tracking-[0.1em] text-[var(--text-faint)] uppercase">
-              <span className="text-[var(--text)]">{filteredProducts.length}</span> results
+            <div className="text-[11px] sm:text-[12px] font-bold tracking-[0.1em] text-[var(--text-faint)] uppercase">
+              <span className="text-[var(--text)]">{filteredProducts.length}</span> pieces available
             </div>
             <div className="flex bg-[var(--bg-subtle)] rounded-xl p-1 border border-[var(--border)]">
-              <button onClick={() => setViewMode("grid")} className={`p-2 rounded-lg transition-colors ${viewMode === "grid" ? "bg-white shadow-sm text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"}`}><LayoutGrid size={16} strokeWidth={1.5} /></button>
-              <button onClick={() => setViewMode("list")} className={`p-2 rounded-lg transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"}`}><List size={16} strokeWidth={1.5} /></button>
+              <button onClick={() => setViewMode("grid")} className={`p-1.5 sm:p-2 rounded-lg transition-colors ${viewMode === "grid" ? "bg-white shadow-sm text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"}`} aria-label="Grid view"><LayoutGrid size={15} strokeWidth={1.5} /></button>
+              <button onClick={() => setViewMode("list")} className={`p-1.5 sm:p-2 rounded-lg transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"}`} aria-label="List view"><List size={15} strokeWidth={1.5} /></button>
             </div>
           </motion.div>
 
@@ -5300,16 +9289,16 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
-                className={`grid gap-x-6 gap-y-12 ${viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}
+                className={`grid gap-3 sm:gap-6 ${viewMode === "grid" ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-1"}`}
               >
                 {filteredProducts.map((p: Product, i: number) => (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.07, duration: 0.5 }}
-                    key={(p as any)._id || p.id}
+                    transition={{ delay: Math.min(i * 0.05, 0.5), duration: 0.5 }}
+                    key={p._id || p.id}
                   >
-                    <ProductCard product={p as any} />
+                    <ProductCard product={p} />
                   </motion.div>
                 ))}
               </motion.div>
@@ -5323,8 +9312,13 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
                 <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm border border-[var(--border)]">
                   <Leaf size={28} className="text-[var(--text-faint)]" strokeWidth={1.5} />
                 </div>
-                <h3 className="text-[var(--text)] text-2xl font-bold tracking-tight">No Results Found</h3>
-                <p className="text-[var(--text-muted)] text-[14px] max-w-sm leading-relaxed">No artifacts match your current price filter. Try adjusting or resetting the filters.</p>
+                <h3 className="text-[var(--text)] text-2xl font-bold tracking-tight">No Pieces Found</h3>
+                <p className="text-[var(--text-muted)] text-[14px] max-w-sm leading-relaxed">
+                  {search 
+                    ? `No pieces matched your search "${search}". Try searching for another item or clear your search.`
+                    : "No artifacts match your current price filter. Try adjusting or resetting the filters."
+                  }
+                </p>
                 <button onClick={resetFilters} className="mt-4 px-8 py-3 bg-white text-[var(--text)] rounded-full text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-[var(--accent)] hover:text-white border border-[var(--border)] transition-all">
                   Reset Filters
                 </button>
@@ -5352,6 +9346,23 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
   );
 }
 
+export default function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
+
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[var(--bg)] flex flex-col items-center justify-center gap-4">
+          <Loader2 className="animate-spin text-[var(--accent)]" size={36} strokeWidth={1.5} />
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--text-faint)]">Loading collection...</span>
+        </div>
+      }
+    >
+      <CategoryContent slug={slug} />
+    </Suspense>
+  );
+}
+
 ```
 
 ## File: `frontend/src/app/checkout/page.tsx`
@@ -5371,6 +9382,8 @@ import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
 import { useCart } from "@/hooks/useCart";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
 import { getImageUrl } from '@/utils/getImageUrl';
+import { formatWeight } from '@/utils/formatWeight';
+import { FREE_SHIPPING_THRESHOLD, calculateShipping } from '@/utils/shipping';
 import {
   MapPin, User, Mail, Phone, Home, Package,
   CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
@@ -5408,7 +9421,7 @@ export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const router   = useRouter();
 
-  const { items, totalPrice, isAuth, clear } = useCart();
+  const { items, totalPrice, totalWeight, isAuth, clear } = useCart();
   const userInfo = useAppSelector(s => s.auth.userInfo);
   const { loading, error, success, currentOrder } = useAppSelector(s => s.orders);
 
@@ -5468,7 +9481,7 @@ export default function CheckoutPage() {
   // Redirect unauthenticated users
   useEffect(() => {
     if (!isAuth) {
-      router.push("/login?redirect=/checkout");
+      router.push("/account?redirect=/checkout");
     }
   }, [isAuth, router]);
 
@@ -5478,6 +9491,9 @@ export default function CheckoutPage() {
   }, [items, paymentSuccess, success, router]);
 
   const touch = (k: keyof ShippingForm) => setTouched(p => ({ ...p, [k]: true }));
+
+  const shippingPrice = calculateShipping(totalPrice);
+  const grandTotal = totalPrice + shippingPrice;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -5497,13 +9513,15 @@ export default function CheckoutPage() {
     const orderData = {
       orderItems: items.map(i => ({
         name: i.name, qty: i.quantity, image: i.image,
-        price: i.price, product: i.product,
+        price: i.price, weight: i.weight || 0, product: i.product,
         selectedVariant: i.selectedVariant,
         selectedColor: i.selectedColor,
         customerImage: i.customerImage,
       })),
       shippingAddress: form,
-      totalPrice,
+      itemsPrice: totalPrice,
+      shippingPrice,
+      totalPrice: grandTotal,
     };
 
     dispatch(createOrder({ orderData, isGuest: false })).then((res: any) => {
@@ -5514,19 +9532,47 @@ export default function CheckoutPage() {
     });
   };
 
+  const loadRazorpayScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window !== "undefined" && (window as any).Razorpay) {
+        return resolve(true);
+      }
+      const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(true));
+        existing.addEventListener('error', () => resolve(false));
+        // Check if already ready
+        if ((window as any).Razorpay) return resolve(true);
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleRazorpay = async (orderId: string, amount: number) => {
     try {
       setIsProcessingPayment(true);
       
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        setIsProcessingPayment(false);
+        alert("Payment gateway could not be initialized. Please check your network connection and try again.");
+        return;
+      }
+
       const { data: createData } = await api.post('/payments/razorpay/create', { orderId });
       const { id: rzpOrderId, key } = createData.data;
 
       const options = {
         key: key,
-        amount: amount * 100,
+        amount: Math.round(amount * 100),
         currency: "INR",
         name: "Mythris Gleams",
-        description: "Artisan Selection",
+        description: "Handcrafted Artisan Order",
         order_id: rzpOrderId,
         handler: async function (response: any) {
           try {
@@ -5555,7 +9601,7 @@ export default function CheckoutPage() {
           contact: form.phone
         },
         theme: {
-          color: "#b85c3a"
+          color: "#c84b31"
         },
         modal: {
           ondismiss: function () {
@@ -5606,17 +9652,17 @@ export default function CheckoutPage() {
           <p className="text-[12px] text-[var(--text-faint)] mb-10">A confirmation has been sent to <strong>{currentOrder.shippingAddress?.email}</strong></p>
 
           {/* Status tracker */}
-          <div className="flex items-center justify-center gap-0 mb-12 overflow-x-auto max-w-[600px] mx-auto pb-2">
+          <div className="flex items-center justify-start sm:justify-center gap-0 mb-10 overflow-x-auto no-scrollbar touch-scroll w-full max-w-[600px] mx-auto pb-4 px-2">
             {STATUS_STEPS.map((step, i) => (
               <React.Fragment key={step}>
                 <div className="flex flex-col items-center gap-2 shrink-0">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-medium transition-all ${i <= stepIdx ? "bg-[var(--text)] text-white" : "bg-[var(--bg-muted)] text-[var(--text-faint)] border border-[var(--border)]"}`}>
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] sm:text-[11px] font-medium transition-all ${i <= stepIdx ? "bg-[var(--text)] text-white" : "bg-[var(--bg-muted)] text-[var(--text-faint)] border border-[var(--border)]"}`}>
                     {i < stepIdx ? "✓" : i + 1}
                   </div>
-                  <span className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] max-w-[60px] text-center leading-tight">{step}</span>
+                  <span className="text-[8px] sm:text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] max-w-[55px] sm:max-w-[60px] text-center leading-tight">{step}</span>
                 </div>
                 {i < STATUS_STEPS.length - 1 && (
-                  <div className={`h-[1px] w-10 sm:w-16 shrink-0 mb-6 ${i < stepIdx ? "bg-[var(--text)]" : "bg-[var(--border)]"}`} />
+                  <div className={`h-[1px] w-6 sm:w-16 shrink-0 mb-5 sm:mb-6 ${i < stepIdx ? "bg-[var(--text)]" : "bg-[var(--border)]"}`} />
                 )}
               </React.Fragment>
             ))}
@@ -5653,24 +9699,24 @@ export default function CheckoutPage() {
         title="Checkout"
       />
 
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-12 py-12 lg:py-20 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-start">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-8 lg:px-12 py-8 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-start">
 
         {/* ─── LEFT: Form ─── */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-7 flex flex-col gap-8">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-7 flex flex-col gap-6 sm:gap-8">
 
           <div>
-            <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]">Step 1 of 1</span>
-            <h1 className="text-3xl  text-[var(--text)] mt-2">Delivery Details</h1>
+            <span className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]">Step 1 of 1</span>
+            <h1 className="text-2xl sm:text-3xl text-[var(--text)] mt-1.5 sm:mt-2">Delivery Details</h1>
           </div>
 
           <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
             <fieldset disabled={loading || isProcessingPayment} className={`flex flex-col gap-6 border-none p-0 m-0 min-w-0 transition-all duration-300 ${loading || isProcessingPayment ? 'opacity-60 pointer-events-none' : ''}`}>
-            <div className="bg-white rounded-[2rem] border border-[var(--border)] p-8 flex flex-col gap-6">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="bg-white rounded-2xl sm:rounded-[2rem] border border-[var(--border)] p-5 sm:p-8 flex flex-col gap-5 sm:gap-6">
+              <div className="flex items-center gap-3 mb-1 sm:mb-2">
                 <div className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center">
                   <User size={15} className="text-[var(--accent)]" strokeWidth={1.5} />
                 </div>
-                <h3 className=" text-lg text-[var(--text)]">Contact Information</h3>
+                <h3 className="text-base sm:text-lg text-[var(--text)]">Contact Information</h3>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -5693,23 +9739,23 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-[2rem] border border-[var(--border)] p-8 flex flex-col gap-6">
-              <div className="flex items-center gap-3 mb-2">
+            <div className="bg-white rounded-2xl sm:rounded-[2rem] border border-[var(--border)] p-5 sm:p-8 flex flex-col gap-5 sm:gap-6">
+              <div className="flex items-center gap-3 mb-1 sm:mb-2">
                 <div className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center">
                   <MapPin size={15} className="text-[var(--accent)]" strokeWidth={1.5} />
                 </div>
-                <h3 className=" text-lg text-[var(--text)]">Delivery Address</h3>
+                <h3 className="text-base sm:text-lg text-[var(--text)]">Delivery Address</h3>
               </div>
 
-              <div className="flex flex-col gap-2 mb-2">
+              <div className="flex flex-col gap-2 mb-1 sm:mb-2">
                 <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Destination Type</label>
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3 flex-wrap">
                   {["Home", "Work", "Other"].map(type => (
                     <button 
                       key={type}
                       type="button"
                       onClick={() => setForm(p => ({ ...p, label: type }))}
-                      className={`px-4 py-2 rounded-xl text-[12px] font-medium border transition-all ${form.label === type ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
+                      className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-[12px] font-medium border transition-all ${form.label === type ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
                     >
                       {type}
                     </button>
@@ -5718,15 +9764,15 @@ export default function CheckoutPage() {
               </div>
 
               {isAuth && userAddresses.length > 1 && (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:gap-3">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">Select Stored Address</label>
-                  <div className="flex gap-3 overflow-x-auto pb-2">
+                  <div className="flex gap-2 sm:gap-3 overflow-x-auto no-scrollbar touch-scroll pb-2">
                     {userAddresses.map((addr, idx) => (
                       <button 
                         key={idx}
                         type="button" 
                         onClick={() => selectAddress(addr)}
-                        className={`px-6 py-3 rounded-xl border text-[12px] font-medium whitespace-nowrap transition-all ${form.street === addr.street ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
+                        className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl border text-[11px] sm:text-[12px] font-medium whitespace-nowrap transition-all ${form.street === addr.street ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
                       >
                         {addr.label}
                       </button>
@@ -5741,7 +9787,7 @@ export default function CheckoutPage() {
                 <FieldError field="street" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">City</label>
                   <input name="city" value={form.city} onChange={handleChange} onBlur={() => touch("city")} placeholder="City / District" className={inputClass("city")} />
@@ -5766,7 +9812,7 @@ export default function CheckoutPage() {
             </div>
 
             {/* Payment note */}
-            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-5 flex gap-4 items-start">
+            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-4 sm:p-5 flex gap-3 sm:gap-4 items-start">
               <Package size={20} className="text-[var(--accent)] shrink-0 mt-0.5" strokeWidth={1.5} />
               <div>
                 <p className="text-[13px] font-medium text-[var(--text)]">Secure Online Payment</p>
@@ -5780,8 +9826,8 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            <button type="submit" disabled={loading || isProcessingPayment} className="h-16 bg-[var(--text)] text-white rounded-2xl text-[13px] font-medium tracking-[0.15em] uppercase hover:bg-[var(--text-muted)] transition-all disabled:opacity-60 flex items-center justify-center gap-3 shadow-lg shadow-[var(--text)]/10">
-              {loading || isProcessingPayment ? <><Loader2 size={18} className="animate-spin" /> {isProcessingPayment ? "Processing Payment..." : "Preparing Order..."}</> : <><CheckCircle2 size={18} strokeWidth={1.5} /> Proceed to Pay — ₹{totalPrice.toLocaleString()}</>}
+            <button type="submit" disabled={loading || isProcessingPayment} className="h-14 sm:h-16 bg-[var(--text)] text-white rounded-xl sm:rounded-2xl text-[12px] sm:text-[13px] font-medium tracking-[0.15em] uppercase hover:bg-[var(--text-muted)] transition-all disabled:opacity-60 flex items-center justify-center gap-3 shadow-lg shadow-[var(--text)]/10">
+              {loading || isProcessingPayment ? <><Loader2 size={18} className="animate-spin" /> {isProcessingPayment ? "Processing Payment..." : "Preparing Order..."}</> : <><CheckCircle2 size={18} strokeWidth={1.5} /> Proceed to Pay — ₹{grandTotal.toLocaleString()}</>}
             </button>
             </fieldset>
           </form>
@@ -5789,14 +9835,14 @@ export default function CheckoutPage() {
 
         {/* ─── RIGHT: Order Summary ─── */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-5 sticky top-[100px]">
-          <div className="bg-white rounded-[2rem] border border-[var(--border)] overflow-hidden">
-            <div className="px-8 py-6 border-b border-[var(--border)] flex items-center gap-3">
+          <div className="bg-white rounded-2xl sm:rounded-[2rem] border border-[var(--border)] overflow-hidden">
+            <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-[var(--border)] flex items-center gap-3">
               <ShoppingBag size={18} className="text-[var(--accent)]" strokeWidth={1.5} />
-              <h2 className=" text-[1.1rem] text-[var(--text)]">Order Summary</h2>
+              <h2 className="text-[1rem] sm:text-[1.1rem] text-[var(--text)]">Order Summary</h2>
               <span className="ml-auto text-[11px] text-[var(--text-faint)] tracking-wide">{items.length} {items.length === 1 ? "item" : "items"}</span>
             </div>
 
-            <div className="px-8 py-6 flex flex-col gap-5 max-h-[380px] overflow-y-auto">
+            <div className="px-5 sm:px-8 py-4 sm:py-6 flex flex-col gap-4 sm:gap-5 max-h-[380px] overflow-y-auto">
               {items.map(item => (
                 <div key={item._id} className="flex gap-4 items-start">
                   <div className="w-16 h-16 rounded-2xl bg-[var(--bg-subtle)] border border-[var(--border)] overflow-hidden shrink-0">
@@ -5819,16 +9865,32 @@ export default function CheckoutPage() {
               ))}
             </div>
 
-            <div className="px-8 py-6 border-t border-[var(--border)] space-y-4 bg-[var(--bg-subtle)]/50">
+            <div className="px-5 sm:px-8 py-4 sm:py-6 border-t border-[var(--border)] space-y-3 sm:space-y-4 bg-[var(--bg-subtle)]/50">
               <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
                 <span>Subtotal</span><span>₹{totalPrice.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
-                <span>Shipping</span><span className="text-[#849b87] font-medium">Free</span>
+                <span>Shipping</span>
+                {shippingPrice === 0 ? (
+                  <span className="text-[#849b87] font-medium">Free</span>
+                ) : (
+                  <span className="text-[var(--text)] font-medium">₹{shippingPrice.toLocaleString()}</span>
+                )}
               </div>
+              {shippingPrice > 0 && (
+                <div className="text-[11px] text-[var(--text-faint)] bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl px-3 py-2">
+                  Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more to unlock free shipping within India (₹0).
+                </div>
+              )}
+              {totalWeight > 0 && (
+                <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
+                  <span>Total Weight</span>
+                  <span className="font-semibold text-[var(--text-muted)]">{formatWeight(totalWeight)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center pt-4 border-t border-[var(--border)]">
                 <span className=" text-[1rem] text-[var(--text)]">Total</span>
-                <span className=" text-2xl text-[var(--text)]">₹{totalPrice.toLocaleString()}</span>
+                <span className=" text-2xl text-[var(--text)]">₹{grandTotal.toLocaleString()}</span>
               </div>
               <p className="text-[11px] text-[var(--text-faint)] text-center">✦ Estimated delivery: 10–14 days ✦</p>
             </div>
@@ -6141,27 +10203,31 @@ export default function ContactPage() {
 
 @layer base {
   :root {
-    /* ─── Warm Terracotta & Rust Palette ───────────────────────────── */
-    /* Backgrounds — warm ivory/linen */
-    --bg:           #faf7f3; /* Rich warm ivory */
-    --bg-subtle:    #f3ebe0; /* Aged linen */
-    --bg-muted:     #e8d9c8; /* Warm sand */
+    /* ─── Artisanal Palette (Extracted from Brand Logo) ────────── */
+    /* Backgrounds — warm ivory & parchment */
+    --bg:           #fffdf9; /* Luminous soft ivory */
+    --bg-subtle:    #f8f2e8; /* Warm parchment linen */
+    --bg-muted:     #eedfcb; /* Soft biscuit sand */
 
-    /* Text — deep charcoal-brown */
-    --text:         #2a1f18; /* Espresso dark */
-    --text-muted:   #6b5444; /* Warm mahogany mid-tone */
-    --text-faint:   #a8896e; /* Soft caramel */
+    /* Text — deep espresso clay & warm mocha */
+    --text:         #2d1810; /* Deep espresso dark */
+    --text-muted:   #785d4d; /* Artisanal warm mocha */
+    --text-faint:   #ad9584; /* Soft clay tone */
 
-    /* Accents — terracotta & rust */
-    --accent:       #b85c3a; /* Rich terracotta */
-    --accent-light: #e07c52; /* Burnt rust/orange */
-    --accent-glow:  #d4855a; /* Warm amber glow */
+    /* Accents — Terracotta Coral, Honey Amber, Craft Teal */
+    --accent:            #c84b31; /* Vibrant terracotta coral */
+    --accent-light:      #e06d53; /* Warm coral highlight */
+    --accent-glow:       #f58e65; /* Terracotta glow */
+    --accent-gold:       #f5a623; /* Honey amber gold from logo letters */
+    --accent-gold-light: #fdbe4e; /* Bright golden gleam */
+    --accent-teal:       #2a9d8f; /* Ceramic tool mug teal */
+    --accent-teal-dark:  #1d7066; /* Deep studio teal */
 
-    --border:       #ddd0c0; /* Warm linen border */
+    --border:       #e8dac8; /* Soft warm border */
 
     /* Shadows */
-    --shadow-soft:  0 8px 30px rgba(42, 31, 24, 0.06);
-    --shadow-float: 0 20px 50px rgba(184, 92, 58, 0.14);
+    --shadow-soft:  0 8px 30px rgba(45, 24, 16, 0.06);
+    --shadow-float: 0 20px 50px rgba(200, 75, 49, 0.15);
   }
 
   html {
@@ -6195,9 +10261,13 @@ export default function ContactPage() {
   --color-txt:          var(--text);
   --color-txt-muted:    var(--text-muted);
   
-  --color-border:       var(--border);
-  --color-accent:       var(--accent);
-  --color-accent-light: var(--accent-light);
+  --color-border:            var(--border);
+  --color-accent:            var(--accent);
+  --color-accent-light:      var(--accent-light);
+  --color-accent-gold:       var(--accent-gold);
+  --color-accent-gold-light: var(--accent-gold-light);
+  --color-accent-teal:       var(--accent-teal);
+  --color-accent-teal-dark:  var(--accent-teal-dark);
 
   --font-serif:    var(--font-playfair), serif;
   --font-sans:     var(--font-quicksand), system-ui, sans-serif;
@@ -6228,15 +10298,30 @@ export default function ContactPage() {
 }
 
 @layer utilities {
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
 }
 
 /* Rounded Scrollbar */
-::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--bg-muted); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Embla carousel touch handling */
+.embla {
+  overflow: hidden;
+}
+.embla__container {
+  display: flex;
+  touch-action: pan-y pinch-zoom;
+}
 
 ```
 
@@ -6305,16 +10390,24 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${cormorant.variable} ${dmSans.variable} ${playfair.variable} ${quicksand.variable} h-full antialiased`}
     >
       <head>
+        <title>Mythris Gleams | Handcrafted Clay Miniatures &amp; South Indian Heritage Art</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+        <meta
+          name="description"
+          content="Shop handcrafted clay miniatures, traditional Tamil Nadu street shops, miniature fruit baskets, vegetable crates, and Navaratri Thamboolam return gifts by Mythris Gleams."
+        />
+        <link rel="icon" href="/logo.png" />
         <script src="https://checkout.razorpay.com/v1/checkout.js" async></script>
       </head>
-      <body className="min-h-full flex flex-col font-sans">
+      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans overflow-x-hidden w-full relative">
         <ReduxProvider>
           <Toaster position="top-right" />
           {!isAdmin && <Navbar />}
-          <main className="flex-grow">
+          <main className="flex-grow w-full overflow-x-hidden">
             {children}
           </main>
           {!isAdmin && <Footer />}
@@ -6343,6 +10436,7 @@ import { Mail, Lock, Loader2, ArrowLeft, AlertCircle, UserPlus, LogIn, User } fr
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { login, registerUser, resetAuthError } from '@/redux/slices/authSlice';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // Validation Schemas
 const loginSchema = z.object({
@@ -6375,10 +10469,12 @@ const LoginContent = () => {
         if (userInfo) {
             if (userInfo.role === 'admin') {
                 router.push('/admin');
+            } else if (redirect) {
+                router.push(redirect);
             } else if (isRegistering) {
-                router.push(`/account/profile?redirect=${redirect || '/'}`);
+                router.push('/account/profile');
             } else {
-                router.push(redirect || '/');
+                router.push('/');
             }
         }
     }, [userInfo, router, redirect, isRegistering]);
@@ -6410,10 +10506,23 @@ const LoginContent = () => {
                 className="w-full max-w-md"
             >
                 {/* Brand Logo */}
-                <div className="text-center mb-10">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-900 text-gold shadow-2xl mb-6 shadow-gold/20">
-                        <span className="text-2xl font-bold font-serif italic">M</span>
+                <div className="text-center mb-8 flex flex-col items-center">
+                    <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-[var(--accent-gold)] shadow-xl bg-black mb-3">
+                        <Image
+                            src="/logo.png"
+                            alt="Mythris Gleams"
+                            fill
+                            sizes="80px"
+                            className="object-cover"
+                            priority
+                        />
                     </div>
+                    <span className="font-serif text-2xl font-bold text-zinc-900 tracking-tight">
+                      Mythris <span className="text-[var(--accent)]">Gleams</span>
+                    </span>
+                    <span className="text-[9px] font-bold tracking-[0.25em] uppercase text-zinc-400 mt-0.5">
+                      Handcrafted Clay Art
+                    </span>
                 </div>
 
                 {/* Form Card */}
@@ -6531,543 +10640,2706 @@ export default LoginPage;
 
 ```
 
+## File: `frontend/src/app/occasion/[slug]/page.tsx`
+
+```typescript
+"use client";
+
+import React, { use, useState, useEffect, useMemo } from "react";
+import Link from "next/link";
+import ProductCard from "@/components/ProductCard";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { fetchProducts } from "@/redux/slices/productSlice";
+import { fetchOccasions } from "@/redux/slices/occasionSlice";
+import { RootState } from "@/redux/store";
+import { getImageUrl } from "@/utils/getImageUrl";
+import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight, X } from "lucide-react";
+import { Product } from "@/data/products";
+import { motion, AnimatePresence } from "framer-motion";
+
+export default function OccasionPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
+  const dispatch = useAppDispatch();
+
+  const { occasions } = useAppSelector((state: RootState) => state.occasions);
+  const { products, loading } = useAppSelector((state: RootState) => state.products);
+
+  const [maxPrice, setMaxPrice] = useState(100000);
+  const [sortBy, setSortBy] = useState("newest");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+
+  useEffect(() => {
+    dispatch(fetchOccasions());
+  }, [dispatch]);
+
+  const getParentId = (o: { parent?: string | { _id: string } | null }) =>
+    typeof o.parent === 'object' && o.parent ? o.parent._id : null;
+
+  const currentOccasion = occasions.find(o => o.slug === slug);
+  const isSubOccasion = !!currentOccasion?.parent;
+
+  // Resolve the top-level occasion either for this occasion or its parent
+  const mainOccasion = isSubOccasion
+    ? occasions.find(o => o._id === getParentId(currentOccasion!))
+    : currentOccasion;
+
+  const subOccasions = occasions.filter(o => {
+    if (!o.parent || !mainOccasion) return false;
+    return getParentId(o) === mainOccasion._id;
+  });
+
+  // Active sub-occasion: if the current slug IS a sub-occasion, pre-select it; else "all"
+  const activeSub = isSubOccasion ? currentOccasion?.slug : "all";
+
+  useEffect(() => {
+    if (slug === 'all') {
+      dispatch(fetchProducts({ sort: sortBy }));
+    } else if (mainOccasion?.name) {
+      const activeSubOccasion = subOccasions.find(s => s.slug === activeSub);
+      if (activeSub === 'all' || !activeSubOccasion) {
+        dispatch(fetchProducts({ occasion: mainOccasion.name, sort: sortBy }));
+      } else {
+        dispatch(fetchProducts({ occasion: mainOccasion.name, occasionSub: activeSubOccasion.name, sort: sortBy }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, slug, mainOccasion?.name, activeSub, sortBy]);
+
+  const filteredProducts = useMemo(() => {
+    let list = ((products || []) as Product[]).filter(p => p.price <= maxPrice);
+    if (sortBy === 'price-asc' || sortBy === 'price-low') {
+      list = [...list].sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-desc' || sortBy === 'price-high') {
+      list = [...list].sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'rating' || sortBy === 'popular') {
+      list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+    return list;
+  }, [products, maxPrice, sortBy]);
+
+  const resetFilters = () => {
+    setMaxPrice(100000);
+    setSortBy("newest");
+  };
+
+  const pageTitle = currentOccasion?.name || (slug === 'all' ? "All Occasions" : "Occasion");
+  const pageDesc = currentOccasion?.description || mainOccasion?.description || "Thoughtfully curated miniatures for every celebration — birthdays, weddings, festivals and every special moment worth treasuring.";
+  const bgImage = getImageUrl(currentOccasion?.image || mainOccasion?.image) || '/hero-bg.jpg';
+
+  return (
+    <div className="flex flex-col min-h-screen font-sans bg-[var(--bg)]">
+
+      {/* ── BACKGROUND IMAGE BREADCRUMB HERO ── */}
+      <section className="relative w-full h-[260px] sm:h-[320px] md:h-[400px] flex flex-col items-start justify-end overflow-hidden">
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-[1.04]"
+          style={{ backgroundImage: `url('${bgImage}')` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/40 to-black/15" />
+        <div className="absolute inset-0 bg-[var(--accent)]/10 mix-blend-multiply" />
+
+        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 pb-6 sm:pb-10 md:pb-12 flex flex-col gap-3 sm:gap-4">
+          {/* Breadcrumb */}
+          <motion.nav
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            aria-label="Breadcrumb"
+            className="flex items-center gap-1.5 sm:gap-2 flex-wrap"
+          >
+            <Link href="/" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300">
+              <Home size={13} />
+            </Link>
+            <ChevronRight size={13} className="text-white/30" />
+            {slug !== 'all' && (
+              <>
+                <Link href="/occasion/all" className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.15em] sm:tracking-[0.2em] uppercase hover:text-white transition-all">
+                  All Occasions
+                </Link>
+                <ChevronRight size={13} className="text-white/30" />
+                {isSubOccasion && mainOccasion && (
+                  <>
+                    <Link href={`/occasion/${mainOccasion.slug}`} className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.15em] sm:tracking-[0.2em] uppercase hover:text-white transition-all">
+                      {mainOccasion.name}
+                    </Link>
+                    <ChevronRight size={13} className="text-white/30" />
+                  </>
+                )}
+              </>
+            )}
+            <span className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-[9px] sm:text-[10px] font-bold tracking-[0.15em] sm:tracking-[0.2em] uppercase truncate max-w-[200px]">
+              {pageTitle}
+            </span>
+          </motion.nav>
+
+          {/* Page Title */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.15 }}
+          >
+            <span className="text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase mb-1.5 sm:mb-2 block">
+              {filteredProducts.length} Handcrafted Pieces
+            </span>
+            <h1 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold leading-[1.2] tracking-tight">
+              {pageTitle}
+            </h1>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── SHOP LAYOUT ── */}
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-12 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 lg:gap-16 items-start w-full">
+
+        {/* MOBILE FILTER & SORT BAR (Visible on mobile only) */}
+        <div className="lg:hidden flex items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-[var(--border)] shadow-sm">
+          <button
+            onClick={() => setMobileFilterOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[var(--bg-subtle)] text-[var(--text)] text-xs font-bold uppercase tracking-wider border border-[var(--border)] active:scale-95 transition-all"
+          >
+            <Filter size={14} className="text-[var(--accent)]" />
+            <span>Refine ({maxPrice < 100000 ? "Active" : "All"})</span>
+          </button>
+          <div className="relative flex-1">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-xs font-bold text-[var(--text)] outline-none appearance-none cursor-pointer pr-8"
+            >
+              <option value="newest">Latest Arrivals</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="rating">Top Rated</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-faint)]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+        </div>
+
+        {/* MOBILE FILTER DRAWER MODAL */}
+        <AnimatePresence>
+          {mobileFilterOpen && (
+            <div className="fixed inset-0 z-[600] flex justify-end lg:hidden">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setMobileFilterOpen(false)}
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 300 }}
+                className="relative w-[320px] max-w-[85vw] h-full bg-white z-10 p-6 flex flex-col justify-between overflow-y-auto"
+              >
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between pb-4 border-b border-[var(--border)]">
+                    <h3 className="text-sm uppercase tracking-wider font-bold text-[var(--text)] flex items-center gap-2">
+                      <Filter size={16} className="text-[var(--accent)]" /> Filter Occasions
+                    </h3>
+                    <button
+                      onClick={() => setMobileFilterOpen(false)}
+                      className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center text-[var(--text-muted)]"
+                      aria-label="Close filters"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Price Limit Slider */}
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-bold uppercase text-[var(--text-faint)] tracking-[0.15em] block">Price Limit</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100000"
+                      step="500"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(parseInt(e.target.value))}
+                      className="w-full h-1.5 rounded-lg appearance-none cursor-pointer outline-none"
+                      style={{ WebkitAppearance: 'none', background: `linear-gradient(to right, var(--accent) ${(maxPrice / 100000) * 100}%, var(--bg-muted) ${(maxPrice / 100000) * 100}%)` }}
+                    />
+                    <div className="flex justify-between text-xs font-bold text-[var(--text-faint)]">
+                      <span>₹0</span>
+                      <span className="text-[var(--accent)] font-extrabold">₹{maxPrice.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  {/* Sort Selection */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold uppercase text-[var(--text-faint)] tracking-[0.15em] block">Sort By</label>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { val: "newest", label: "Latest Arrivals" },
+                        { val: "price-asc", label: "Price: Low to High" },
+                        { val: "price-desc", label: "Price: High to Low" },
+                        { val: "rating", label: "Top Rated" },
+                      ].map(opt => (
+                        <button
+                          key={opt.val}
+                          onClick={() => setSortBy(opt.val)}
+                          className={`w-full text-left py-2.5 px-3.5 rounded-xl text-xs font-semibold transition-all ${sortBy === opt.val ? 'bg-[var(--accent)] text-white shadow-sm' : 'bg-[var(--bg-subtle)] text-[var(--text-muted)]'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-[var(--border)] flex gap-3">
+                  <button
+                    onClick={() => { resetFilters(); setMobileFilterOpen(false); }}
+                    className="flex-1 py-3 rounded-xl bg-[var(--bg-subtle)] text-[var(--text-muted)] text-xs font-bold uppercase tracking-wider"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => setMobileFilterOpen(false)}
+                    className="flex-1 py-3 rounded-xl bg-[var(--text)] text-white text-xs font-bold uppercase tracking-wider"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* DESKTOP FILTERS SIDEBAR */}
+        <motion.aside
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.7 }}
+          className="hidden lg:flex flex-col gap-8 lg:sticky lg:top-[100px]"
+        >
+          <div className="space-y-7 p-7 rounded-[1.5rem] bg-[var(--bg-subtle)] border border-[var(--border)] shadow-sm">
+            <div className="flex items-center justify-between pb-4 border-b border-[var(--border)]">
+               <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-[var(--text)] flex items-center gap-2">
+                 <Filter size={14} strokeWidth={2} /> Refine
+               </h3>
+               <button onClick={resetFilters} className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-faint)] hover:text-[var(--accent)] transition-colors">Clear</button>
+            </div>
+
+            <div className="space-y-7">
+              {/* Price Range */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-bold uppercase text-[var(--text-faint)] tracking-[0.15em] block">Price Limit</label>
+                <div className="relative pt-1">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100000"
+                    step="1000"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(parseInt(e.target.value))}
+                    className="w-full h-1 rounded-lg appearance-none cursor-pointer outline-none slider-thumb"
+                    style={{ WebkitAppearance: 'none', background: `linear-gradient(to right, var(--accent) ${(maxPrice / 100000) * 100}%, var(--bg-muted) ${(maxPrice / 100000) * 100}%)` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[12px] font-bold text-[var(--text-faint)]">
+                  <span>₹0</span>
+                  <span className="text-[var(--accent)]">₹{maxPrice.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              {/* Sort */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-bold uppercase text-[var(--text-faint)] tracking-[0.15em] block">Sort By</label>
+                <div className="relative">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full bg-white border border-[var(--border)] hover:border-[var(--accent)] focus:border-[var(--accent)] transition-colors rounded-xl px-4 py-3 text-[13px] font-bold text-[var(--text)] outline-none cursor-pointer appearance-none shadow-sm"
+                  >
+                    <option value="newest">Latest Arrivals</option>
+                    <option value="price-asc">Price: Low to High</option>
+                    <option value="price-desc">Price: High to Low</option>
+                    <option value="rating">Top Rated</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-faint)]">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Occasion Description */}
+          {pageDesc && (
+            <div className="p-6 rounded-[1.5rem] bg-white border border-[var(--border)] shadow-sm">
+              <p className="text-[var(--text-muted)] text-[13px] leading-relaxed">{pageDesc}</p>
+            </div>
+          )}
+        </motion.aside>
+
+        {/* PRODUCTS AREA */}
+        <div className="flex flex-col gap-6 pb-16">
+          {/* Sub-occasion Tabs */}
+          {mainOccasion && subOccasions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 touch-scroll"
+            >
+              <Link
+                href={`/occasion/${mainOccasion.slug}`}
+                className={`shrink-0 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border text-[10px] sm:text-[11px] font-bold tracking-wide transition-all duration-300 ${
+                  activeSub === "all" || (!isSubOccasion && !activeSub)
+                    ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                    : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                }`}
+              >
+                All
+              </Link>
+              {subOccasions.map((sub) => (
+                <Link
+                  key={sub._id}
+                  href={`/occasion/${sub.slug}`}
+                  className={`shrink-0 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border text-[10px] sm:text-[11px] font-bold tracking-wide transition-all duration-300 ${
+                    activeSub === sub.slug
+                      ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-sm"
+                      : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                  }`}
+                >
+                  {sub.name}
+                </Link>
+              ))}
+            </motion.div>
+          )}
+
+          {/* Toolbar */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-4"
+          >
+            <div className="text-[11px] sm:text-[12px] font-bold tracking-[0.1em] text-[var(--text-faint)] uppercase">
+              <span className="text-[var(--text)]">{filteredProducts.length}</span> results
+            </div>
+            <div className="flex bg-[var(--bg-subtle)] rounded-xl p-1 border border-[var(--border)]">
+              <button onClick={() => setViewMode("grid")} className={`p-1.5 sm:p-2 rounded-lg transition-colors ${viewMode === "grid" ? "bg-white shadow-sm text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"}`}><LayoutGrid size={15} strokeWidth={1.5} /></button>
+              <button onClick={() => setViewMode("list")} className={`p-1.5 sm:p-2 rounded-lg transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-muted)]"}`}><List size={15} strokeWidth={1.5} /></button>
+            </div>
+          </motion.div>
+
+          <AnimatePresence mode="wait">
+            {loading ? (
+              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-40 flex flex-col items-center gap-5">
+                <Loader2 className="animate-spin text-[var(--accent)]" size={36} strokeWidth={1.5} />
+                <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--text-faint)]">Curating the Archive...</span>
+              </motion.div>
+            ) : filteredProducts.length > 0 ? (
+              <motion.div
+                key="grid"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className={`grid gap-3 sm:gap-6 ${viewMode === "grid" ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-1"}`}
+              >
+                {filteredProducts.map((p: Product, i: number) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.07, duration: 0.5 }}
+                    key={p._id || p.id}
+                  >
+                    <ProductCard product={p} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="py-24 px-8 text-center bg-[var(--bg-subtle)] rounded-[2rem] border border-[var(--border)] flex flex-col items-center gap-4 shadow-sm"
+              >
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm border border-[var(--border)]">
+                  <Leaf size={28} className="text-[var(--text-faint)]" strokeWidth={1.5} />
+                </div>
+                <h3 className="text-[var(--text)] text-2xl font-bold tracking-tight">No Results Found</h3>
+                <p className="text-[var(--text-muted)] text-[14px] max-w-sm leading-relaxed">No artifacts match your current price filter. Try adjusting or resetting the filters.</p>
+                <button onClick={resetFilters} className="mt-4 px-8 py-3 bg-white text-[var(--text)] rounded-full text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-[var(--accent)] hover:text-white border border-[var(--border)] transition-all">
+                  Reset Filters
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Slider thumb style */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .slider-thumb::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: var(--accent);
+          cursor: pointer;
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+      `}} />
+    </div>
+  );
+}
+```
+
 ## File: `frontend/src/app/page.tsx`
 
 ```typescript
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import SectionHeader from "@/components/SectionHeader";
-import Hero from "@/components/Hero";
-import ProductCard from "@/components/ProductCard";
+import Image from "next/image";
+import { motion } from "framer-motion";
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProducts } from "@/redux/slices/productSlice";
-import { fetchCollections } from "@/redux/slices/collectionSlice";
-import { createInquiry } from "@/redux/slices/inquirySlice";
+import { fetchCollections, type CollectionItem } from "@/redux/slices/collectionSlice";
+import { fetchOccasions } from "@/redux/slices/occasionSlice";
+import { fetchHomepageSettings, type HomepageSettingsReferenceValue } from "@/redux/slices/homepageSettingsSlice";
 import { RootState } from "@/redux/store";
-import { Loader2, Package, CheckCircle2, Plus } from "lucide-react";
-import { motion } from "framer-motion";
-import { Product } from "@/data/products";
-import { getImageUrl } from '@/utils/getImageUrl';
-import { useCart } from '@/hooks/useCart';
+import { getImageUrl } from "@/utils/getImageUrl";
+import { useCart } from "@/hooks/useCart";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ShoppingBag,
+  Sparkles,
+  ArrowRight,
+  Star,
+  Truck,
+  MessageCircle,
+} from "lucide-react";
+import toast from "react-hot-toast";
 
-/* ── Inline add-to-cart button — needs hook so must be its own component ── */
-function BestSellerAddBtn({ product, className, showText }: { product: Product, className?: string, showText?: boolean }) {
-  const { addToCart } = useCart();
-  return (
-    <button
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        addToCart({
-          productId: (product as any)._id || String(product.id),
-          name:      product.name,
-          image:     (product as any).images?.[0] || '',
-          price:     product.price,
-          quantity:  1,
-        });
-      }}
-      aria-label="Add to cart"
-      className={className || "w-9 h-9 rounded-full bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shrink-0"}
-    >
-      {showText ? "Add to Cart" : <Plus size={14} strokeWidth={2} />}
-    </button>
-  );
-}
+const SEASONAL_COLLECTION_SLUG = "navaratri-thamboolam";
+const SEASONAL_OCCASION_SLUG = "navaratri-golu";
+const DEFAULT_SEASONAL_COLLECTION_NAME = "Navaratri Thamboolam Collections";
+const DEFAULT_SEASONAL_OCCASION_NAME = "Navaratri Golu";
+const DEFAULT_SEASONAL_DESCRIPTION = "Thoughtful traditional return gifts for Golu visitors, weddings, and housewarmings. Featuring miniature betel leaves, supari, coconut, and decorative trays.";
 
-export default function Home() {
+type SeasonalCatalogItem = Pick<CollectionItem, "_id" | "name" | "slug" | "description" | "image" | "parent">;
+
+const getReferenceId = (reference: HomepageSettingsReferenceValue) =>
+  typeof reference === "string" ? reference : reference?._id || "";
+
+const getParentId = (item: { parent?: string | { _id: string } | null }) =>
+  typeof item.parent === "string" ? item.parent : item.parent?._id;
+
+const expandSelectedItems = <T extends SeasonalCatalogItem>(
+  selected: T[],
+  catalog: T[]
+): T[] => {
+  const expanded: T[] = [];
+  const pending = [...selected];
+  const seen = new Set<string>();
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || seen.has(current._id)) continue;
+    seen.add(current._id);
+    expanded.push(current);
+    catalog.forEach((item) => {
+      if (getParentId(item) === current._id) pending.push(item);
+    });
+  }
+
+  return expanded;
+};
+
+const ProductImage = ({
+  image,
+  alt,
+  className,
+}: {
+  image?: string;
+  alt: string;
+  className: string;
+}) => {
+  if (!image) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-stone-100 text-[var(--text-muted)] text-xs`}>
+        Image unavailable
+      </div>
+    );
+  }
+
+  return <img src={getImageUrl(image)} alt={alt} className={className} />;
+};
+
+type MarketTabKey = "fruits" | "veggies";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiProduct = any;
+
+type MarketItem = {
+  _id?: string;
+  sku: string;
+  name: string;
+  slug: string;
+  image: string;
+  price: number;
+  mrp: number;
+  shortDesc: string;
+  weight?: number;
+  stockStatus?: string;
+  requiresImage?: boolean;
+};
+
+const MARKET_GROUPS: Record<MarketTabKey, { category: string }> = {
+  fruits: { category: "Miniature Fruit Baskets" },
+  veggies: { category: "Miniature Vegetable Crates" },
+};
+
+const toMarketProduct = (p: ApiProduct): MarketItem => ({
+  _id: p._id,
+  sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+  name: p.name,
+  slug: p.slug,
+  image: p.images?.[0] || p.image || "",
+  price: p.price,
+  mrp: p.mrp || p.price,
+  shortDesc: p.story || p.details || "",
+  weight: p.weight,
+  stockStatus: p.stockStatus,
+  requiresImage: p.requiresImage,
+});
+
+// Live catalog from the API only
+const getMarketItems = (products: ApiProduct[], tab: MarketTabKey): MarketItem[] => {
+  const { category } = MARKET_GROUPS[tab];
+  return (products || [])
+    .filter(
+      (p: ApiProduct) =>
+        p.category === category ||
+        (Array.isArray(p.categories) && p.categories.includes(category))
+    )
+    .map(toMarketProduct);
+};
+
+export default function HomePage() {
   const dispatch = useAppDispatch();
-  const { products, loading: productsLoading } = useAppSelector((state: RootState) => state.products);
-  const { collections, loading: collectionsLoading } = useAppSelector((state: RootState) => state.collections);
-  const { success: inquirySuccess, loading: inquiryLoading } = useAppSelector((state: RootState) => state.inquiries);
-  
-  const [inquiryData, setInquiryData] = useState({ name: '', phone: '', message: '' });
+  const { products, loading: productsLoading } = useAppSelector(
+    (state: RootState) => state.products
+  );
+  const { collections } = useAppSelector(
+    (state: RootState) => state.collections
+  );
+  const { occasions } = useAppSelector(
+    (state: RootState) => state.occasions
+  );
+  const { settings: homepageSettings } = useAppSelector(
+    (state: RootState) => state.homepageSettings
+  );
+  const { addToCart } = useCart();
+
+  // Active tab for the ₹199 Market section
+  const [activeMarketTab, setActiveMarketTab] = useState<"fruits" | "veggies">("fruits");
 
   useEffect(() => {
-    dispatch(fetchProducts({ sort: 'newest' }));
+    dispatch(fetchProducts({ sort: "newest" }));
     dispatch(fetchCollections());
-
-    // Premium Reveal Animation logic
-    const observerOptions = { threshold: 0.1 };
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-        }
-      });
-    }, observerOptions);
-
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-    // Parallax Animation logic
-    const handleScroll = () => {
-      document.querySelectorAll('.parallax').forEach(el => {
-        const rect = el.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        // Only animate if in or near viewport
-        if (rect.top < viewportHeight && rect.bottom > 0) {
-          const speed = parseFloat(el.getAttribute('data-speed') || '0.1');
-          const yOffset = (rect.top - viewportHeight / 2) * speed;
-          (el as HTMLElement).style.transform = `translate3d(0, ${yOffset}px, 0)`;
-        }
-      });
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    // Trigger once on load
-    handleScroll();
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('scroll', handleScroll);
-    };
+    dispatch(fetchOccasions());
+    dispatch(fetchHomepageSettings());
   }, [dispatch]);
 
-  const handleInquirySubmit = (e: React.FormEvent) => {
+  // Heritage stalls drawn from the live product catalog (API)
+  const miniatureShops = useMemo(
+    () =>
+      products
+        .filter(
+          (p) =>
+            p.category === "Navaratri Miniature Shops" ||
+            p.subcategory === "Cultural Souvenirs"
+        )
+        .map((p) => ({
+          _id: p._id,
+          sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          group: "miniature-shops" as const,
+          subcategory: p.subcategory || "Miniature Shops",
+          image: p.images?.[0] || p.image || "",
+          price: p.price,
+          mrp: p.mrp || p.price,
+          badge: p.badge,
+          shortDesc: p.story || p.details || "",
+          rating: p.rating ?? 5,
+          reviewsCount: p.reviewCount ?? 0,
+        })),
+    [products]
+  );
+  const fruitBaskets = useMemo(
+    () => getMarketItems(products, "fruits"),
+    [products]
+  );
+  const vegetableCrates = useMemo(
+    () => getMarketItems(products, "veggies"),
+    [products]
+  );
+  const activeMarketItems =
+    activeMarketTab === "fruits" ? fruitBaskets : vegetableCrates;
+  const marketLoading = productsLoading && products.length === 0;
+  const fallbackSeasonalCollection = collections.find(
+    (collection) =>
+      collection.slug === SEASONAL_COLLECTION_SLUG ||
+      collection.name === DEFAULT_SEASONAL_COLLECTION_NAME
+  );
+  const fallbackSeasonalOccasion = occasions.find(
+    (occasion) =>
+      occasion.slug === SEASONAL_OCCASION_SLUG ||
+      occasion.name === DEFAULT_SEASONAL_OCCASION_NAME
+  );
+  // Pick the first enabled seasonal section from the new array
+  const activeSeasonalSection = useMemo(() => {
+    if (!homepageSettings?.seasonalSections?.length) return null;
+    return homepageSettings.seasonalSections.find((s) => s.enabled) ?? null;
+  }, [homepageSettings]);
+
+  const selectedCollections = useMemo(() => {
+    if (!activeSeasonalSection) {
+      return fallbackSeasonalCollection ? [fallbackSeasonalCollection] : [];
+    }
+    const selectedIds = new Set(
+      activeSeasonalSection.collectionIds.map(getReferenceId)
+    );
+    return collections.filter((collection) => selectedIds.has(collection._id));
+  }, [collections, fallbackSeasonalCollection, activeSeasonalSection]);
+  const selectedOccasions = useMemo(() => {
+    if (!activeSeasonalSection) {
+      return fallbackSeasonalOccasion ? [fallbackSeasonalOccasion] : [];
+    }
+    const selectedIds = new Set(
+      activeSeasonalSection.occasionIds.map(getReferenceId)
+    );
+    return occasions.filter((occasion) => selectedIds.has(occasion._id));
+  }, [fallbackSeasonalOccasion, activeSeasonalSection, occasions]);
+  const seasonalCollectionItems = useMemo(
+    () => expandSelectedItems(selectedCollections, collections),
+    [collections, selectedCollections]
+  );
+  const seasonalOccasionItems = useMemo(
+    () => expandSelectedItems(selectedOccasions, occasions),
+    [occasions, selectedOccasions]
+  );
+  const seasonalSectionEnabled = Boolean(activeSeasonalSection?.enabled);
+  const seasonalBadge = activeSeasonalSection?.badge || "";
+  const seasonalCollectionName = activeSeasonalSection?.heading ||
+    (selectedCollections.length > 0
+      ? selectedCollections.map((collection) => collection.name).join(" · ")
+      : DEFAULT_SEASONAL_COLLECTION_NAME);
+  const seasonalOccasionName = activeSeasonalSection?.badge ||
+    (selectedOccasions.length > 0
+      ? selectedOccasions.map((occasion) => occasion.name).join(" · ")
+      : "Sacred Festive Keepsakes");
+  const seasonalDescription = activeSeasonalSection?.description ||
+    seasonalOccasionItems.find((occasion) => occasion.description)?.description ||
+    seasonalCollectionItems.find((collection) => collection.description)?.description ||
+    DEFAULT_SEASONAL_DESCRIPTION;
+  const seasonalImage =
+    seasonalOccasionItems.find((occasion) => occasion.image)?.image ||
+    seasonalCollectionItems.find((collection) => collection.image)?.image;
+  const seasonalProducts = useMemo(() => {
+    if (!seasonalSectionEnabled) return [];
+
+    const collectionNames = new Set(
+      seasonalCollectionItems.map((collection) => collection.name)
+    );
+    const occasionNames = new Set(
+      seasonalOccasionItems.map((occasion) => occasion.name)
+    );
+
+    if (collectionNames.size === 0 && occasionNames.size === 0) return [];
+
+    return products
+      .filter((product) => {
+        const productCollectionNames = [
+          product.category,
+          product.subcategory,
+          ...(Array.isArray(product.categories) ? product.categories : []),
+          ...(Array.isArray(product.subcategories) ? product.subcategories : []),
+        ];
+        const productOccasionNames = [
+          product.occasion,
+          product.occasionSub,
+          ...(Array.isArray(product.occasions) ? product.occasions : []),
+          ...(Array.isArray(product.occasionSubs) ? product.occasionSubs : []),
+        ];
+        return productCollectionNames.some((name) => collectionNames.has(name)) ||
+          productOccasionNames.some((name) => occasionNames.has(name));
+      })
+      .map((product) => ({
+        _id: product._id,
+        sku: product._id || product.sku || product.slug || "",
+        name: product.name,
+        slug: product.slug || product._id || product.sku || "",
+        image: product.images?.[0] || product.image || "",
+        price: product.price,
+        mrp: product.mrp || product.price,
+        shortDesc: product.story || product.details || "",
+        weight: product.weight,
+        stockStatus: product.stockStatus,
+        requiresImage: product.requiresImage,
+      }));
+  }, [products, seasonalCollectionItems, seasonalOccasionItems, seasonalSectionEnabled]);
+
+  const [seasonalEmblaRef, seasonalEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [seasonalProgress, setSeasonalProgress] = useState(0);
+
+  useEffect(() => {
+    if (!seasonalEmblaApi) return;
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, seasonalEmblaApi.scrollProgress()));
+      setSeasonalProgress(p * 100);
+    };
+    onScroll();
+    seasonalEmblaApi.on("scroll", onScroll);
+    seasonalEmblaApi.on("reInit", onScroll);
+    return () => {
+      seasonalEmblaApi.off("scroll", onScroll);
+      seasonalEmblaApi.off("reInit", onScroll);
+    };
+  }, [seasonalEmblaApi]);
+
+  // Newest additions to the catalog, sorted by createdAt (newest first)
+  const newArrivals = useMemo(
+    () =>
+      [...products]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime()
+        )
+        .slice(0, 8)
+        .map((p) => ({
+          _id: p._id,
+          sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          subcategory: p.subcategory || p.category || "",
+          image: p.images?.[0] || p.image || "",
+          price: p.price,
+          mrp: p.mrp || p.price,
+          shortDesc: p.story || p.details || "",
+        })),
+    [products]
+  );
+
+  const bestSellers = useMemo(
+    () =>
+      products
+        .filter((product) => Boolean(product.isBestseller))
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime()
+        )
+        .map((product) => ({
+          _id: product._id,
+          sku: product.sku || `MG-${String(product._id).slice(-6).toUpperCase()}`,
+          name: product.name,
+          slug: product.slug,
+          category: product.category,
+          subcategory: product.subcategory || product.category || "",
+          image: product.images?.[0] || product.image || "",
+          price: product.price,
+          mrp: product.mrp || product.price,
+          shortDesc: product.story || product.details || "",
+        })),
+    [products]
+  );
+
+  // Custom Miniature Wall Clocks drawn from the live catalog (API)
+  const wallClocks = useMemo(
+    () =>
+      products
+        .filter((p) => p.category === "Custom Miniature Wall Clocks")
+        .map((p) => ({
+          _id: p._id,
+          sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+          name: p.name,
+          slug: p.slug,
+          category: p.category,
+          subcategory: p.subcategory || p.category || "",
+          image: p.images?.[0] || p.image || "",
+          price: p.price,
+          mrp: p.mrp || p.price,
+          shortDesc: p.story || p.details || "",
+        })),
+    [products]
+  );
+  const [shopsEmblaRef, shopsEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [shopsProgress, setShopsProgress] = useState(0);
+
+  useEffect(() => {
+    if (!shopsEmblaApi) return;
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, shopsEmblaApi.scrollProgress()));
+      setShopsProgress(p * 100);
+    };
+    onScroll();
+    shopsEmblaApi.on("scroll", onScroll);
+    shopsEmblaApi.on("reInit", onScroll);
+    return () => {
+      shopsEmblaApi.off("scroll", onScroll);
+      shopsEmblaApi.off("reInit", onScroll);
+    };
+  }, [shopsEmblaApi]);
+
+  // Custom Miniature Wall Clocks carousel
+  const [clocksEmblaRef, clocksEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 4000, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [clocksProgress, setClocksProgress] = useState(0);
+
+  useEffect(() => {
+    if (!clocksEmblaApi) return;
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, clocksEmblaApi.scrollProgress()));
+      setClocksProgress(p * 100);
+    };
+    onScroll();
+    clocksEmblaApi.on("scroll", onScroll);
+    clocksEmblaApi.on("reInit", onScroll);
+    return () => {
+      clocksEmblaApi.off("scroll", onScroll);
+      clocksEmblaApi.off("reInit", onScroll);
+    };
+  }, [clocksEmblaApi]);
+
+  const [bestSellersEmblaRef, bestSellersEmblaApi] = useEmblaCarousel(
+    {
+      align: "start",
+      loop: true,
+      containScroll: "trimSnaps",
+    },
+    [Autoplay({ delay: 4500, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [bestSellersProgress, setBestSellersProgress] = useState(0);
+
+  useEffect(() => {
+    if (!bestSellersEmblaApi) return;
+    const onScroll = () => {
+      const p = Math.max(0, Math.min(1, bestSellersEmblaApi.scrollProgress()));
+      setBestSellersProgress(p * 100);
+    };
+    onScroll();
+    bestSellersEmblaApi.on("scroll", onScroll);
+    bestSellersEmblaApi.on("reInit", onScroll);
+    return () => {
+      bestSellersEmblaApi.off("scroll", onScroll);
+      bestSellersEmblaApi.off("reInit", onScroll);
+    };
+  }, [bestSellersEmblaApi]);
+
+  // Handle Quick Add to Cart
+  const handleQuickAdd = (product: { _id?: string; sku: string; name: string; image: string; price: number; weight?: number; stockStatus?: string; requiresImage?: boolean }, e: React.MouseEvent) => {
     e.preventDefault();
-    const formData = new FormData();
-    formData.append('type', 'custom');
-    formData.append('name', inquiryData.name);
-    formData.append('phone', inquiryData.phone);
-    formData.append('message', inquiryData.message);
-    formData.append('subject', `Custom Design Request from ${inquiryData.name}`);
-    formData.append('email', 'guest@mythrisgleams.com'); 
-    dispatch(createInquiry(formData as any));
+    e.stopPropagation();
+    if (product.stockStatus === "out-of-stock") {
+      toast.error(`${product.name} is currently unavailable.`);
+      return;
+    }
+    if (product.requiresImage) {
+      toast("Please select options on the product page.");
+      return;
+    }
+    addToCart({
+      productId: product._id || product.sku,
+      name: product.name,
+      image: product.image,
+      price: product.price,
+      weight: product.weight,
+      quantity: 1,
+    });
+    toast.success(`${product.name} added to cart!`, {
+      icon: "🏺",
+      style: {
+        borderRadius: "12px",
+        background: "#2d1810",
+        color: "#fff",
+        fontSize: "12px",
+      },
+    });
   };
 
-  // Featured Products (Trending / Top Picks)
-  const featuredProducts = (products as Product[]).slice(0, 4);
-
   return (
-    <div className="flex flex-col font-sans">
-      <Hero />
+    <div className="flex flex-col font-sans bg-[var(--bg)] text-[var(--text)] overflow-x-hidden">
 
+      {/* ══════════════════════════════════════════════════════════
+          1. HERO SECTION: Brand Mascot & Artisanal Heritage
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full overflow-hidden bg-gradient-to-b from-[#fbf5ed] via-[#fffdf9] to-[#faf4ec] border-b border-[var(--border)] pt-8 pb-14 md:pt-14 md:pb-20">
+        {/* Ambient Decorative Backdrops */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full bg-[var(--accent-gold)]/15 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 -right-24 w-[30rem] h-[30rem] rounded-full bg-[var(--accent)]/10 blur-3xl"
+        />
 
-      {/* ── CURATED GALLERIES — POTTERY EDITORIAL LAYOUT ── */}
-      <section className="w-full py-16 md:py-24">
-        <div className="max-w-[1440px] mx-auto px-8 sm:px-12">
+        <div className="relative max-w-[1440px] mx-auto px-4 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+            
+            {/* Left Content (7 Cols) */}
+            <div className="lg:col-span-7 flex flex-col items-start text-left z-10">
+              
+              {/* Studio Pill Badge */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[var(--border)] shadow-sm mb-5">
+                <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
+                <span className="text-[11px] font-bold tracking-[0.18em] uppercase text-[var(--accent)]">
+                  Handcrafted Clay Miniature Studio
+                </span>
+                <span className="text-[10px] text-[var(--accent-teal)] font-semibold border-l border-[var(--border)] pl-2">
+                  Navaratri & Golu 2026
+                </span>
+              </div>
 
-          {/* ── TOP HEADER ROW ── */}
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-20 items-start mb-14 md:mb-16"
-          >
+              {/* Main Headline */}
+              <h1 className="font-serif text-[2.4rem] sm:text-[3.2rem] md:text-[3.8rem] leading-[1.08] tracking-tight text-[var(--text)] mb-5">
+                Hand-Sculpted Stories of{" "}
+                <span className="relative inline-block text-[var(--accent)] italic font-normal">
+                  South Indian Heritage
+                  <svg
+                    className="absolute -bottom-1.5 left-0 w-full text-[var(--accent-gold)]"
+                    height="8"
+                    viewBox="0 0 250 8"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M2 6C65 2 175 2 248 6"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>{" "}
+                & Everyday Nostalgia.
+              </h1>
 
-            {/* Left: eyebrow + large heading */}
-            <div>
-              <span className="text-[var(--text-faint)] text-[10px] font-bold tracking-[0.25em] uppercase mb-4 block">
-                Our Product
-              </span>
-              <h2 className="text-[var(--text)] text-3xl md:text-4xl lg:text-5xl font-bold leading-[1.2] tracking-tight">
-                Explore Our<br /> Artisanal Collections
-              </h2>
-            </div>
-
-            {/* Right: body text + CTA */}
-            <div className="flex flex-col items-start justify-center gap-6 pt-0 md:pt-10">
-              <p className="text-[var(--text-muted)] text-[15px] leading-relaxed">
-                Each piece in our collection is handcrafted by skilled artisans using 
-                premium clay — shaped, fired, and finished with care. From functional 
-                tableware to sculptural centerpieces, explore a world of texture, warmth, 
-                and timeless artisanal beauty.
+              {/* Sub-headline */}
+              <p className="text-[14px] sm:text-[16px] text-[var(--text-muted)] leading-relaxed max-w-[580px] mb-8 font-medium">
+                From bustling Madurai Jigarthanda stalls and crispy Dosa kadas to
+                fragrant Malligai Poo stands—bring home museum-grade miniature clay art, 
+                sculpted by hand with air-dry polymer clay, wood, and pure nostalgia.
               </p>
-              <Link
-                href="/category/all"
-                className="inline-block bg-[var(--bg-muted)] hover:bg-[var(--accent)] text-[var(--text)] hover:text-white text-[11px] font-bold tracking-[0.2em] uppercase px-7 py-3 rounded-full transition-colors duration-300"
-              >
-                All Products
-              </Link>
-            </div>
-          </motion.div>
 
-          {/* ── BOTTOM: 4-CARD GRID ── */}
-          {collectionsLoading ? (
-            <div className="py-20 flex justify-center">
-              <Loader2 className="animate-spin text-[var(--accent)]" size={28} />
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-              {collections.slice(0, 4).map((col: any) => (
-                <Link
-                  key={col._id}
-                  href={`/category/${col.slug}`}
-                  className="group flex flex-col"
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-10 w-full sm:w-auto">
+                <a
+                  href="#miniature-shops"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-full bg-[var(--accent)] text-white text-[12px] font-bold tracking-[0.14em] uppercase shadow-lg shadow-[var(--accent)]/25 hover:bg-[var(--accent-light)] transition-all duration-300 hover:scale-[1.02]"
                 >
-                  {/* Image */}
-                  <div className="relative w-full aspect-square rounded-[10px] overflow-hidden bg-[var(--bg-muted)] mb-4 parallax" data-speed="-0.03">
-                    {col.image ? (
-                      <img
-                        src={getImageUrl(col.image)}
-                        alt={col.name}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-[1.04]"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-[var(--text-faint)]">
-                        <Package size={40} strokeWidth={1.2} />
-                      </div>
-                    )}
-                  </div>
+                  <Sparkles size={15} />
+                  Explore Miniature Shops
+                </a>
+                <a
+                  href="#market-crates"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-full bg-white border-2 border-[var(--border)] text-[var(--text)] text-[12px] font-bold tracking-[0.14em] uppercase hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all duration-300 shadow-sm"
+                >
+                  Shop ₹199 Baskets & Crates
+                  <ArrowRight size={14} />
+                </a>
+              </div>
 
-                  {/* Text */}
-                  <div className="text-center px-1">
-                    <h3 className="text-[var(--text)] text-[15px] font-bold leading-[1.2] mb-1.5 group-hover:text-[var(--accent)] transition-colors duration-300">
-                      {col.name}
-                    </h3>
-                    <p className="text-[var(--text-faint)] text-[13px] leading-relaxed line-clamp-2">
-                      {col.description || "Handcrafted with care, shaped by skilled artisans using premium clay."}
+              {/* Trust Value Badges */}
+              <div className="grid grid-cols-3 gap-4 pt-6 border-t border-[var(--border)]/80 w-full max-w-[540px]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[var(--accent-gold)]/15 flex items-center justify-center text-[var(--accent-gold)]">
+                    <Star size={15} fill="currentColor" />
+                  </div>
+                  <div>
+                    <span className="block text-[13px] font-bold leading-tight">40+</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">Exclusive Designs</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center text-[var(--accent)]">
+                    <Sparkles size={15} />
+                  </div>
+                  <div>
+                    <span className="block text-[13px] font-bold leading-tight">100%</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">Hand-Sculpted</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[var(--accent-teal)]/15 flex items-center justify-center text-[var(--accent-teal)]">
+                    <Truck size={15} />
+                  </div>
+                  <div>
+                    <span className="block text-[13px] font-bold leading-tight">Safe</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">Pan-India Delivery</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Showcase: Mascot Emblem & Floating Highlights (5 Cols) */}
+            <div className="lg:col-span-5 relative flex justify-center mt-6 lg:mt-0">
+              
+              {/* Golden Sun Emblem Aura */}
+              <div className="relative w-[280px] xs:w-[320px] sm:w-[380px] md:w-[420px] max-w-[85vw] aspect-square rounded-full p-2.5 sm:p-3 bg-gradient-to-tr from-[var(--accent-gold)] via-[var(--accent)] to-[var(--accent-teal)] shadow-2xl shadow-[var(--accent)]/20">
+                <div className="relative w-full h-full rounded-full overflow-hidden bg-black border-4 border-white">
+                  <Image
+                    src="/logo.png"
+                    alt="Mythris Gleams Artisanal Mascot"
+                    fill
+                    priority
+                    sizes="(max-width: 768px) 300px, 420px"
+                    className="object-cover scale-105"
+                  />
+                  {/* Subtle inner highlight */}
+                  <div className="absolute inset-0 rounded-full ring-1 ring-inset ring-white/30" />
+                </div>
+
+                {/* Floating Badge 1: Top Right */}
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.3 }}
+                  className="absolute -top-3 -right-1 sm:right-2 bg-white/95 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border border-[var(--border)] shadow-lg flex items-center gap-2 max-w-[190px] sm:max-w-none"
+                >
+                  <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center text-xs sm:text-sm font-bold shrink-0">
+                    🏺
+                  </span>
+                  <div>
+                    <p className="text-[8px] sm:text-[9px] font-bold tracking-wider uppercase text-[var(--accent)]">
+                      Bestseller
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] font-bold text-[var(--text)] truncate">
+                      Jigarthanda Shop • ₹2,499
                     </p>
                   </div>
-                </Link>
-              ))}
+                </motion.div>
+
+                {/* Floating Badge 2: Bottom Left */}
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, delay: 0.5 }}
+                  className="absolute -bottom-3 -left-1 sm:left-2 bg-white/95 backdrop-blur-md px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl border border-[var(--border)] shadow-lg flex items-center gap-2 max-w-[190px] sm:max-w-none"
+                >
+                  <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-[var(--accent-gold)]/15 text-[var(--accent-gold)] flex items-center justify-center text-xs sm:text-sm font-bold shrink-0">
+                    🧺
+                  </span>
+                  <div>
+                    <p className="text-[8px] sm:text-[9px] font-bold tracking-wider uppercase text-[var(--accent-gold)]">
+                      Pocket Favorite
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] font-bold text-[var(--text)] truncate">
+                      Clay Fruit Baskets • ₹199
+                    </p>
+                  </div>
+                </motion.div>
+              </div>
             </div>
-          )}
+
+          </div>
         </div>
       </section>
 
-      {/* ── BEST SELLERS — MINIMALIST GALLERY ── */}
-      <section id="products" className="w-full py-16 md:py-24 scroll-m-20 bg-white relative overflow-hidden">
-        
-        <div className="max-w-[1440px] mx-auto px-8 sm:px-12">
-          
-          {/* ── Unique Header (Centered Watermark Style) ── */}
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="relative mb-20 flex flex-col items-center justify-center text-center"
-          >
+      {bestSellers.length > 0 && (
+        <section id="bestsellers" className="relative w-full py-14 md:py-20 bg-[var(--bg-subtle)] border-b border-[var(--border)]">
+          <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
+                  <Star size={12} fill="currentColor" />
+                  Collector Favorites
+                </div>
+                <h2 className="font-serif text-[2rem] sm:text-[2.6rem] md:text-[3rem] leading-[1.1] text-[var(--text)] tracking-tight">
+                  Best Sellers
+                </h2>
+                <p className="text-[13px] sm:text-[14px] text-[var(--text-muted)] mt-3 leading-relaxed max-w-[560px]">
+                  The handcrafted pieces our collectors return to most. Discover the stories everyone is bringing home.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 self-end md:self-auto">
+                <span className="text-[11px] font-bold tracking-wider text-[var(--text-muted)] mr-2 hidden sm:inline">
+                  {bestSellers.length} {bestSellers.length === 1 ? "Favorite" : "Favorites"}
+                </span>
+                {bestSellers.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => bestSellersEmblaApi?.scrollPrev()}
+                      aria-label="Previous best seller"
+                      className="w-10 h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      onClick={() => bestSellersEmblaApi?.scrollNext()}
+                      aria-label="Next best seller"
+                      className="w-10 h-10 rounded-full border border-[var(--border)] bg-white flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
 
-            <div className="z-10 pt-6 md:pt-12">
-              <span className="text-[var(--accent)] text-[10px] font-bold tracking-[0.4em] uppercase mb-4 block">
-                 Curated Selection
-              </span>
-              <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-5">
-                 Best Selling Miniatures
+            <div className="relative">
+              <div className="overflow-hidden" ref={bestSellersEmblaRef}>
+                <div className="flex touch-pan-y -ml-4 md:-ml-6">
+                  {bestSellers.map((product) => {
+                    const discountPct = product.mrp > product.price
+                      ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
+                      : 0;
+                    return (
+                      <div
+                        key={product._id || product.sku}
+                        className="shrink-0 grow-0 pl-4 md:pl-6 basis-[85%] sm:basis-[50%] lg:basis-[33.33%] xl:basis-[25%]"
+                      >
+                        <Link
+                          href={`/product/${product.slug}`}
+                          className="group relative flex flex-col h-full rounded-[24px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500"
+                        >
+                          <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
+                            <ProductImage
+                              image={product.image}
+                              alt={product.name}
+                              className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                            />
+                            <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold tracking-wider uppercase shadow-md">
+                              Bestseller
+                            </span>
+                            {discountPct > 0 && (
+                              <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/95 text-[var(--accent)] text-[9px] font-extrabold tracking-wider uppercase shadow-sm">
+                                {discountPct}% OFF
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-5 flex flex-col flex-1 justify-between">
+                            <div>
+                              <h3 className="font-serif text-[17px] font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors leading-snug mb-2 line-clamp-2">
+                                {product.name}
+                              </h3>
+                              {product.shortDesc && (
+                                <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-4">
+                                  {product.shortDesc}
+                                </p>
+                              )}
+                            </div>
+                            <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-[18px] font-bold text-[var(--text)]">
+                                  ₹{product.price.toLocaleString()}
+                                </span>
+                                {product.mrp > product.price && (
+                                  <span className="text-[12px] text-[var(--text-muted)] line-through">
+                                    ₹{product.mrp.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => handleQuickAdd(product, e)}
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--text)] text-white text-[11px] font-bold tracking-wider uppercase hover:bg-[var(--accent)] transition-colors shadow-sm"
+                              >
+                                <ShoppingBag size={13} />
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {bestSellers.length > 1 && (
+                <div className="mt-8 h-[2px] w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-300"
+                    style={{ width: `${bestSellersProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          2. SIGNATURE COLLECTION: Navaratri Miniature Shops
+      ═══════════════════════════════════════════════════════════ */}
+      <section id="miniature-shops" className="relative w-full py-14 md:py-20 bg-white border-b border-[var(--border)]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+          
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10 md:mb-12">
+            <div>
+              <div className="flex items-center gap-3 mb-2.5">
+                <span className="h-[2px] w-8 bg-[var(--accent)]" />
+                <span className="text-[11px] font-bold tracking-[0.25em] uppercase text-[var(--accent)]">
+                  Signature Heritage Showpieces
+                </span>
+              </div>
+              <h2 className="font-serif text-[1.9rem] sm:text-[2.5rem] md:text-[2.85rem] leading-[1.1] text-[var(--text)] tracking-tight">
+                Traditional Miniature <em className="italic font-normal text-[var(--accent)]">Street Shops & Carts</em>
               </h2>
-              <p className="text-[var(--text-muted)] text-[15px] leading-relaxed max-w-md mx-auto">
-                 Our most loved creations, meticulously hand-crafted and cherished across the country.
+              <p className="text-[13px] md:text-[14px] text-[var(--text-muted)] mt-2 max-w-[620px]">
+                Recreating Tamil Nadu & South Indian street culture with meticulous clay craftsmanship, 
+                rustic tile roofs, copper pots, and miniature figurines.
               </p>
             </div>
-          </motion.div>
 
-          {/* ── 4-Card Minimalist Grid ── */}
-          {productsLoading ? (
-            <div className="py-20 flex justify-center">
-              <Loader2 className="animate-spin text-[var(--accent)]" size={36} />
+            {/* Nav Arrows */}
+            <div className="flex items-center gap-3 self-end md:self-auto">
+              <span className="text-[11px] font-bold tracking-wider text-[var(--text-muted)] mr-2 hidden sm:inline">
+                {miniatureShops.length} Heritage Stalls
+              </span>
+              <button
+                onClick={() => shopsEmblaApi?.scrollPrev()}
+                aria-label="Previous Stall"
+                className="w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => shopsEmblaApi?.scrollNext()}
+                aria-label="Next Stall"
+                className="w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+              >
+                <ChevronRight size={18} />
+              </button>
             </div>
-          ) : products.length === 0 ? (
-            <div className="py-20 text-center text-[var(--text-faint)] italic text-[16px]">
-              No products found in the vault yet.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-              {featuredProducts.map((product: Product, i: number) => {
-                const productSlug  = product.slug || product.id;
-                const productImage = (product as any).images?.[0] ?? null;
-                const productPrice = product.price;
-                const productMRP   = (product as any).mrp || (product as any).oldPrice;
-                const catTitle     = product.category;
+          </div>
 
-                return (
-                  <div key={(product as any)._id || product.id}>
-                    <ProductCard product={product as any} />
+          {/* Embla Carousel */}
+          <div className="relative">
+            <div className="overflow-hidden" ref={shopsEmblaRef}>
+              <div className="flex touch-pan-y -ml-4 md:-ml-6">
+                {miniatureShops.map((product) => {
+                  const discountPct = Math.round(
+                    ((product.mrp - product.price) / product.mrp) * 100
+                  );
+                  return (
+                    <div
+                      key={product.sku}
+                      className="shrink-0 grow-0 pl-4 md:pl-6 basis-[85%] sm:basis-[50%] lg:basis-[33.33%] xl:basis-[28%]"
+                    >
+                      <Link
+                        href={`/product/${product.slug}`}
+                        className="group relative flex flex-col h-full rounded-[24px] bg-[var(--bg)] border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500"
+                      >
+                        
+                        {/* Image Showcase */}
+                        <div className="relative w-full aspect-[4/3] overflow-hidden bg-stone-100">
+                          <ProductImage
+                            image={product.image}
+                            alt={product.name}
+                            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                          />
+
+                          {/* Gradient Backdrop for Legibility */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                          {/* Discount Pill */}
+                          {discountPct > 0 && (
+                            <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[var(--accent)] text-white text-[10px] font-extrabold tracking-wider uppercase shadow-md">
+                              {discountPct}% OFF
+                            </span>
+                          )}
+
+                          {/* Golu Badge */}
+                          {product.badge && (
+                            <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md border border-white/40 text-[9px] font-bold tracking-wider uppercase text-[var(--text)] shadow-sm">
+                              {product.badge}
+                            </span>
+                          )}
+
+                          {/* SKU Pill */}
+                          <span className="absolute bottom-3 left-3 text-[9px] font-mono text-white/90 font-bold bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded">
+                            {product.sku}
+                          </span>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="p-5 flex flex-col flex-1 justify-between">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <div className="flex text-[var(--accent-gold)]">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star key={i} size={11} fill="currentColor" />
+                                ))}
+                              </div>
+                              {product.reviewsCount > 0 && (
+                                <span className="text-[10px] font-bold text-[var(--text-muted)]">
+                                  ({product.reviewsCount} reviews)
+                                </span>
+                              )}
+                            </div>
+
+                            <h3 className="font-serif text-[17px] font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors leading-snug mb-2 line-clamp-2">
+                              {product.name}
+                            </h3>
+
+                            {product.shortDesc && (
+                              <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-4">
+                                {product.shortDesc}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Pricing & CTA */}
+                          <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
+                            <div>
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-[18px] font-bold text-[var(--text)]">
+                                  ₹{product.price.toLocaleString()}
+                                </span>
+                                {product.mrp > product.price && (
+                                  <span className="text-[12px] text-[var(--text-muted)] line-through">
+                                    ₹{product.mrp.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[9px] text-[var(--accent-teal)] font-semibold">
+                                Air-dry clay & wood
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={(e) => handleQuickAdd(product, e)}
+                              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--text)] text-white text-[11px] font-bold tracking-wider uppercase hover:bg-[var(--accent)] transition-colors shadow-sm"
+                            >
+                              <ShoppingBag size={13} />
+                              Add
+                            </button>
+                          </div>
+                        </div>
+
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mt-8 h-[2px] w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[var(--accent)] transition-all duration-300"
+                style={{ width: `${shopsProgress}%` }}
+              />
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          CHEF DAMU SPOTLIGHT: Celebrity Bespoke Miniature Clock
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full py-16 md:py-24 bg-gradient-to-br from-[#1e130b] via-[#2c1910] to-[#180e07] text-white overflow-hidden border-b border-[var(--border)]">
+        {/* Soft Golden Ambient Glow */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[var(--accent-gold)]/15 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-32 -right-32 w-[30rem] h-[30rem] rounded-full bg-[var(--accent)]/15 blur-3xl"
+        />
+
+        <div className="relative max-w-[1440px] mx-auto px-4 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+            
+            {/* Left Image Showcase with Golden Wooden Border */}
+            <div className="lg:col-span-6 relative">
+              <div className="relative w-full aspect-[4/3] sm:aspect-[16/11] rounded-[28px] md:rounded-[36px] overflow-hidden border-2 border-[var(--accent-gold)]/40 shadow-2xl shadow-black/60 group">
+                <Image
+                  src="/chef-damu-clock.jpg"
+                  alt="Mythris Gleams Bespoke Miniature Food Wall Clock at Chef Damu's Office"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-cover transition-transform duration-700 group-hover:scale-105"
+                  priority
+                />
+                
+                {/* Subtle Luxury Gradient Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+
+                {/* Floating Corner Ribbon */}
+                <div className="absolute top-4 left-4 bg-black/65 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--accent-gold)] animate-pulse" />
+                  <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-[var(--accent-gold-light)]">
+                    Chef Damu’s Office
+                  </span>
+                </div>
+
+                {/* Bottom Caption Pill */}
+                <div className="absolute bottom-2 inset-x-2 sm:bottom-4 sm:inset-x-4 bg-black/80 backdrop-blur-md p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-white/10 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 sm:gap-2.5">
+                    <span className="text-lg sm:text-xl">👨‍🍳</span>
+                    <div>
+                      <p className="text-[10px] sm:text-[11px] font-bold text-white leading-tight">
+                        Presented to Chef K. Damodharan
+                      </p>
+                      <p className="text-[8px] sm:text-[9px] text-white/70">
+                        Guinness Record Holder &amp; MasterChef Judge
+                      </p>
+                    </div>
                   </div>
-                );
-              })}
+                  <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-[var(--accent-gold)] bg-white/10 px-2 sm:px-2.5 py-1 rounded-full shrink-0">
+                    Bespoke Piece
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Editorial Story & Commission Action */}
+            <div className="lg:col-span-6 flex flex-col items-start">
+              
+              {/* Eyebrow */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[var(--accent-gold)]/15 border border-[var(--accent-gold)]/30 text-[var(--accent-gold-light)] text-[10px] font-bold tracking-[0.22em] uppercase mb-4">
+                <Sparkles size={12} className="text-[var(--accent-gold)]" />
+                Celebrity Spotlight &amp; Heirloom Craft
+              </div>
+
+              {/* Headline */}
+              <h2 className="font-serif text-[2rem] sm:text-[2.8rem] md:text-[3.3rem] leading-[1.08] tracking-tight text-white mb-5">
+                When Culinary Royalty Meets{" "}
+                <span className="text-[var(--accent-gold)] italic font-normal">
+                  Handcrafted Clay.
+                </span>
+              </h2>
+
+              {/* Story Description */}
+              <p className="text-white/80 text-[13px] sm:text-[15px] leading-relaxed mb-6 font-light">
+                We had the immense honour of handcrafting a custom South Indian food wall clock 
+                installed proudly at <strong className="text-white font-semibold">Chef Damu&apos;s personal office</strong> in Chennai.
+                Each hour on the wooden Roman clock dial features an iconic delicacy—from steaming idlis 
+                and crispy vadai to miniature dosas and fragrant biryani—sculpted millimeter by millimeter in polymer clay.
+              </p>
+
+              {/* 3 Detail Badges */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 w-full mb-8">
+                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                  <span className="text-lg mb-1 block">🍽️</span>
+                  <p className="text-[12px] font-bold text-white">12 Clay Delicacies</p>
+                  <p className="text-[10px] text-white/60">One signature dish at every hour mark</p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                  <span className="text-lg mb-1 block">🕰️</span>
+                  <p className="text-[12px] font-bold text-white">Silent Quartz Sweep</p>
+                  <p className="text-[10px] text-white/60">Laser-carved Roman wooden center</p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10">
+                  <span className="text-lg mb-1 block">✨</span>
+                  <p className="text-[12px] font-bold text-white">100% Bespoke</p>
+                  <p className="text-[10px] text-white/60">Personalized for gifts &amp; executive spaces</p>
+                </div>
+              </div>
+
+              {/* CTA Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <a
+                  href="https://wa.me/918300034451?text=Hi%20Mythris%20Gleams,%20I%20saw%20Chef%20Damu's%20clock%20on%20your%20website%20and%20would%20like%20to%20commission%20a%20custom%20clock."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 sm:px-7 py-3.5 rounded-full bg-[var(--accent-gold)] text-[var(--text)] text-[11px] font-bold tracking-widest uppercase hover:bg-[var(--accent-gold-light)] transition-all duration-300 shadow-xl shadow-[var(--accent-gold)]/20 text-center"
+                >
+                  <MessageCircle size={15} />
+                  Commission Your Custom Clock
+                </a>
+                <Link
+                  href="/category/wall-clocks"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold tracking-widest uppercase border border-white/20 transition-all duration-300 text-center"
+                >
+                  Explore Clock Range
+                  <ArrowRight size={13} />
+                </Link>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          CUSTOM MINIATURE WALL CLOCKS: Commission & Curated Range
+      ═══════════════════════════════════════════════════════════ */}
+      <section id="wall-clocks" className="relative w-full py-14 md:py-20 bg-[var(--bg-subtle)] border-b border-[var(--border)] overflow-hidden">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+
+          {/* Commission CTA Banner */}
+          <div className="rounded-[28px] md:rounded-[36px] bg-gradient-to-tr from-[#1e130b] via-[#2c1910] to-[#180e07] text-white relative overflow-hidden shadow-2xl mb-12">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[var(--accent-gold)]/15 blur-3xl"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-[var(--accent)]/10 blur-3xl"
+            />
+            <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8 p-8 sm:p-12">
+              <div className="flex-1 text-center lg:text-left">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[var(--accent-gold)]/15 border border-[var(--accent-gold)]/30 text-[var(--accent-gold-light)] text-[10px] font-bold tracking-[0.22em] uppercase mb-4">
+                  <Sparkles size={12} className="text-[var(--accent-gold)]" />
+                  Commissioned Timepieces
+                </div>
+                <h2 className="font-serif text-[2rem] sm:text-[2.8rem] md:text-[3.2rem] leading-[1.08] tracking-tight text-white mb-3">
+                  Custom Miniature{" "}
+                  <span className="text-[var(--accent-gold)] italic">Wall Clocks</span>
+                </h2>
+                <p className="text-white/80 text-[13px] sm:text-[15px] leading-relaxed font-light max-w-[560px] mx-auto lg:mx-0 mb-7">
+                  Bespoke sculptural timepieces capturing heritage, food and personal stories —
+                  each hour hand-sculpted in polymer clay around a silent quartz movement.
+                  Made to order, personalised to you.
+                </p>
+                <a
+                  href="https://wa.me/918300034451?text=Hi%20Mythris%20Gleams,%20I%20would%20like%20to%20commission%20a%20custom%20miniature%20wall%20clock."
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-[var(--accent-gold)] text-[var(--text)] text-[11px] font-bold tracking-widest uppercase hover:bg-[var(--accent-gold-light)] transition-all duration-300 shadow-xl shadow-[var(--accent-gold)]/20"
+                >
+                  <MessageCircle size={15} />
+                  Commission Your Custom Clock
+                </a>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 w-full lg:w-auto shrink-0">
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center lg:text-left">
+                  <span className="text-lg mb-1 block">🕰️</span>
+                  <p className="text-[12px] font-bold text-white">Silent Quartz</p>
+                  <p className="text-[10px] text-white/60">Soft sweep movement</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center lg:text-left">
+                  <span className="text-lg mb-1 block">🎨</span>
+                  <p className="text-[12px] font-bold text-white">100% Bespoke</p>
+                  <p className="text-[10px] text-white/60">Theme, colours &amp; name</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-center lg:text-left">
+                  <span className="text-lg mb-1 block">🎁</span>
+                  <p className="text-[12px] font-bold text-white">Prized Gifts</p>
+                  <p className="text-[10px] text-white/60">Heirlooms &amp; executive spaces</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid Header */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-gold)]/20 text-[var(--text)] text-[10px] font-bold tracking-[0.2em] uppercase mb-3">
+                <Sparkles size={12} className="text-[var(--accent)]" />
+                The Signature Clock Range
+              </div>
+              <h3 className="font-serif text-[1.9rem] sm:text-[2.4rem] leading-[1.1] text-[var(--text)] tracking-tight">
+                Curated Commissions
+              </h3>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => clocksEmblaApi?.scrollPrev()}
+                aria-label="Previous Clock"
+                className="w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => clocksEmblaApi?.scrollNext()}
+                aria-label="Next Clock"
+                className="w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--text)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] transition-all duration-300 shadow-sm"
+              >
+                <ChevronRight size={18} />
+              </button>
+              <Link
+                href="/category/wall-clocks"
+                className="group shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full border border-[var(--border)] text-[11px] font-bold tracking-widest uppercase text-[var(--text)] hover:bg-[var(--text)] hover:text-white hover:border-[var(--text)] transition-all duration-300"
+              >
+                Explore Clock Range
+                <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+          </div>
+
+          {wallClocks.length === 0 ? (
+            <p className="text-center text-[13px] text-[var(--text-muted)] py-12">
+              New clock commissions are being crafted — message us to start yours.
+            </p>
+          ) : (
+            <div className="relative">
+              <div className="overflow-hidden" ref={clocksEmblaRef}>
+                <div className="flex touch-pan-y select-none -ml-4 md:-ml-6">
+                  {wallClocks.map((product) => {
+                    const discountPct = Math.round(
+                      ((product.mrp - product.price) / product.mrp) * 100
+                    );
+                    return (
+                      <div
+                        key={product.sku}
+                        className="shrink-0 grow-0 basis-[70%] sm:basis-[45%] md:basis-[33.33%] lg:basis-[25%] xl:basis-[20%] pl-4 md:pl-6"
+                      >
+                        <Link
+                          href={`/product/${product.slug}`}
+                          className="group relative flex flex-col h-full rounded-[24px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-300"
+                        >
+                          <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
+                            <ProductImage
+                              image={product.image}
+                              alt={product.name}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            />
+                            {discountPct > 0 && (
+                              <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/95 text-[var(--accent)] text-[9px] font-extrabold tracking-wider uppercase shadow-sm">
+                                {discountPct}% OFF
+                              </span>
+                            )}
+                            <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-sm text-white/90 text-[9px] font-bold tracking-wider uppercase border border-white/15">
+                              Made to Order
+                            </span>
+                          </div>
+
+                          <div className="p-5 flex flex-col flex-1 justify-between">
+                            <div>
+                              <h3 className="font-serif text-[17px] font-bold text-[var(--text)] leading-snug mb-1.5 group-hover:text-[var(--accent)] transition-colors line-clamp-2">
+                                {product.name}
+                              </h3>
+                              {product.subcategory && (
+                                <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wide mb-2">
+                                  {product.subcategory}
+                                </p>
+                              )}
+                              {product.shortDesc && (
+                                <p className="text-[12px] text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-4">
+                                  {product.shortDesc}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="pt-4 border-t border-[var(--border)] flex items-center justify-between gap-3">
+                              <div>
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-[18px] font-bold text-[var(--text)]">
+                                    ₹{product.price.toLocaleString()}
+                                  </span>
+                                  {product.mrp > product.price && (
+                                    <span className="text-[12px] text-[var(--text-muted)] line-through">
+                                      ₹{product.mrp.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={(e) => handleQuickAdd(product, e)}
+                                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--text)] text-white text-[11px] font-bold tracking-wider uppercase hover:bg-[var(--accent)] transition-colors shadow-sm"
+                              >
+                                <ShoppingBag size={13} />
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mt-8 h-[2px] w-full bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--accent)] transition-all duration-300"
+                  style={{ width: `${clocksProgress}%` }}
+                />
+              </div>
             </div>
           )}
-          
-          {/* Centered View All Link */}
-          <div className="mt-16 flex justify-center">
-             <Link
-                href="/category/all"
-                className="inline-flex items-center gap-3 text-[var(--accent)] text-[11px] font-bold tracking-[0.2em] uppercase group hover:text-[var(--text)] transition-colors duration-300"
-              >
-                View Complete Vault
-                <span className="inline-block group-hover:translate-x-1 transition-transform duration-300">→</span>
-             </Link>
-          </div>
+
         </div>
       </section>
 
-      {/* ── OUR HERITAGE (STORY SECTION) ── */}
-      <section className="w-full py-16 md:py-24 bg-white relative overflow-hidden group">
-        
-        {/* Animated Background Seal (Addon) */}
-        <div className="absolute -top-10 -right-20 md:top-10 md:right-10 w-96 h-96 lg:w-[500px] lg:h-[500px] animate-[spin_60s_linear_infinite] opacity-[0.02] pointer-events-none select-none z-0 parallax" data-speed="0.2">
-          <svg viewBox="0 0 100 100" className="w-full h-full fill-[var(--text)]">
-            <path id="heritageCircle" d="M 50, 50 m -40, 0 a 40,40 0 1,1 80,0 a 40,40 0 1,1 -80,0" fill="none" />
-            <text className="text-[9px] font-bold tracking-[0.25em] uppercase">
-              <textPath href="#heritageCircle" startOffset="0%">
-                Mythris Gleams • Handcrafted with love • Since 2018 • Mythris Gleams • Handcrafted with love • Since 2018 • 
-              </textPath>
-            </text>
-          </svg>
-        </div>
-
-        <div className="max-w-[1440px] mx-auto px-8 sm:px-12 relative z-10">
+      {/* ══════════════════════════════════════════════════════════
+          3. ₹199 COLLECTORS' CORNER: Fruit Baskets & Vegetable Crates
+      ═══════════════════════════════════════════════════════════ */}
+      <section id="market-crates" className="relative w-full py-14 md:py-20 bg-[var(--bg-subtle)] border-b border-[var(--border)]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
           
-          <div className="flex items-center gap-4 mb-16 md:mb-24">
-            <span className="w-12 h-px bg-[var(--text-faint)]"></span>
-            <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-[var(--text-faint)]">Our Heritage</span>
-          </div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32"
-          >
-             {/* Left: The Vision */}
-             <div className="relative">
-                <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-[4rem] font-bold leading-[1.1] tracking-tight mb-10 max-w-xl relative parallax" data-speed="-0.05">
-                  From Chennai to <br />
-                  <span className="text-[var(--accent)] relative inline-block">
-                    across India.
-                    {/* Subtle underline animation */}
-                    <span className="absolute bottom-2 left-0 w-full h-[6px] bg-[var(--accent)] opacity-20 -z-10 group-hover:h-[60%] transition-all duration-700 ease-out"></span>
-                  </span>
-                </h2>
-                <div className="relative pl-8 md:pl-12 border-l border-[var(--border)]">
-                   <div className="absolute top-0 left-[-1.5px] w-[3px] h-16 bg-[var(--accent)]" />
-                   <p className="text-[var(--text-muted)] text-[16px] md:text-[18px] leading-relaxed max-w-lg mb-8">
-                     Founded by <strong className="text-[var(--text)] font-semibold">Uma Gayathri</strong> in 2018 with a simple vision: to capture fleeting memories and transform them into lasting miniature art. 
-                   </p>
-                   <p className="text-[var(--text-muted)] text-[15px] leading-relaxed max-w-lg">
-                     Today, our atelier has delivered thousands of hand-sculpted smiles, meticulously crafting stories into timeless physical forms.
-                   </p>
-                   
-                   <Link href="/about" className="inline-flex items-center gap-4 mt-12 group/btn">
-                     <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--text)] group-hover/btn:text-[var(--accent)] transition-colors duration-300">
-                       Read Full Story
-                     </span>
-                     <span className="w-12 h-px bg-[var(--text)] group-hover/btn:w-20 group-hover/btn:bg-[var(--accent)] transition-all duration-500"></span>
-                   </Link>
-                </div>
-             </div>
-
-             {/* Right: The Pillars */}
-             <div className="flex flex-col justify-center">
-               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-12">
-                  
-                  {/* Pillar 1 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     {/* Animated top border */}
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">01</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Hand Sculpted</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Every piece is shaped entirely by hand. No molds are used for our main designs, ensuring each creation is wholly unique.
-                     </p>
-                  </div>
-                  
-                  {/* Pillar 2 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">02</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Hand Painted</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Vibrant and delicate detailing is achieved using top quality colors and microscopic brushes for breathtaking precision.
-                     </p>
-                  </div>
-
-                  {/* Pillar 3 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">03</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Premium Clay</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Crafted using high-grade, resilient air-dry and polymer clay designed for lifelong durability and a smooth finish.
-                     </p>
-                  </div>
-
-                  {/* Pillar 4 */}
-                  <div className="group/pillar relative pt-8 pb-6 px-6 -mx-6 rounded-[1.5rem] transition-all duration-500 hover:bg-[var(--bg-subtle)] hover:shadow-[0_8px_30px_rgba(42,31,24,0.06)]">
-                     <div className="absolute top-0 left-6 right-6 h-px bg-[var(--border)] group-hover/pillar:bg-transparent transition-colors duration-300" />
-                     <div className="absolute top-0 left-6 w-0 h-[2px] bg-[var(--accent)] group-hover/pillar:w-[60%] transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]" />
-                     
-                     <span className="block text-[var(--text-faint)] text-3xl font-light mb-4 group-hover/pillar:text-[var(--accent)] group-hover/pillar:translate-x-1 transition-all duration-500">04</span>
-                     <h4 className="text-[var(--text)] text-[14px] font-bold tracking-[0.2em] uppercase mb-3">Personalized</h4>
-                     <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-                       Themes, names, and concepts perfectly tailored to your memories. You dream it, we sculpt it.
-                     </p>
-                  </div>
-
-               </div>
-             </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ── BESPOKE COMMISSION (CUSTOM SECTION) ── */}
-      <section id="custom" className="w-full bg-white py-16 md:py-24 border-t border-[var(--border)]">
-        <div className="max-w-[1320px] mx-auto px-8 sm:px-12">
-          
-          <motion.div 
-            initial={{ opacity: 0, y: 40 }} 
-            whileInView={{ opacity: 1, y: 0 }} 
-            viewport={{ once: true, margin: "-50px" }} 
-            transition={{ duration: 0.8 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center"
-          >
-            
-            {/* Left side: Editorial Typography */}
-            <div className="flex flex-col order-2 lg:order-1">
-               <div className="inline-block px-4 py-1.5 rounded-full border border-[var(--accent)] text-[var(--accent)] text-[9px] font-bold tracking-[0.3em] uppercase w-max mb-8">
-                 Bespoke Service
-               </div>
-
-               <h2 className="text-[var(--text)] text-4xl md:text-5xl lg:text-[4.5rem] font-bold leading-[1.05] tracking-tight mb-8">
-                 Your story,<br />
-                 <span className="text-[var(--text-faint)] italic font-serif font-light">miniaturized.</span>
-               </h2>
-
-               <p className="text-[var(--text-muted)] text-[16px] md:text-[18px] leading-[1.8] max-w-md mb-12">
-                 We transform your cherished memories, favorite foods, and beloved pets into everlasting miniature art. Share your vision, and we will sculpt it into reality.
-               </p>
-
-               <div className="grid grid-cols-2 gap-y-8 gap-x-12">
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">01</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Share Idea</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Send us your theme, concept, or reference photos.</p>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">02</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Sketch & Design</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">We finalize the layout before the clay is touched.</p>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">03</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Hand Sculpt</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Every detail is shaped and painted by artisan hands.</p>
-                  </div>
-                  <div>
-                    <div className="text-[var(--text-faint)] font-light text-3xl mb-2">04</div>
-                    <h4 className="text-[var(--text)] text-[12px] font-bold tracking-[0.1em] uppercase mb-2">Delivery</h4>
-                    <p className="text-[var(--text-muted)] text-[13px] leading-relaxed pr-4">Packaged securely and shipped right to your door.</p>
-                  </div>
-               </div>
+          {/* Header */}
+          <div className="text-center max-w-[680px] mx-auto mb-10">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-gold)]/20 text-[var(--text)] text-[10px] font-bold tracking-[0.2em] uppercase mb-3">
+              <Sparkles size={12} className="text-[var(--accent)]" />
+              The ₹199 Collectors’ Corner
             </div>
+            <h2 className="font-serif text-[2rem] sm:text-[2.6rem] md:text-[3rem] leading-[1.1] text-[var(--text)] tracking-tight">
+              Fresh From the Clay Market
+            </h2>
+            <p className="text-[13px] sm:text-[14px] text-[var(--text-muted)] mt-3 leading-relaxed">
+              Delightful hand-textured fruit baskets and miniature farm vegetable crates. 
+              Ideal for Golu market streets, dollhouse kitchens, and charming festive return gifts.
+            </p>
 
-            {/* Right side: The Form */}
-            <div className="order-1 lg:order-2 bg-[var(--bg-subtle)] rounded-[2.5rem] p-10 md:p-14 relative overflow-hidden group border border-[var(--border)] shadow-sm">
-               {/* Decorative background shape */}
-               <div className="absolute -top-32 -right-32 w-80 h-80 bg-[var(--bg-muted)] rounded-full blur-3xl opacity-50 group-hover:bg-[var(--accent)] group-hover:opacity-10 transition-all duration-1000 parallax" data-speed="-0.15" />
-               
-               <div className="relative z-10">
-                 {inquirySuccess ? (
-                    <div className="py-20 text-center flex flex-col items-center gap-6">
-                      <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-sm">
-                        <CheckCircle2 size={32} className="text-[var(--accent)]" />
-                      </div>
-                      <h3 className="text-3xl font-bold text-[var(--text)] tracking-tight">Vision Captured.</h3>
-                      <p className="text-[var(--text-muted)] text-[15px] max-w-[280px] mx-auto leading-relaxed">Uma Gayathri will reach out via WhatsApp shortly to begin your bespoke collaboration.</p>
+            {/* Tab Buttons */}
+            <div className="flex flex-col sm:inline-flex sm:flex-row p-1.5 rounded-2xl sm:rounded-full bg-white border border-[var(--border)] shadow-sm mt-6 gap-1 sm:gap-0 max-w-full">
+              <button
+                onClick={() => setActiveMarketTab("fruits")}
+                className={`px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider uppercase transition-all duration-300 text-center ${
+                  activeMarketTab === "fruits"
+                    ? "bg-[var(--accent)] text-white shadow-md"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+              >
+                🧺 Fruit Baskets ({fruitBaskets.length})
+              </button>
+              <button
+                onClick={() => setActiveMarketTab("veggies")}
+                className={`px-4 sm:px-5 py-2.5 rounded-xl sm:rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider uppercase transition-all duration-300 text-center ${
+                  activeMarketTab === "veggies"
+                    ? "bg-[var(--accent)] text-white shadow-md"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+              >
+                📦 Vegetable Crates ({vegetableCrates.length})
+              </button>
+            </div>
+          </div>
+
+          {/* Special Festive Bundle Callout (Hidden) */}
+          {/*
+          <div className="mb-10 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#fae8d4] via-[#fcefdc] to-[#f7e4ce] border border-[var(--accent-gold)]/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-center sm:text-left">
+              <span className="text-2xl">🎁</span>
+              <div>
+                <h4 className="text-[13px] sm:text-[14px] font-bold text-[var(--text)]">
+                  Navaratri Collector Bundle Offer
+                </h4>
+                <p className="text-[11px] sm:text-[12px] text-[var(--text-muted)]">
+                  Select any 5 Fruit Baskets or Vegetable Crates for just <strong className="text-[var(--accent)]">₹899</strong> (Save ₹100 instantly at checkout).
+                </p>
+              </div>
+            </div>
+            <span className="px-4 py-2 rounded-full bg-white text-[var(--accent)] text-[10px] font-bold tracking-widest uppercase border border-[var(--border)] shrink-0 shadow-sm">
+              Code: CLAY5BUNDLE
+            </span>
+          </div>
+          */}
+
+          {/* Product Grid */}
+          {marketLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-full rounded-[20px] bg-white border border-[var(--border)] overflow-hidden shadow-sm animate-pulse"
+                >
+                  <div className="aspect-[4/3] sm:aspect-square w-full bg-stone-100" />
+                  <div className="p-4 space-y-2">
+                    <div className="h-3 w-4/5 rounded bg-stone-100" />
+                    <div className="h-3 w-1/3 rounded bg-stone-100" />
+                    <div className="h-9 w-full rounded-xl bg-stone-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : activeMarketItems.length === 0 ? (
+            <p className="text-center text-[13px] text-[var(--text-muted)] py-10">
+              {activeMarketTab === "fruits"
+                ? "No fruit baskets available right now."
+                : "No vegetable crates available right now."}
+            </p>
+          ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5">
+            {activeMarketItems.map((item) => (
+              <Link
+                key={item._id || item.slug}
+                href={`/product/${item.slug}`}
+                className="group relative flex flex-col h-full rounded-[20px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500"
+              >
+                {/* Image */}
+                <div className="relative aspect-[4/3] sm:aspect-square w-full overflow-hidden bg-stone-100">
+                  <ProductImage
+                    image={item.image}
+                    alt={item.name}
+                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                  />
+
+                  {/* Discount Badge */}
+                  {item.mrp > item.price && (
+                    <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#be442b] text-white text-[10px] font-extrabold tracking-wider uppercase shadow-md z-10">
+                      {Math.round(((item.mrp - item.price) / item.mrp) * 100)}% OFF
+                    </span>
+                  )}
+
+                  {/* Gradient overlay on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                  <span className="absolute bottom-3 left-3 text-[9px] font-mono text-white/90 font-bold bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    {item.sku}
+                  </span>
+                </div>
+
+                {/* Details */}
+                <div className="p-4 flex flex-col flex-1 justify-between bg-gradient-to-b from-white to-[var(--bg-subtle)]">
+                  <div>
+                    <h4 className="text-[14px] font-bold text-[var(--text)] leading-snug line-clamp-2 group-hover:text-[var(--accent)] transition-colors mb-2">
+                      {item.name}
+                    </h4>
+                  </div>
+
+                  <div className="pt-3 border-t border-[var(--border)] mt-auto">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-[18px] font-extrabold text-[var(--accent)]">
+                        ₹{item.price}
+                      </span>
+                      {item.mrp > item.price && (
+                        <span className="text-[12px] font-semibold text-[var(--text-muted)] line-through">
+                          ₹{item.mrp}
+                        </span>
+                      )}
                     </div>
-                 ) : (
-                    <form onSubmit={handleInquirySubmit} className="flex flex-col gap-8">
-                      <div>
-                        <h3 className="text-[var(--text)] text-[28px] font-bold tracking-tight mb-2">Initiate Narrative</h3>
-                        <p className="text-[var(--text-muted)] text-[14px]">We'll respond via WhatsApp within 24 hours.</p>
-                      </div>
+                    <button
+                      onClick={(e) => handleQuickAdd(item, e)}
+                      className="w-full py-2.5 rounded-xl bg-[var(--text)] hover:bg-[var(--accent)] text-white text-[11px] font-bold tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:shadow-[0_4px_12px_rgba(190,68,43,0.3)] hover:-translate-y-0.5"
+                    >
+                      <ShoppingBag size={14} />
+                      Add to Cart
+                    </button>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+          )}
 
-                      <div className="flex flex-col gap-5 mt-2">
-                        <div className="relative">
-                          <input
-                            required
-                            value={inquiryData.name}
-                            onChange={(e) => setInquiryData({...inquiryData, name: e.target.value})}
-                            type="text"
-                            placeholder="Your Name"
-                            className="w-full bg-white h-14 rounded-xl px-5 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm"
-                          />
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          4. FESTIVE SPECIAL: Navaratri Thamboolam Return Gifts
+      ═══════════════════════════════════════════════════════════ */}
+      {seasonalSectionEnabled && (selectedCollections.length > 0 || selectedOccasions.length > 0) && seasonalProducts.length > 0 && (
+        <section id="seasonal-collection" className="relative w-full py-14 md:py-20 bg-white border-b border-[var(--border)]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+          
+          <div className="rounded-[36px] bg-gradient-to-br from-[#180e07] via-[#24130b] to-[#120a05] border border-[var(--accent-gold)]/20 text-white p-8 sm:p-12 md:p-16 relative overflow-hidden shadow-2xl">
+            {seasonalImage && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.12] mix-blend-overlay"
+                style={{ backgroundImage: `url(${getImageUrl(seasonalImage)})` }}
+              />
+            )}
+            {/* Elegant Background Glows */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-24 -right-24 w-[30rem] h-[30rem] rounded-full bg-[var(--accent-gold)]/15 blur-[100px]"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-[var(--accent)]/10 blur-[80px]"
+            />
+
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+              
+              {/* Left Info - Premium Design */}
+              <div className="lg:col-span-5 flex flex-col justify-center">
+                <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/5 backdrop-blur-md border border-[var(--accent-gold)]/30 text-[var(--accent-gold)] text-[10px] font-bold tracking-[0.25em] uppercase mb-6 self-start shadow-sm">
+                  <Sparkles size={12} className="text-[var(--accent-gold)]" />
+                  {seasonalBadge || seasonalOccasionName}
+                </div>
+                
+                <h2 className="font-serif text-[2.4rem] sm:text-[3.2rem] md:text-[3.5rem] leading-[1.05] tracking-tight mb-5 text-white">
+                  {seasonalCollectionName.split(' ').map((word, i, arr) => 
+                    i === arr.length - 1 ? <em key={i} className="italic text-[var(--accent-gold)] font-normal">{word}</em> : `${word} `
+                  )}
+                </h2>
+                
+                {/* Decorative Divider */}
+                <div className="flex items-center gap-3 mb-6 opacity-60">
+                  <span className="h-[1px] w-12 bg-gradient-to-r from-[var(--accent-gold)] to-transparent" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-gold)]" />
+                  <span className="h-[1px] w-12 bg-gradient-to-l from-[var(--accent-gold)] to-transparent" />
+                </div>
+                
+                <p className="text-white/70 text-[14px] md:text-[15px] font-light leading-relaxed mb-8 max-w-[420px]">
+                  {seasonalDescription}
+                </p>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-5 mb-4">
+                  <a
+                    href="https://wa.me/918300034451?text=Hi%20Mythris%20Gleams,%20I%20am%20interested%20in%20bulk%20Navaratri%20Thamboolam%20orders."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2.5 px-7 py-4 rounded-full bg-gradient-to-r from-[var(--accent-gold)] to-yellow-600 text-[#1a0f0a] text-[11px] font-extrabold tracking-[0.15em] uppercase hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all duration-300"
+                  >
+                    <MessageCircle size={16} />
+                    Inquire Bulk Gifting
+                  </a>
+                  <p className="text-white/50 text-[10px] md:text-[11px] leading-snug max-w-[180px]">
+                    Custom packaging & personalized name tags available.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right: Carousel */}
+              <div className="lg:col-span-7 relative">
+                <div className="overflow-hidden" ref={seasonalEmblaRef}>
+                  <div className="flex touch-pan-y -ml-4">
+                    {seasonalProducts.map((set) => (
+                      <div
+                        key={set._id || set.slug}
+                        className="shrink-0 grow-0 pl-4 basis-[85%] sm:basis-[45%] md:basis-[40%] lg:basis-[45%] xl:basis-[40%]"
+                      >
+                        <div
+                          className="h-full rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 flex flex-col justify-between hover:bg-white/15 transition-all duration-300"
+                        >
+                          <Link href={`/product/${set.slug}`} className="block">
+                            <div className="aspect-square w-full rounded-xl overflow-hidden mb-3 bg-black/20">
+                              <ProductImage
+                                image={set.image}
+                                alt={set.name}
+                                className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                              />
+                            </div>
+                            <h4 className="text-[13px] font-bold text-white leading-snug mb-1">
+                              {set.name.replace(/^Navaratri Miniature Thamboolam\s*[–-]\s*/, "")}
+                            </h4>
+                          </Link>
+                          <p className="text-[10px] text-white/60 line-clamp-2 mb-3 mt-1">
+                            {set.shortDesc}
+                          </p>
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+                            <div>
+                              <span className="text-[14px] font-bold text-[var(--accent-gold)]">
+                                ₹{set.price.toLocaleString()}
+                              </span>
+                              {set.mrp > set.price && (
+                                <span className="text-[10px] text-white/40 line-through ml-1.5">
+                                  ₹{set.mrp.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                            {set.requiresImage ? (
+                              <Link
+                                href={`/product/${set.slug}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors text-[11px]"
+                              >
+                                Customize
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleQuickAdd(set, e)}
+                                disabled={set.stockStatus === "out-of-stock"}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-light)] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 text-[11px]"
+                                aria-label={`Add ${set.name} to cart`}
+                              >
+                                <ShoppingBag size={12} />
+                                {set.stockStatus === "out-of-stock" ? "Out of Stock" : "Add"}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="relative">
-                          <input
-                            required
-                            value={inquiryData.phone}
-                            onChange={(e) => setInquiryData({...inquiryData, phone: e.target.value})}
-                            type="tel"
-                            placeholder="WhatsApp Number"
-                            className="w-full bg-white h-14 rounded-xl px-5 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm"
-                          />
-                        </div>
-                        <div className="relative">
-                          <textarea
-                            required
-                            value={inquiryData.message}
-                            onChange={(e) => setInquiryData({...inquiryData, message: e.target.value})}
-                            rows={4}
-                            placeholder="Describe your vision..."
-                            className="w-full bg-white rounded-xl px-5 py-4 text-[var(--text)] text-[15px] placeholder:text-[var(--text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] border border-transparent transition-all shadow-sm resize-none"
-                          />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Progress bar and navigation */}
+                {seasonalProducts.length > 1 && (
+                  <div className="mt-6 flex items-center justify-between gap-4">
+                    <div className="h-[2px] flex-1 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent-gold)] transition-all duration-300"
+                        style={{ width: `${seasonalProgress}%` }}
+                      />
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => seasonalEmblaApi?.scrollPrev()}
+                        className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-colors"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        onClick={() => seasonalEmblaApi?.scrollNext()}
+                        className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-white/10 transition-colors"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
+          </div>
+        </section>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          5. NEW COLLECTIONS: Fresh From The Kiln
+      ═══════════════════════════════════════════════════════════ */}
+      <section id="new-collections" className="relative w-full py-14 md:py-20 bg-white border-b border-[var(--border)]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-gold)]/20 text-[var(--text)] text-[10px] font-bold tracking-[0.2em] uppercase mb-4">
+                <Sparkles size={12} className="text-[var(--accent)]" />
+                Fresh From The Kiln
+              </div>
+              <h2 className="font-serif text-[2rem] sm:text-[2.6rem] md:text-[3rem] leading-[1.1] text-[var(--text)] tracking-tight">
+                New Collections
+              </h2>
+              <p className="text-[13px] sm:text-[14px] text-[var(--text-muted)] mt-3 leading-relaxed max-w-[520px]">
+                The latest handcrafted additions straight to our shelves — freshly shaped, painted, and ready for your Golu, home, and gift-giving.
+              </p>
+            </div>
+            <Link
+              href="/category/all"
+              className="group shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full border border-[var(--border)] text-[11px] font-bold tracking-widest uppercase text-[var(--text)] hover:bg-[var(--text)] hover:text-white hover:border-[var(--text)] transition-all duration-300"
+            >
+              View All Pieces
+              <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+
+          {newArrivals.length === 0 ? (
+            <p className="text-center text-[13px] text-[var(--text-muted)] py-16">
+              New pieces are being crafted — check back soon.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4 md:gap-5">
+              {newArrivals.map((product) => {
+                const discountPct = Math.round(
+                  ((product.mrp - product.price) / product.mrp) * 100
+                );
+                return (
+                  <Link
+                    key={product.sku}
+                    href={`/product/${product.slug}`}
+                    className="group relative flex flex-col rounded-2xl bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-lg hover:border-[var(--accent-gold)] transition-all duration-300"
+                  >
+                    {/* Image */}
+                    <div className="relative aspect-square w-full overflow-hidden bg-stone-100">
+                      <ProductImage
+                        image={product.image}
+                        alt={product.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      {/* New Pill */}
+                      <span className="absolute top-2 left-2 px-2 py-1 rounded-full bg-[var(--accent)] text-white text-[9px] font-extrabold tracking-wider uppercase shadow-md">
+                        New
+                      </span>
+                      {/* Discount Pill */}
+                      {discountPct > 0 && (
+                        <span className="absolute top-2 right-2 px-2 py-1 rounded-full bg-white/95 text-[var(--accent)] text-[9px] font-extrabold tracking-wider uppercase shadow-sm">
+                          {discountPct}% OFF
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Details */}
+                    <div className="p-3.5 sm:p-4 flex flex-col flex-1 justify-between">
+                      <div>
+                        <h3 className="text-[12px] sm:text-[13px] font-bold text-[var(--text)] leading-snug line-clamp-2 group-hover:text-[var(--accent)] transition-colors">
+                          {product.name}
+                        </h3>
+                        {product.subcategory && (
+                          <p className="text-[10px] text-[var(--text-muted)] mt-1 truncate uppercase tracking-wide">
+                            {product.subcategory}
+                          </p>
+                        )}
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-[15px] sm:text-[16px] font-bold text-[var(--text)]">
+                            ₹{product.price.toLocaleString()}
+                          </span>
+                          {product.mrp > product.price && (
+                            <span className="text-[11px] text-[var(--text-muted)] line-through">
+                              ₹{product.mrp.toLocaleString()}
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       <button
-                        type="submit"
-                        disabled={inquiryLoading}
-                        className="w-full h-14 mt-4 rounded-xl bg-[var(--text)] text-white text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-[var(--accent)] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:hover:translate-y-0 flex items-center justify-center gap-3 shadow-md"
+                        onClick={(e) => handleQuickAdd(product, e)}
+                        className="mt-3 w-full py-2 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--accent)] hover:text-white text-[10px] font-bold text-[var(--text)] tracking-wider uppercase transition-colors flex items-center justify-center gap-1.5 border border-[var(--border)]"
                       >
-                        {inquiryLoading && <Loader2 size={16} className="animate-spin" />}
-                        {inquiryLoading ? 'Sending...' : 'Submit Request'}
+                        <ShoppingBag size={11} />
+                        Add to Cart
                       </button>
-                    </form>
-                 )}
-               </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
+          )}
 
-          </motion.div>
         </div>
       </section>
-      
-      {/* ── WHATSAPP CTA (SLEEK & ELEGANT) ── */}
-      <section id="bulk" className="w-full max-w-[1000px] mx-auto px-8 sm:px-12 py-16 md:py-24">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 30 }} 
-          whileInView={{ opacity: 1, scale: 1, y: 0 }} 
-          viewport={{ once: true, margin: "-50px" }} 
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="bg-white border border-[var(--border)] rounded-[2rem] md:rounded-full p-6 md:px-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm transition-all hover:shadow-md hover:border-[#25D366]/30 group"
-        >
+
+      {/* ══════════════════════════════════════════════════════════
+          6. THE CRAFT: Behind The Gleam (Artisan Spotlight)
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full py-16 md:py-24 bg-[var(--bg)] border-b border-[var(--border)]">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
           
-          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 text-center md:text-left">
-            <div className="w-12 h-12 rounded-full bg-[var(--bg-subtle)] flex items-center justify-center shrink-0 group-hover:bg-[#25D366]/10 transition-colors duration-500">
-               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--text-muted)] group-hover:text-[#25D366] transition-colors duration-500">
-                 <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-               </svg>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            {/* Mascot Visual Display */}
+            <div className="lg:col-span-5 flex justify-center">
+              <div className="relative w-full max-w-[380px] aspect-square rounded-[36px] overflow-hidden border-2 border-[var(--accent-gold)] shadow-2xl bg-black">
+                <Image
+                  src="/logo.png"
+                  alt="Mythris Gleams Craft Story"
+                  fill
+                  className="object-cover"
+                />
+              </div>
             </div>
-            <div>
-              <h2 className="text-[var(--text)] text-[16px] font-bold tracking-tight mb-1">
-                Events & Corporate Gifting
+
+            {/* Story Content */}
+            <div className="lg:col-span-7">
+              <div className="flex items-center gap-3 mb-2.5">
+                <span className="h-[2px] w-8 bg-[var(--accent)]" />
+                <span className="text-[11px] font-bold tracking-[0.25em] uppercase text-[var(--accent)]">
+                  Behind the Gleam
+                </span>
+              </div>
+              <h2 className="font-serif text-[2.2rem] sm:text-[2.8rem] leading-[1.1] text-[var(--text)] tracking-tight mb-5">
+                Preserving Southern Memory, <em className="italic font-normal text-[var(--accent)]">One Millimeter</em> at a Time.
               </h2>
-              <p className="text-[var(--text-muted)] text-[13px]">
-                Special rates for bulk orders (25+ units). Custom designs & packaging available.
+              <p className="text-[14px] text-[var(--text-muted)] leading-relaxed mb-8">
+                Mythris Gleams was born out of deep admiration for the everyday street life of Tamil Nadu—the 
+                sizzling tiffin counters, the aroma of crushed sugarcane, and the vivid colours of the flower bazaars. 
+                Each miniature scene is individually hand-shaped, painted, assembled, and protected for a lifetime of festive joy.
               </p>
+
+              {/* 4 Pillars Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-white border border-[var(--border)] shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center font-bold text-sm mb-2">
+                    1
+                  </div>
+                  <h4 className="text-[13px] font-bold mb-1">Air-Dry & Polymer Clay</h4>
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    Lightweight, durable, and highly detailed formulas that will not crumble over time.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-[var(--border)] shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-[var(--accent-gold)]/20 text-[var(--accent-gold)] flex items-center justify-center font-bold text-sm mb-2">
+                    2
+                  </div>
+                  <h4 className="text-[13px] font-bold mb-1">Authentic Materials</h4>
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    Real pine wood crates, woven cane baskets, and miniature metal accents for true realism.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-[var(--border)] shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-[var(--accent-teal)]/15 text-[var(--accent-teal)] flex items-center justify-center font-bold text-sm mb-2">
+                    3
+                  </div>
+                  <h4 className="text-[13px] font-bold mb-1">Hand-Mixed Pigments</h4>
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    Turmeric yellows, fresh mint chutneys, and terracotta reds mixed to perfection.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white border border-[var(--border)] shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-stone-100 text-stone-700 flex items-center justify-center font-bold text-sm mb-2">
+                    4
+                  </div>
+                  <h4 className="text-[13px] font-bold mb-1">Collector-Grade Sealant</h4>
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                    Protected against dust and humid weather so your Golu pieces shine year after year.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          7. NOSTALGIA & CUSTOMER REVIEWS
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full py-14 md:py-20 bg-white">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8">
+          
+          <div className="text-center max-w-[620px] mx-auto mb-12">
+            <span className="text-[11px] font-bold tracking-[0.25em] uppercase text-[var(--accent)] block mb-2">
+              Collector Stories
+            </span>
+            <h2 className="font-serif text-[2rem] sm:text-[2.5rem] text-[var(--text)] tracking-tight">
+              Cherished in Homes Worldwide
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-3xl bg-[var(--bg)] border border-[var(--border)] shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex text-[var(--accent-gold)] mb-3">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={14} fill="currentColor" />
+                  ))}
+                </div>
+                <p className="text-[13px] text-[var(--text-muted)] italic leading-relaxed mb-4">
+                  &ldquo;The Madurai Jigarthanda stall was the absolute centerpiece of our Navaratri Golu this year! 
+                  The tiny glass bottles and brass churner had every single guest taking close-up photos.&rdquo;
+                </p>
+              </div>
+              <div className="pt-4 border-t border-[var(--border)]">
+                <p className="text-[12px] font-bold text-[var(--text)]">Lakshmi Ramanathan</p>
+                <p className="text-[10px] text-[var(--text-muted)]">Chennai • Golu Enthusiast</p>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-[var(--bg)] border border-[var(--border)] shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex text-[var(--accent-gold)] mb-3">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={14} fill="currentColor" />
+                  ))}
+                </div>
+                <p className="text-[13px] text-[var(--text-muted)] italic leading-relaxed mb-4">
+                  &ldquo;We ordered 40 Miniature Vegetable Crates and Fruit Baskets as wedding return gifts. 
+                  They were packed safely and our guests were so touched by such a unique, artistic keepsake.&rdquo;
+                </p>
+              </div>
+              <div className="pt-4 border-t border-[var(--border)]">
+                <p className="text-[12px] font-bold text-[var(--text)]">Aditi & Karthik</p>
+                <p className="text-[10px] text-[var(--text-muted)]">Bangalore • Wedding Return Gifts</p>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-[var(--bg)] border border-[var(--border)] shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex text-[var(--accent-gold)] mb-3">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={14} fill="currentColor" />
+                  ))}
+                </div>
+                <p className="text-[13px] text-[var(--text-muted)] italic leading-relaxed mb-4">
+                  &ldquo;Living in the US, having the Dosa stall and Filter Coffee miniatures on our shelf brings 
+                  such warm nostalgia of Sunday mornings in Tamil Nadu. The craft detail is breathtaking.&rdquo;
+                </p>
+              </div>
+              <div className="pt-4 border-t border-[var(--border)]">
+                <p className="text-[12px] font-bold text-[var(--text)]">Sowmya Venkat</p>
+                <p className="text-[10px] text-[var(--text-muted)]">California, USA • Miniature Collector</p>
+              </div>
             </div>
           </div>
 
-          <a 
-            href="https://wa.me/918300034451" 
-            className="shrink-0 bg-white text-[var(--text)] border border-[var(--border)] group-hover:border-[#25D366] group-hover:text-[#25D366] group-hover:bg-[#25D366]/5 rounded-full px-8 py-3 text-[10px] tracking-[0.25em] uppercase font-bold transition-all duration-300"
-          >
-            Chat on WhatsApp
-          </a>
-        </motion.div>
+        </div>
       </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          8. BOTTOM CTA BANNER: Custom Orders & Corporate Gifting
+      ═══════════════════════════════════════════════════════════ */}
+      <section className="relative w-full py-12 bg-gradient-to-r from-[var(--accent)] via-[#be442b] to-[#a83c25] text-white">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 text-center">
+          <h3 className="font-serif text-[1.8rem] sm:text-[2.2rem] font-bold mb-3 tracking-tight">
+            Have a Bespoke Clay Sculpture or Miniature in Mind?
+          </h3>
+          <p className="text-white/80 text-[13px] sm:text-[14px] max-w-[560px] mx-auto mb-6">
+            We hand-sculpt custom family street scenes, personalized heirloom clocks, and wedding return gift sets.
+          </p>
+          <a
+            href="https://wa.me/918300034451"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-full bg-white text-[var(--accent)] text-[11px] font-bold tracking-widest uppercase hover:bg-[var(--bg-subtle)] transition-all shadow-xl"
+          >
+            <MessageCircle size={15} />
+            Chat with the Artisan on WhatsApp
+          </a>
+        </div>
+      </section>
+
     </div>
   );
 }
+
+```
+
+## File: `frontend/src/app/pay/[id]/page.tsx`
+
+```typescript
+"use client";
+
+import React, { Suspense, useCallback, useEffect, useState } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import axios from 'axios';
+import { motion } from 'framer-motion';
+import { getImageUrl } from '@/utils/getImageUrl';
+import { formatWeight } from '@/utils/formatWeight';
+import { CheckCircle2, AlertCircle, Loader2, ShieldCheck, Sparkles, Phone } from 'lucide-react';
+
+// A bare axios instance: the shared `api` client redirects to /account on any 401,
+// which would break this public, token-gated page.
+const publicApi = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL });
+
+type PayOrder = {
+    _id: string;
+    orderCode: string;
+    title: string;
+    image: string;
+    weight: number;
+    totalPrice: number;
+    isPaid: boolean;
+    status: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+};
+
+type RazorpayCheckoutResponse = {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+};
+
+type RazorpayInstance = {
+    open: () => void;
+    on: (event: 'payment.failed', handler: (response: { error?: { description?: string } }) => void) => void;
+};
+
+declare global {
+    interface Window {
+        Razorpay?: new (options: Record<string, unknown>) => RazorpayInstance;
+    }
+}
+
+const apiErrorMessage = (err: unknown, fallback: string): string => {
+    const e = err as { response?: { data?: { error?: string; message?: string } } };
+    return e?.response?.data?.error || e?.response?.data?.message || fallback;
+};
+
+const loadRazorpayScript = (): Promise<boolean> =>
+    new Promise((resolve) => {
+        if (typeof window !== 'undefined' && window.Razorpay) return resolve(true);
+        const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+        if (existing) {
+            existing.addEventListener('load', () => resolve(true));
+            existing.addEventListener('error', () => resolve(false));
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+    });
+
+const PayOrderContent = () => {
+    const params = useParams<{ id: string }>();
+    const searchParams = useSearchParams();
+    const id = String(params?.id || '');
+    const token = searchParams.get('token') || '';
+
+    const [order, setOrder] = useState<PayOrder | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [paying, setPaying] = useState(false);
+    const [paid, setPaid] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+
+        const load = async () => {
+            if (!id || !token) {
+                setError("This payment link is incomplete. Please request a fresh link from the store.");
+                setLoading(false);
+                return;
+            }
+            try {
+                const { data } = await publicApi.get(`/orders/public/pay/${id}`, { params: { token } });
+                if (!active) return;
+                setOrder(data.data);
+                if (data.data.isPaid) setPaid(true);
+            } catch (err: unknown) {
+                if (!active) return;
+                setError(apiErrorMessage(err, "We could not open this payment link."));
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        load();
+        return () => {
+            active = false;
+        };
+    }, [id, token]);
+
+    const handlePay = useCallback(async () => {
+        setPaying(true);
+        try {
+            const scriptReady = await loadRazorpayScript();
+            if (!scriptReady) {
+                setError("The payment gateway could not be loaded. Please check your connection and refresh.");
+                setPaying(false);
+                return;
+            }
+
+            const { data } = await publicApi.post(`/orders/public/pay/${id}/razorpay/create`, { token });
+            const { id: rzpOrderId, amount, currency, key } = data.data;
+
+            if (!window.Razorpay) {
+                setError("The payment gateway is unavailable right now. Please refresh to try again.");
+                setPaying(false);
+                return;
+            }
+
+            const rzp = new window.Razorpay({
+                key,
+                amount,
+                currency,
+                name: 'Mythris Gleams',
+                description: order?.title || 'Custom Order',
+                order_id: rzpOrderId,
+                prefill: {
+                    name: order?.customerName || undefined,
+                    email: order?.customerEmail || undefined,
+                    contact: order?.customerPhone || undefined,
+                },
+                theme: { color: '#c84b31' },
+                handler: async (response: RazorpayCheckoutResponse) => {
+                    try {
+                        await publicApi.post(`/orders/public/pay/${id}/razorpay/verify`, {
+                            token,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                        });
+                        setPaid(true);
+                    } catch (err: unknown) {
+                        alert(apiErrorMessage(err, "Payment verification failed. If money was deducted, please contact the store."));
+                    } finally {
+                        setPaying(false);
+                    }
+                },
+                modal: {
+                    ondismiss: () => setPaying(false),
+                },
+            });
+
+            rzp.on('payment.failed', (response) => {
+                setPaying(false);
+                alert(response?.error?.description || "Payment failed. Please try again.");
+            });
+
+            rzp.open();
+        } catch (err: unknown) {
+            setPaying(false);
+            setError(apiErrorMessage(err, "We could not start the payment. Please try again."));
+        }
+    }, [id, token, order]);
+
+    if (loading) {
+        return (
+            <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4">
+                <Loader2 className="animate-spin text-[var(--accent)]" size={32} />
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400">Loading your order</p>
+            </div>
+        );
+    }
+
+    if (error && !order) {
+        return (
+            <div className="min-h-[70vh] flex flex-col items-center justify-center px-6 text-center">
+                <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-5">
+                    <AlertCircle size={26} />
+                </div>
+                <h1 className="text-2xl font-bold text-zinc-900 mb-2">Payment Link Unavailable</h1>
+                <p className="text-zinc-500 max-w-md text-sm mb-6">{error}</p>
+                <Link
+                    href="/"
+                    className="px-6 py-3 bg-zinc-900 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all"
+                >
+                    Back to store
+                </Link>
+            </div>
+        );
+    }
+
+    if (paid && order) {
+        return (
+            <div className="min-h-[70vh] flex flex-col items-center justify-center px-6 py-12">
+                <motion.div
+                    initial={{ scale: 0.85, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 200 }}
+                    className="text-center max-w-md w-full"
+                >
+                    <div className="w-20 h-20 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto mb-5">
+                        <CheckCircle2 className="text-emerald-600" size={40} />
+                    </div>
+                    <h1 className="text-3xl font-bold text-zinc-900 mb-2">Payment Successful</h1>
+                    <p className="text-zinc-500 mb-8 text-sm">
+                        Thank you{order.customerName ? `, ${order.customerName.split(' ')[0]}` : ''}! Your order is confirmed and is already in our handcrafting
+                        stage.
+                    </p>
+                    <div className="bg-white border border-zinc-200 rounded-2xl p-5 text-left text-sm space-y-2">
+                        <div className="flex justify-between">
+                            <span className="text-zinc-500">Order</span>
+                            <span className="font-mono font-bold text-zinc-900">#{order.orderCode}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-zinc-500">Amount paid</span>
+                            <span className="font-bold text-zinc-900 tabular-nums">₹{order.totalPrice.toLocaleString()}</span>
+                        </div>
+                    </div>
+                    <Link
+                        href="/"
+                        className="inline-block mt-8 px-6 py-3 bg-zinc-900 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all"
+                    >
+                        Continue shopping
+                    </Link>
+                </motion.div>
+            </div>
+        );
+    }
+
+    if (!order) return null;
+
+    return (
+        <div className="py-10 sm:py-16 px-4">
+            <div className="max-w-xl mx-auto">
+                <div className="text-center mb-8">
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-zinc-200 text-[10px] font-bold tracking-[0.2em] uppercase text-[var(--accent)]">
+                        <Sparkles size={12} /> Secure Payment
+                    </span>
+                    <h1 className="text-3xl sm:text-4xl font-bold text-zinc-900 mt-4 mb-2">Complete your order</h1>
+                    <p className="text-zinc-500 text-sm">
+                        {order.customerName ? `Hi ${order.customerName.split(' ')[0]}, ` : ''}please review and pay below.
+                    </p>
+                </div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm"
+                >
+                    {order.image ? (
+                        <div className="aspect-[16/9] bg-stone-100 overflow-hidden">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={getImageUrl(order.image)} alt={order.title} className="w-full h-full object-cover" />
+                        </div>
+                    ) : (
+                        <div className="h-1.5 bg-[var(--accent)]" />
+                    )}
+
+                    <div className="p-6 sm:p-7 space-y-4">
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Order #{order.orderCode}</div>
+                            <div className="text-lg font-bold text-zinc-900">{order.title}</div>
+                            {order.weight > 0 && <div className="text-[11px] text-zinc-400 mt-1">Shipping weight: {formatWeight(order.weight)}</div>}
+                        </div>
+
+                        {order.customerPhone && (
+                            <div className="flex items-center gap-2 text-[12px] text-zinc-500">
+                                <Phone size={12} /> {order.customerPhone}
+                            </div>
+                        )}
+
+                        <div className="pt-4 border-t border-zinc-100 flex items-baseline justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Amount payable</span>
+                            <span className="text-3xl font-bold text-zinc-900 tabular-nums">₹{order.totalPrice.toLocaleString()}</span>
+                        </div>
+
+                        {error && <div className="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
+
+                        <button
+                            type="button"
+                            onClick={handlePay}
+                            disabled={paying}
+                            className="w-full h-14 bg-zinc-900 text-white rounded-2xl font-bold text-[12px] uppercase tracking-[0.15em] hover:bg-[var(--accent)] transition-all disabled:opacity-60 flex items-center justify-center gap-3 shadow-lg"
+                        >
+                            {paying ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} />}
+                            {paying ? 'Processing' : 'Pay securely with Razorpay'}
+                        </button>
+
+                        <p className="text-[11px] text-center text-zinc-400 flex items-center justify-center gap-1.5">
+                            <ShieldCheck size={12} /> Secured by Razorpay
+                        </p>
+                    </div>
+                </motion.div>
+
+                <p className="text-[11px] text-center text-zinc-400 mt-6">
+                    Questions about this order? Reach us on{' '}
+                    <a
+                        href={`https://wa.me/918300034451?text=${encodeURIComponent(`Hi, I have a question about my custom order #${order.orderCode}.`)}`}
+                        className="underline hover:text-zinc-900"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        WhatsApp
+                    </a>
+                    .
+                </p>
+            </div>
+        </div>
+    );
+};
+
+const PayOrderPage = () => (
+    <Suspense
+        fallback={
+            <div className="min-h-[70vh] flex items-center justify-center">
+                <Loader2 className="animate-spin text-zinc-300" size={28} />
+            </div>
+        }
+    >
+        <PayOrderContent />
+    </Suspense>
+);
+
+export default PayOrderPage;
 
 ```
 
@@ -7076,13 +13348,14 @@ export default function Home() {
 ```typescript
 "use client";
 
-import React, { use, useState, useEffect } from "react";
+import React, { use, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import { useCart } from "@/hooks/useCart";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchProductBySlug, fetchProducts } from "@/redux/slices/productSlice";
 import { Product } from "@/data/products";
+import { EXCEL_PRODUCTS } from "@/data/excelProducts";
 import { motion, AnimatePresence } from "framer-motion";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { compressImageFile } from '@/utils/compressImage';
@@ -7098,7 +13371,30 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
   const { selectedProduct, loading, products } = useAppSelector((state: any) => state.products);
   const { addToCart } = useCart();
 
-  const p = selectedProduct as Product | null;
+  // Excel catalog fallback if not yet in database
+  const excelFallback = useMemo(() => {
+    const item = EXCEL_PRODUCTS.find((ep) => ep.slug === slug);
+    if (!item) return null;
+    return {
+      _id: item.sku,
+      id: item.sku,
+      name: item.name,
+      slug: item.slug,
+      category: item.category,
+      price: item.price,
+      mrp: item.mrp,
+      story: item.shortDesc,
+      details: item.shortDesc,
+      images: [item.image],
+      variants: [],
+      stockStatus: 'made-to-order',
+      requiresImage: false,
+      rating: item.rating,
+      reviewCount: item.reviewsCount,
+    } as any;
+  }, [slug]);
+
+  const p = (selectedProduct || excelFallback) as Product | null;
   const [activeImage, setActiveImage] = useState(0);
   const [qty, setQty] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState("");
@@ -7203,32 +13499,32 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/10" />
         <div className="absolute inset-0 bg-[var(--accent)]/10 mix-blend-multiply" />
 
-        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-8 sm:px-12 pb-8 md:pb-12 flex flex-col gap-4">
+        <div className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 pb-6 md:pb-12 flex flex-col gap-3 sm:gap-4">
           {/* Breadcrumb */}
           <motion.nav
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             aria-label="Breadcrumb"
-            className="flex items-center gap-2 flex-wrap"
+            className="flex items-center gap-1.5 sm:gap-2 flex-wrap"
           >
-            <Link href="/" className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300">
-              <Home size={14} />
+            <Link href="/" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition-all duration-300">
+              <Home size={13} />
             </Link>
-            <ChevronRight size={14} className="text-white/30" />
-            <Link href="/category/all" className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
-              All Products
+            <ChevronRight size={13} className="text-white/30" />
+            <Link href="/category/all" className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
+              All
             </Link>
             {p.category && (
               <>
-                <ChevronRight size={14} className="text-white/30" />
-                <Link href={`/category/${categorySlug}`} className="px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all">
+                <ChevronRight size={13} className="text-white/30" />
+                <Link href={`/category/${categorySlug}`} className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase hover:text-white transition-all max-w-[140px] truncate">
                   {p.category}
                 </Link>
               </>
             )}
-            <ChevronRight size={14} className="text-white/30" />
-            <span className="px-4 py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-[10px] font-bold tracking-[0.2em] uppercase max-w-[200px] truncate">
+            <ChevronRight size={13} className="text-white/30" />
+            <span className="px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase max-w-[120px] sm:max-w-[200px] truncate">
               {p.name}
             </span>
           </motion.nav>
@@ -7239,10 +13535,10 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.15 }}
           >
-            <span className="text-white/70 text-[10px] font-bold tracking-[0.25em] uppercase mb-3 block">
+            <span className="text-white/70 text-[9px] sm:text-[10px] font-bold tracking-[0.25em] uppercase mb-1.5 sm:mb-3 block">
               {p.category}
             </span>
-            <h1 className="text-white text-2xl md:text-3xl lg:text-4xl font-bold leading-[1.2] tracking-tight max-w-2xl line-clamp-2">
+            <h1 className="text-white text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold leading-[1.2] tracking-tight max-w-2xl line-clamp-2">
               {p.name}
             </h1>
           </motion.div>
@@ -7250,7 +13546,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
       </section>
 
       {/* ── PRODUCT DETAIL ── */}
-      <section className="max-w-[1440px] mx-auto px-8 sm:px-12 pt-10 pb-16 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start w-full">
+      <section className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-10 pb-16 grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-20 items-start w-full">
 
         {/* LEFT: Gallery */}
         <motion.div
@@ -7259,7 +13555,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col gap-4 lg:sticky lg:top-[100px]"
         >
-          <div className="aspect-square w-full max-h-[65vh] rounded-[2rem] bg-[var(--bg-subtle)] overflow-hidden relative group border border-[var(--border)]">
+          <div className="aspect-square w-full max-h-[50vh] sm:max-h-[65vh] rounded-2xl sm:rounded-[2rem] bg-[var(--bg-subtle)] overflow-hidden relative group border border-[var(--border)]">
             <AnimatePresence mode="wait">
               {p.images && p.images.length > 0 ? (
                 <motion.img
@@ -7308,9 +13604,38 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col gap-8"
         >
-          {/* Category Label + Name */}
-          <div className="space-y-2">
-            <div className="text-[10px] tracking-[0.25em] uppercase text-[var(--text-faint)] font-bold">{p.category}</div>
+          {/* Category / Collections & Occasions Label + Name */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* All Collections */}
+              {Array.from(new Set([p.category, ...(p.categories || [])].filter(Boolean))).map((cat) => {
+                const catSlug = cat.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+                return (
+                  <Link
+                    key={cat}
+                    href={`/category/${catSlug}`}
+                    className="text-[9px] tracking-[0.15em] uppercase font-bold px-2.5 py-1 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-all"
+                  >
+                    {cat}
+                  </Link>
+                );
+              })}
+
+              {/* All Occasions */}
+              {Array.from(new Set([p.occasion, ...(p.occasions || [])].filter((occ): occ is string => Boolean(occ)))).map((occ) => {
+                const occSlug = occ.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+                return (
+                  <Link
+                    key={occ}
+                    href={`/occasion/${occSlug}`}
+                    className="text-[9px] tracking-[0.15em] uppercase font-bold px-2.5 py-1 rounded-full bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 transition-all"
+                  >
+                    ✦ {occ}
+                  </Link>
+                );
+              })}
+            </div>
+
             <h2 className="text-[var(--text)] text-2xl md:text-3xl font-bold leading-[1.2] tracking-tight">
               {p.name}
             </h2>
@@ -7429,8 +13754,9 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                 onClick={() => addToCart({
                   productId: (p as any)._id || String(p.id),
                   name: p.name,
-                  image: (p as any).images?.[0] || "",
+                  image: (p as any).images?.[0] || (p as any).image || "",
                   price: p.price,
+                  weight: p.weight || 0,
                   quantity: qty,
                   selectedVariant,
                   selectedColor,
@@ -7491,7 +13817,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                 {activeTab === 'shipping' && (
                   <motion.div key="shipping" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }} className="flex gap-4">
                     <Truck size={18} strokeWidth={1.5} className="text-[var(--accent)] shrink-0 mt-0.5" />
-                    <p>Delivered with care across India. Please allow 10–14 days for this handcrafted piece to reach your home.</p>
+                    <p>Delivered with care across India. Orders above ₹4,999 qualify for free shipping within India. Please allow 10–14 days for this handcrafted piece to reach your home.</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -7502,23 +13828,23 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
 
       {/* ── RELATED PRODUCTS ── */}
       {relatedProducts.length > 0 && (
-        <section className="max-w-[1440px] mx-auto px-8 sm:px-12 py-12 border-t border-[var(--border)] w-full mb-8">
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-10 sm:py-12 border-t border-[var(--border)] w-full mb-16 lg:mb-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-50px" }}
             transition={{ duration: 0.8 }}
           >
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-10">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-5 mb-6 sm:mb-10">
               <div className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[var(--accent)] block">Discover More</span>
-                <h2 className="text-[var(--text)] text-2xl md:text-3xl font-bold tracking-tight">You May Also Love</h2>
+                <h2 className="text-[var(--text)] text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">You May Also Love</h2>
               </div>
               <Link href="/category/all" className="group flex items-center gap-2 text-[11px] font-bold tracking-[0.15em] uppercase text-[var(--text-faint)] hover:text-[var(--accent)] transition-colors">
                 View All <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
               {relatedProducts.map((rp: Product, i: number) => (
                 <motion.div
                   key={(rp as any)._id || rp.id}
@@ -7534,6 +13860,36 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           </motion.div>
         </section>
       )}
+
+      {/* ── STICKY MOBILE BOTTOM BAR ── */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[var(--border)] px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3">
+        <div className="flex flex-col">
+          <span className="text-[9px] uppercase tracking-wider text-[var(--text-faint)] font-bold">Total ({qty})</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-base sm:text-lg font-bold text-[var(--text)]">₹{(p.price * qty).toLocaleString()}</span>
+            {p.mrp && p.mrp > p.price && (
+              <span className="text-[11px] text-[var(--text-faint)] line-through">₹{(p.mrp * qty).toLocaleString()}</span>
+            )}
+          </div>
+        </div>
+        <button
+          className="flex-1 max-w-[210px] h-11 bg-[var(--text)] text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.15em] hover:bg-[var(--accent)] transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-40"
+          disabled={requiresImage && !customerImage}
+          onClick={() => addToCart({
+            productId: (p as any)._id || String(p.id),
+            name: p.name,
+            image: (p as any).images?.[0] || (p as any).image || "",
+            price: p.price,
+            weight: p.weight || 0,
+            quantity: qty,
+            selectedVariant,
+            selectedColor,
+            customerImage,
+          })}
+        >
+          {requiresImage && !customerImage ? "Upload Photo" : "Add to Cart"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -7547,25 +13903,32 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { 
     LayoutDashboard, 
     ShoppingBag, 
     Users, 
-    MessageSquare, 
     LogOut, 
-    Package,
-    ArrowLeft,
-    Layers,
-    ShieldCheck,
-    Box,
-    Globe,
-    Inbox
+    Layers, 
+    ShieldCheck, 
+    Box, 
+    Globe, 
+    Inbox, 
+    Gift,
+    Settings,
+    X
 } from 'lucide-react';
 import { useAppDispatch } from '@/redux/hooks';
 import { logout } from '@/redux/slices/authSlice';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const AdminSidebar = () => {
+interface AdminSidebarProps {
+    isOpen?: boolean;
+    onClose?: () => void;
+}
+
+const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onClose }) => {
     const pathname = usePathname();
     const dispatch = useAppDispatch();
 
@@ -7573,35 +13936,52 @@ const AdminSidebar = () => {
         { name: 'Dashboard', icon: <LayoutDashboard size={16} />, path: '/admin' },
         { name: 'Products', icon: <Box size={16} />, path: '/admin/products' },
         { name: 'Collections', icon: <Layers size={16} />, path: '/admin/collections' },
+        { name: 'Occasions', icon: <Gift size={16} />, path: '/admin/occasions' },
+        { name: 'Homepage', icon: <Settings size={16} />, path: '/admin/settings' },
         { name: 'Orders', icon: <ShoppingBag size={16} />, path: '/admin/orders' },
         { name: 'Inquiries', icon: <Inbox size={16} />, path: '/admin/inquiries' },
         { name: 'Customers', icon: <Users size={16} />, path: '/admin/customers' },
     ];
 
-    return (
-        <aside className="w-60 h-screen bg-white text-zinc-600 flex flex-col border-r border-zinc-200 flex-shrink-0 relative z-50">
+    const sidebarContent = (
+        <div className="flex flex-col h-full">
             {/* Professional Logo Area */}
             <div className="p-6">
-                <Link href="/" className="flex items-center gap-2 group text-zinc-900 border-b border-zinc-100 pb-5">
-                    <div className="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center text-white font-bold shadow-md shadow-zinc-900/10 group-hover:scale-105 transition-transform">MG</div>
-                    <div>
-                        <span className="font-bold tracking-tight text-xs uppercase">Store Admin</span>
-                        <div className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest leading-none mt-0.5 flex items-center gap-1">
-                            <ShieldCheck size={8} /> Authorized
+                <div className="flex items-center justify-between border-b border-zinc-100 pb-5">
+                    <Link href="/" onClick={onClose} className="flex items-center gap-2.5 group text-zinc-900">
+                        <div className="relative w-9 h-9 rounded-full overflow-hidden border border-[var(--accent-gold)] bg-black shadow-sm group-hover:scale-105 transition-transform shrink-0">
+                          <Image src="/logo.png" alt="Mythris Gleams" fill sizes="36px" className="object-cover" />
                         </div>
-                    </div>
-                </Link>
+                        <div>
+                            <span className="font-bold tracking-tight text-xs uppercase text-zinc-900">Mythris Gleams</span>
+                            <div className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest leading-none mt-0.5 flex items-center gap-1">
+                                <ShieldCheck size={8} /> Store Admin
+                            </div>
+                        </div>
+                    </Link>
+                    {onClose && (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
+                            aria-label="Close menu"
+                        >
+                            <X size={18} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Navigation Registry */}
-            <nav className="flex-1 px-3 space-y-1 mt-4">
+            <nav className="flex-1 px-3 space-y-1 mt-2 overflow-y-auto">
                 <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-[0.2em] px-3 mb-2">Main Menu</div>
                 {menuItems.map((item) => {
-                    const isActive = pathname === item.path;
+                    const isActive = item.path === '/admin' ? pathname === item.path : pathname.startsWith(item.path);
                     return (
                         <Link 
                             key={item.name} 
                             href={item.path}
+                            onClick={onClose}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 group ${
                                 isActive 
                                     ? 'bg-zinc-900 text-white shadow-lg shadow-zinc-900/10 font-bold' 
@@ -7616,20 +13996,57 @@ const AdminSidebar = () => {
             </nav>
 
             {/* Protocols Footer */}
-            <div className="p-4 space-y-1 border-t border-zinc-100">
-                <Link href="/" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-50 text-zinc-500 hover:text-zinc-900 transition-all font-bold text-[9px] uppercase tracking-widest">
+            <div className="p-4 space-y-1 border-t border-zinc-100 mt-auto">
+                <Link href="/" onClick={onClose} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-50 text-zinc-500 hover:text-zinc-900 transition-all font-bold text-[9px] uppercase tracking-widest">
                     <Globe size={14} />
                     <span>View Website</span>
                 </Link>
                 <button 
-                    onClick={() => dispatch(logout())}
+                    onClick={() => {
+                        if (onClose) onClose();
+                        dispatch(logout());
+                    }}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-rose-50 text-zinc-400 hover:text-rose-600 transition-all text-left font-bold text-[9px] uppercase tracking-widest"
                 >
                     <LogOut size={14} />
                     <span>Logout</span>
                 </button>
             </div>
-        </aside>
+        </div>
+    );
+
+    return (
+        <>
+            {/* Desktop persistent sidebar */}
+            <aside className="hidden lg:flex w-60 h-screen bg-white text-zinc-600 flex-col border-r border-zinc-200 flex-shrink-0 relative z-40">
+                {sidebarContent}
+            </aside>
+
+            {/* Mobile Drawer */}
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            onClick={onClose}
+                            className="fixed inset-0 bg-black/40 z-50 lg:hidden backdrop-blur-xs"
+                        />
+                        <motion.aside
+                            initial={{ x: "-100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "-100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 250 }}
+                            className="fixed top-0 bottom-0 left-0 w-64 bg-white text-zinc-600 flex flex-col border-r border-zinc-200 z-50 lg:hidden shadow-2xl"
+                        >
+                            {sidebarContent}
+                        </motion.aside>
+                    </>
+                )}
+            </AnimatePresence>
+        </>
     );
 };
 
@@ -7714,26 +14131,33 @@ import {
     Layers, 
     Image as ImageIcon,
     Plus,
-    Minus,
     Trash2,
     Palette,
-    Camera
+    Camera,
+    Weight,
+    TrendingUp
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
 import { fetchCollections } from '@/redux/slices/collectionSlice';
+import { fetchOccasions } from '@/redux/slices/occasionSlice';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { RootState } from '@/redux/store';
 import { getImageUrl } from '@/utils/getImageUrl';
+import toast from 'react-hot-toast';
 
 const artisanalSchema = z.object({
     name: z.string().min(3, "Name your creation"),
     slug: z.string().min(3, "Unique identifier required"),
-    category: z.string().min(1, "Choose a collection"),
+    category: z.string().optional(),
+    subcategory: z.string().optional(),
+    occasion: z.string().optional(),
+    occasionSub: z.string().optional(),
     price: z.number().min(1, "Enter artisanal value"),
     mrp: z.number().min(1, "Enter valuation (MRP)"),
+    weight: z.number().min(0, "Enter weight in grams"),
     story: z.string().min(10, "Share the inspiration behind this piece"),
     details: z.string().min(5, "Technical details are mandatory"),
     metaDescription: z.string().max(160, "Keep SEO hooks concise").optional(),
@@ -7747,16 +14171,48 @@ interface ProductModalProps {
     onClose: () => void;
     onSubmit: (data: FormData) => void;
     loading?: boolean;
-    initialData?: any; // Data for editing
+    initialData?: Partial<{
+        _id?: string;
+        id: number;
+        name: string;
+        slug: string;
+        category: string;
+        categories?: string[];
+        subcategory?: string | null;
+        subcategories?: string[];
+        occasion?: string | null;
+        occasions?: string[];
+        occasionSub?: string | null;
+        occasionSubs?: string[];
+        price: number;
+        mrp?: number | null;
+        weight?: number | null;
+        story?: string;
+        details?: string;
+        metaDescription?: string;
+        stockStatus?: string;
+        requiresImage?: boolean;
+        isBestseller?: boolean;
+        images?: string[];
+        variants?: { type: string; options: string[] }[];
+    }>; // Data for editing
 }
 
 const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, loading, initialData }) => {
     const dispatch = useAppDispatch();
     const { collections } = useAppSelector((state: RootState) => state.collections);
+    const { occasions } = useAppSelector((state: RootState) => state.occasions);
     const [mediaItems, setMediaItems] = useState<{ type: 'existing' | 'new', url: string, file?: File }[]>([]);
     const [variants, setVariants] = useState<string[]>(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
     const [colors, setColors] = useState<string[]>([]);
     const [requiresImage, setRequiresImage] = useState(false);
+    const [isBestseller, setIsBestseller] = useState(false);
+
+    // Multi-selection state
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
+    const [selectedOccasions, setSelectedOccasions] = useState<string[]>([]);
+    const [selectedOccasionSubs, setSelectedOccasionSubs] = useState<string[]>([]);
 
     const COLOR_PALETTE = [
         { name: 'Gold', hex: '#d4af37' },
@@ -7785,13 +14241,31 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         formState: { errors },
     } = useForm<ArtisanalFormData>({
         resolver: zodResolver(artisanalSchema),
-        defaultValues: { stockStatus: 'made-to-order' }
+        defaultValues: { stockStatus: 'made-to-order', subcategory: '', weight: 0 }
+    });
+
+    const mainCategories = collections.filter(c => !c.parent);
+    // Subcategories available for any currently selected main categories
+    const activeSubcategories = collections.filter(c => {
+        if (!c.parent) return false;
+        const parentId = typeof c.parent === 'object' ? c.parent._id : c.parent;
+        const parentCol = collections.find(col => col._id === parentId);
+        return parentCol && selectedCategories.includes(parentCol.name);
+    });
+
+    const mainOccasions = occasions.filter(o => !o.parent);
+    // Occasion subcategories available for any currently selected main occasions
+    const activeOccasionSubs = occasions.filter(o => {
+        if (!o.parent) return false;
+        const parentId = typeof o.parent === 'object' ? o.parent._id : o.parent;
+        const parentOcc = occasions.find(occ => occ._id === parentId);
+        return parentOcc && selectedOccasions.includes(parentOcc.name);
     });
 
     // Auto-Slug Generation Logic
     const productName = watch('name');
     useEffect(() => {
-        if (productName) {
+        if (productName && !initialData) {
             const generatedSlug = productName
                 .toLowerCase()
                 .trim()
@@ -7800,39 +14274,79 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                 .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
             setValue('slug', generatedSlug);
         }
-    }, [productName, setValue]);
+    }, [productName, setValue, initialData]);
 
     useEffect(() => {
         if (isOpen) {
             dispatch(fetchCollections());
+            dispatch(fetchOccasions());
             if (initialData) {
                 reset({
-                    name: initialData.name,
-                    slug: initialData.slug,
-                    category: initialData.category,
-                    price: initialData.price,
-                    mrp: initialData.mrp,
+                    name: initialData.name || '',
+                    slug: initialData.slug || '',
+                    category: initialData.category || '',
+                    subcategory: initialData.subcategory || '',
+                    occasion: initialData.occasion || '',
+                    occasionSub: initialData.occasionSub || '',
+                    price: initialData.price || 0,
+                    mrp: initialData.mrp || 0,
+                    weight: initialData.weight || 0,
                     story: initialData.story,
                     details: initialData.details,
                     metaDescription: initialData.metaDescription || '',
-                    stockStatus: initialData.stockStatus,
+                    stockStatus: (initialData.stockStatus as ArtisanalFormData['stockStatus']) || 'made-to-order',
                 });
+
+                // Populate multi categories
+                const initCats = Array.from(new Set([
+                    ...(initialData.categories || []),
+                    ...(initialData.category ? [initialData.category] : [])
+                ].filter(Boolean)));
+                setSelectedCategories(initCats);
+
+                // Populate multi subcategories
+                const initSubs = Array.from(new Set([
+                    ...(initialData.subcategories || []),
+                    ...(initialData.subcategory ? [initialData.subcategory] : [])
+                ].filter(Boolean)));
+                setSelectedSubcategories(initSubs);
+
+                // Populate multi occasions
+                const initOccs = Array.from(new Set([
+                    ...(initialData.occasions || []),
+                    ...(initialData.occasion ? [initialData.occasion] : [])
+                ].filter(Boolean)));
+                setSelectedOccasions(initOccs);
+
+                // Populate multi occasion subs
+                const initOccSubs = Array.from(new Set([
+                    ...(initialData.occasionSubs || []),
+                    ...(initialData.occasionSub ? [initialData.occasionSub] : [])
+                ].filter(Boolean)));
+                setSelectedOccasionSubs(initOccSubs);
+
                 if (initialData.images) {
-                    setMediaItems(initialData.images.map((url: string) => ({ type: 'existing', url: getImageUrl(url) })));
+                    setMediaItems(initialData.images.map((url: string) => ({ type: 'existing', url })));
                 } else {
                     setMediaItems([]);
                 }
-                const sizeVariants = initialData.variants?.find((v: any) => v.type === 'Size')?.options || [];
-                const colorVariants = initialData.variants?.find((v: any) => v.type === 'Color')?.options || [];
+                const sizeVariants = initialData.variants?.find((v) => v.type === 'Size')?.options || [];
+                const colorVariants = initialData.variants?.find((v) => v.type === 'Color')?.options || [];
                 setVariants(Array.isArray(sizeVariants) && sizeVariants.length > 0 ? sizeVariants : []);
                 setColors(Array.isArray(colorVariants) ? colorVariants : []);
                 setRequiresImage(!!initialData.requiresImage);
+                setIsBestseller(!!initialData.isBestseller);
             } else {
-                reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', price: 0, mrp: 0, story: '', details: '', metaDescription: '' });
+                reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', subcategory: '', occasion: '', occasionSub: '', price: 0, mrp: 0, weight: 0, story: '', details: '', metaDescription: '' });
+                setSelectedCategories([]);
+                setSelectedSubcategories([]);
+                setSelectedOccasions([]);
+                setSelectedOccasionSubs([]);
                 setMediaItems([]);
                 setVariants(['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)']);
                 setColors([]);
                 setRequiresImage(false);
+                setIsBestseller(false);
             }
         }
     }, [isOpen, initialData, reset, dispatch]);
@@ -7846,7 +14360,16 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         if (files.length > 0) {
-            const newMedia = files.map(file => ({
+            const allowed = Math.max(0, 10 - mediaItems.length);
+            if (allowed <= 0) {
+                toast.error("Maximum 10 images per product");
+                return;
+            }
+            const accepted = files.slice(0, allowed);
+            if (accepted.length < files.length) {
+                toast.error(`Maximum 10 images per product (skipped ${files.length - accepted.length})`);
+            }
+            const newMedia = accepted.map(file => ({
                 type: 'new' as const,
                 url: URL.createObjectURL(file), // create temporary URL for preview
                 file
@@ -7862,8 +14385,28 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const handleFormSubmit = (data: ArtisanalFormData) => {
         const formData = new FormData();
         Object.keys(data).forEach(key => {
-            formData.append(key, (data as any)[key]);
+            formData.append(key, String((data as Record<string, unknown>)[key]));
         });
+
+        // Set primary and multi collections
+        const primaryCat = selectedCategories[0] || data.category || '';
+        formData.set('category', primaryCat);
+        formData.set('categories', JSON.stringify(selectedCategories));
+
+        // Set primary and multi subcategories
+        const primarySub = selectedSubcategories[0] || data.subcategory || '';
+        formData.set('subcategory', primarySub);
+        formData.set('subcategories', JSON.stringify(selectedSubcategories));
+
+        // Set primary and multi occasions
+        const primaryOcc = selectedOccasions[0] || data.occasion || '';
+        formData.set('occasion', primaryOcc);
+        formData.set('occasions', JSON.stringify(selectedOccasions));
+
+        // Set primary and multi occasion subcategories
+        const primaryOccSub = selectedOccasionSubs[0] || data.occasionSub || '';
+        formData.set('occasionSub', primaryOccSub);
+        formData.set('occasionSubs', JSON.stringify(selectedOccasionSubs));
         
         // Add variants
         const variantPayload: { type: string; options: string[] }[] = [];
@@ -7871,9 +14414,15 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         if (colors.length > 0) variantPayload.push({ type: 'Color', options: colors });
         formData.append('variants', JSON.stringify(variantPayload));
         formData.append('requiresImage', String(requiresImage));
+        formData.append('isBestseller', String(isBestseller));
 
         // Add kept existing images
-        const existingImagesToKeep = mediaItems.filter(m => m.type === 'existing').map(m => m.url);
+        const existingImagesToKeep = mediaItems
+            .filter(m => m.type === 'existing')
+            .map(m => {
+                const idx = m.url.indexOf('/uploads/');
+                return idx !== -1 ? m.url.slice(idx) : m.url;
+            });
         formData.append('existingImages', JSON.stringify(existingImagesToKeep));
 
         // Add new images
@@ -7931,7 +14480,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                         <div className="space-y-4">
                                             {mediaItems.length > 0 ? (
                                                 <div className="aspect-[4/3] rounded-[2.5rem] overflow-hidden border border-zinc-100 relative group">
-                                                    <img src={getImageUrl(mediaItems[0].url)} alt="Master" className="w-full h-full object-cover" />
+                                                    <img src={mediaItems[0].type === 'new' ? mediaItems[0].url : getImageUrl(mediaItems[0].url)} alt="Master" className="w-full h-full object-cover" />
                                                     <div className="absolute top-4 left-4 px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-[8px] font-black text-white uppercase tracking-widest border border-white/20">
                                                         Master Visual
                                                     </div>
@@ -7954,7 +14503,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             <div className="grid grid-cols-4 gap-4">
                                                 {mediaItems.slice(1).map((item, i) => (
                                                     <div key={i} className="aspect-square rounded-2xl border border-zinc-100 overflow-hidden relative group">
-                                                        <img src={getImageUrl(item.url)} alt="Sub" className="w-full h-full object-cover" />
+                                                        <img src={item.type === 'new' ? item.url : getImageUrl(item.url)} alt="Sub" className="w-full h-full object-cover" />
                                                         <button 
                                                             type="button"
                                                             onClick={() => handleRemoveMedia(i + 1)}
@@ -8044,7 +14593,7 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             {/* Active Variants List */}
                                             <div className="grid grid-cols-1 gap-2 pt-2">
                                                 <AnimatePresence>
-                                                    {variants.map((v, i) => (
+                                                    {variants.map((v) => (
                                                         <motion.div 
                                                             key={v}
                                                             initial={{ opacity: 0, x: -10 }}
@@ -8182,6 +14731,30 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             </button>
                                         </div>
                                     </div>
+
+                                    <div className="space-y-6 pt-6">
+                                        <div className="p-8 bg-amber-50/60 rounded-[2rem] border border-amber-100 flex items-center justify-between gap-6">
+                                            <div className="flex items-start gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                                                    <TrendingUp size={18} className="text-amber-600" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 block">Show in Best Sellers</label>
+                                                    <p className="text-[11px] font-medium text-zinc-400 italic mt-1 max-w-[260px]">Feature this product in the Best Sellers carousel on the home page.</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isBestseller}
+                                                aria-label="Show this product in Best Sellers"
+                                                onClick={() => setIsBestseller(prev => !prev)}
+                                                className={`w-16 h-8 rounded-full transition-all flex items-center px-1 ${isBestseller ? 'bg-amber-500 justify-end' : 'bg-zinc-300 justify-start'}`}
+                                            >
+                                                <span className="w-6 h-6 rounded-full bg-white shadow-md transition-all" />
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Right Side: Information Narrative (7 cols) */}
@@ -8197,14 +14770,169 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                             <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Reference Slug</label>
                                             <input {...register('slug')} placeholder="slug-path" className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-mono text-xs focus:ring-2 focus:ring-gold/20 outline-none transition-all" />
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 ml-1">Collection</label>
-                                            <select {...register('category')} className="w-full bg-zinc-50 border-none rounded-2xl p-5 text-zinc-900 font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all appearance-none cursor-pointer">
-                                                <option value="">Select Gallery...</option>
-                                                {collections.map((col: any) => (
+                                        {/* Multi-Collection Selection */}
+                                        <div className="col-span-2 space-y-3 bg-zinc-50/70 p-5 rounded-2xl border border-zinc-100">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 flex items-center gap-1.5">
+                                                    <Layers size={13} className="text-gold" /> Collections (Galleries)
+                                                </label>
+                                                <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                                                    {selectedCategories.length} selected
+                                                </span>
+                                            </div>
+
+                                            {/* Dropdown to add collection */}
+                                            <select
+                                                value=""
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val && !selectedCategories.includes(val)) {
+                                                        setSelectedCategories(prev => [...prev, val]);
+                                                    }
+                                                }}
+                                                className="w-full bg-white border border-zinc-200 rounded-xl p-3.5 text-zinc-900 font-bold text-xs focus:ring-2 focus:ring-gold/20 outline-none transition-all cursor-pointer shadow-sm"
+                                            >
+                                                <option value="">+ Add to Collection...</option>
+                                                {mainCategories.filter(c => !selectedCategories.includes(c.name)).map((col) => (
                                                     <option key={col._id} value={col.name}>{col.name}</option>
                                                 ))}
                                             </select>
+
+                                            {/* Selected collections chips */}
+                                            {selectedCategories.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {selectedCategories.map((cat, idx) => (
+                                                        <span key={cat} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 text-white text-[11px] font-bold shadow-sm">
+                                                            {idx === 0 && <span className="text-[8px] bg-gold/30 text-gold px-1.5 py-0.5 rounded font-black tracking-wider uppercase mr-0.5">Primary</span>}
+                                                            {cat}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedCategories(prev => prev.filter(c => c !== cat));
+                                                                    // remove subcategories that belong only to this category if needed
+                                                                }}
+                                                                className="hover:text-rose-400 p-0.5 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Subcategories multi-select (appears if activeSubcategories exist) */}
+                                            {activeSubcategories.length > 0 && (
+                                                <div className="pt-3 border-t border-zinc-200/60 space-y-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Subcategories</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {activeSubcategories.map(sub => {
+                                                            const isSelected = selectedSubcategories.includes(sub.name);
+                                                            return (
+                                                                <button
+                                                                    key={sub._id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isSelected) {
+                                                                            setSelectedSubcategories(prev => prev.filter(s => s !== sub.name));
+                                                                        } else {
+                                                                            setSelectedSubcategories(prev => [...prev, sub.name]);
+                                                                        }
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider uppercase transition-all border ${
+                                                                        isSelected 
+                                                                            ? 'bg-gold text-white border-gold shadow-sm' 
+                                                                            : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected ? '✓ ' : '+ '} {sub.name}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Multi-Occasion Selection */}
+                                        <div className="col-span-2 space-y-3 bg-rose-50/40 p-5 rounded-2xl border border-rose-100/70">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-rose-800 flex items-center gap-1.5">
+                                                    <Sparkles size={13} className="text-rose-500" /> Occasions & Festivals
+                                                </label>
+                                                <span className="text-[9px] font-bold text-rose-400 uppercase tracking-wider">
+                                                    {selectedOccasions.length} selected
+                                                </span>
+                                            </div>
+
+                                            {/* Dropdown to add occasion */}
+                                            <select
+                                                value=""
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val && !selectedOccasions.includes(val)) {
+                                                        setSelectedOccasions(prev => [...prev, val]);
+                                                    }
+                                                }}
+                                                className="w-full bg-white border border-rose-200 rounded-xl p-3.5 text-zinc-900 font-bold text-xs focus:ring-2 focus:ring-rose-300 outline-none transition-all cursor-pointer shadow-sm"
+                                            >
+                                                <option value="">+ Add to Occasion...</option>
+                                                {mainOccasions.filter(o => !selectedOccasions.includes(o.name)).map((occ) => (
+                                                    <option key={occ._id} value={occ.name}>{occ.name}</option>
+                                                ))}
+                                            </select>
+
+                                            {/* Selected occasions chips */}
+                                            {selectedOccasions.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {selectedOccasions.map((occ, idx) => (
+                                                        <span key={occ} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 text-white text-[11px] font-bold shadow-sm">
+                                                            {idx === 0 && <span className="text-[8px] bg-white/20 text-white px-1.5 py-0.5 rounded font-black tracking-wider uppercase mr-0.5">Primary</span>}
+                                                            {occ}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedOccasions(prev => prev.filter(o => o !== occ));
+                                                                }}
+                                                                className="hover:text-rose-200 p-0.5 transition-colors"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Occasion Subcategories multi-select (appears if activeOccasionSubs exist) */}
+                                            {activeOccasionSubs.length > 0 && (
+                                                <div className="pt-3 border-t border-rose-200/60 space-y-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-wider text-rose-500 block">Occasion Subcategories</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {activeOccasionSubs.map(sub => {
+                                                            const isSelected = selectedOccasionSubs.includes(sub.name);
+                                                            return (
+                                                                <button
+                                                                    key={sub._id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isSelected) {
+                                                                            setSelectedOccasionSubs(prev => prev.filter(s => s !== sub.name));
+                                                                        } else {
+                                                                            setSelectedOccasionSubs(prev => [...prev, sub.name]);
+                                                                        }
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider uppercase transition-all border ${
+                                                                        isSelected 
+                                                                            ? 'bg-rose-500 text-white border-rose-500 shadow-sm' 
+                                                                            : 'bg-white text-rose-700 border-rose-200 hover:border-rose-300'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected ? '✓ ' : '+ '} {sub.name}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -8225,6 +14953,14 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                                     <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
                                                     <input {...register('mrp', { valueAsNumber: true })} type="number" className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pl-12 text-sm font-bold text-zinc-400 focus:ring-1 focus:ring-white/20 outline-none" placeholder="0.00" />
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-6 space-y-2">
+                                            <label className="text-[10px] font-black tracking-widest text-zinc-400 ml-1">Item Weight (grams)</label>
+                                            <div className="relative">
+                                                <Weight className="absolute left-4 top-1/2 -translate-y-1/2 text-gold" size={16} />
+                                                <input {...register('weight', { valueAsNumber: true })} type="number" min={0} className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pl-12 text-sm font-bold text-white focus:ring-1 focus:ring-white/20 outline-none" placeholder="e.g. 850" />
                                             </div>
                                         </div>
                                         
@@ -8313,12 +15049,14 @@ export default ArtisanalProductModal;
 ```typescript
 export default function AnnouncementBar() {
   return (
-    <div className="bg-brown text-gold-light text-center text-[0.78rem] tracking-[0.12em] py-[9px] px-4 uppercase overflow-hidden whitespace-nowrap">
-      <span>✨ Free shipping on orders above ₹999</span>
-      <span className="mx-6">·</span>
-      <span>🎁 Custom & Bulk Orders Available</span>
-      <span className="mx-6">·</span>
-      <span>📦 Pan India Delivery</span>
+    <div className="bg-[#2d1810] text-[var(--accent-gold)] text-center text-[0.75rem] font-semibold tracking-[0.14em] py-2 px-4 uppercase overflow-hidden whitespace-nowrap border-b border-white/10">
+      <span>✨ 100% Handcrafted Air-Dry Clay Art</span>
+      <span className="mx-5 opacity-60">·</span>
+      <span>📦 Free Shipping Within India on Orders Above ₹4,999</span>
+      <span className="mx-5 opacity-60">·</span>
+      <span>🪔 Navaratri &amp; Golu 2026 Collection Live</span>
+      <span className="mx-5 opacity-60">·</span>
+      <span>🎁 Custom Wedding &amp; Return Gifts Available</span>
     </div>
   );
 }
@@ -8504,9 +15242,11 @@ import { useCart } from "@/hooks/useCart";
 import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2 } from "lucide-react";
 import { CartItem } from "@/redux/slices/cartSlice";
 import { getImageUrl } from '@/utils/getImageUrl';
+import { formatWeight } from '@/utils/formatWeight';
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE, calculateShipping } from '@/utils/shipping';
 
 export default function CartDrawer() {
-  const { items, isOpen, close, setQty, remove, totalPrice, totalItems, loading } = useCart();
+  const { items, isOpen, close, setQty, remove, totalPrice, totalWeight, totalItems, loading } = useCart();
 
   return (
     <AnimatePresence>
@@ -8529,24 +15269,25 @@ export default function CartDrawer() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed top-0 right-0 bottom-0 w-[420px] max-w-[100vw] bg-[var(--bg)] z-[999] flex flex-col shadow-2xl border-l border-[var(--border)]"
+            className="fixed top-0 right-0 bottom-0 w-full sm:w-[420px] max-w-full bg-[var(--bg)] z-[999] flex flex-col shadow-2xl border-l border-[var(--border)]"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-8 py-6 border-b border-[var(--border)]">
+            <div className="flex items-center justify-between px-5 sm:px-8 py-5 sm:py-6 border-b border-[var(--border)]">
               <div>
-                <h2 className="text-[var(--text)] text-xl md:text-2xl font-bold tracking-tight leading-tight">Your Collection</h2>
-                <p className="text-[var(--text-faint)] text-[10px] font-bold uppercase tracking-[0.25em] mt-1">{totalItems} piece{totalItems !== 1 ? "s" : ""} selected</p>
+                <h2 className="text-[var(--text)] text-lg sm:text-2xl font-bold tracking-tight leading-tight">Your Collection</h2>
+                <p className="text-[var(--text-faint)] text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.25em] mt-1">{totalItems} piece{totalItems !== 1 ? "s" : ""} selected</p>
               </div>
               <button
                 onClick={close}
-                className="w-10 h-10 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--text)] hover:text-white transition-all"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[var(--bg-subtle)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--text)] hover:text-white transition-all"
+                aria-label="Close cart"
               >
                 <X size={16} strokeWidth={1.5} />
               </button>
             </div>
 
             {/* Items */}
-            <div className="flex-grow overflow-y-auto px-8 py-6 flex flex-col gap-6">
+            <div className="flex-grow overflow-y-auto px-5 sm:px-8 py-5 sm:py-6 flex flex-col gap-5 touch-scroll">
               {loading && (
                 <div className="flex items-center justify-center py-20">
                   <div className="w-6 h-6 border-2 border-[var(--text-faint)] border-t-transparent rounded-full animate-spin" />
@@ -8643,10 +15384,40 @@ export default function CartDrawer() {
 
             {/* Footer */}
             {items.length > 0 && (
-              <div className="px-8 py-6 border-t border-[var(--border)] bg-white space-y-4">
+              <div className="px-5 sm:px-8 py-4 sm:py-6 border-t border-[var(--border)] bg-white space-y-3.5">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-muted)]">Subtotal</span>
-                  <span className="text-[var(--text)] text-xl md:text-2xl font-bold tracking-tight">₹{totalPrice.toLocaleString()}</span>
+                  <span className="text-[var(--text)] text-lg sm:text-2xl font-bold tracking-tight">₹{totalPrice.toLocaleString()}</span>
+                </div>
+                {totalWeight > 0 && (
+                  <div className="flex justify-between items-center text-[11px] text-[var(--text-faint)]">
+                    <span>Total Weight</span>
+                    <span className="font-semibold text-[var(--text-muted)]">{formatWeight(totalWeight)}</span>
+                  </div>
+                )}
+                {totalPrice >= FREE_SHIPPING_THRESHOLD ? (
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#2e7d32] font-semibold bg-[#2e7d32]/10 px-3 py-2 rounded-xl">
+                    <span>✨</span> You have unlocked Free Shipping within India!
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 bg-[var(--bg-subtle)]/70 p-2.5 rounded-xl border border-[var(--border)]/60">
+                    <div className="flex justify-between text-[11px] text-[var(--text-muted)] font-medium">
+                      <span>Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more for <strong className="text-[var(--text)]">Free Shipping within India</strong></span>
+                      <span className="font-semibold">{Math.min(100, Math.round((totalPrice / FREE_SHIPPING_THRESHOLD) * 100))}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--accent)] transition-all duration-300 rounded-full"
+                        style={{ width: `${Math.min(100, Math.round((totalPrice / FREE_SHIPPING_THRESHOLD) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-between text-[11px] text-[var(--text-faint)]">
+                  <span>Shipping</span>
+                  <span className="font-semibold text-[var(--text-muted)]">
+                    {calculateShipping(totalPrice) === 0 ? <span className="text-[#2e7d32]">Free</span> : `₹${SHIPPING_FEE.toLocaleString()}`}
+                  </span>
                 </div>
                 <p className="text-[11px] text-[var(--text-faint)]">Shipping & taxes calculated at checkout.</p>
 
@@ -8681,6 +15452,7 @@ export default function CartDrawer() {
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useAppSelector } from "@/redux/hooks";
 import { RootState } from "@/redux/store";
 import { Mail, Phone, MapPin } from "lucide-react";
@@ -8688,18 +15460,20 @@ import { Mail, Phone, MapPin } from "lucide-react";
 export default function Footer() {
   const { collections } = useAppSelector((state: RootState) => state.collections);
 
-  // Fallback collections if none are fetched yet
+  // Fallback collections based on Excel catalogs
   const displayCollections = collections.length > 0 
-    ? collections.slice(0, 5) 
+    ? collections.slice(0, 6) 
     : [
-        { name: "Miniature Food Clocks", slug: "miniature-food-clocks" },
-        { name: "Kawaii Collections", slug: "kawaii-collections" },
-        { name: "Personalized Gifts", slug: "personalized-gifts" },
-        { name: "Jewellery", slug: "jewellery" },
+        { name: "Navaratri Miniature Shops", slug: "miniature-shops" },
+        { name: "Miniature Fruit Baskets", slug: "fruit-baskets" },
+        { name: "Miniature Vegetable Crates", slug: "vegetable-crates" },
+        { name: "Navaratri Thamboolam Sets", slug: "navaratri-thamboolam" },
+        { name: "Heritage Wall Clocks", slug: "wall-clocks" },
+        { name: "Clay Fridge Magnets", slug: "fridge-magnets" },
       ];
 
   return (
-    <footer className="bg-[var(--text)] text-white pt-20 md:pt-32 pb-8 border-t border-[var(--border)] relative overflow-hidden">
+    <footer className="bg-[var(--text)] text-white pt-16 md:pt-24 pb-8 border-t border-[var(--border)] relative overflow-hidden">
       
       {/* Massive Brand Watermark */}
       <div className="absolute top-0 left-0 w-full flex justify-center pointer-events-none select-none overflow-hidden opacity-5">
@@ -8708,16 +15482,29 @@ export default function Footer() {
         </h2>
       </div>
 
-      <div className="max-w-[1440px] mx-auto px-8 sm:px-12 relative z-10">
+      <div className="max-w-[1440px] mx-auto px-6 sm:px-12 relative z-10">
         
-        {/* Top Header Row */}
-        <div className="flex flex-col md:flex-row items-center justify-between w-full gap-10 border-b border-white/10 pb-16 mb-16">
-          <div className="text-center md:text-left flex flex-col gap-2">
-            <Link href="/" className="font-serif text-3xl md:text-4xl font-semibold tracking-wide text-white hover:text-[var(--accent-light)] transition-colors duration-300">
-              Mythris Gleams
-            </Link>
-            <span className="text-[10px] tracking-[0.3em] uppercase text-white/70">Handcrafted in Chennai, India</span>
-          </div>
+        {/* Top Header Row with Mascot Logo */}
+        <div className="flex flex-col md:flex-row items-center justify-between w-full gap-8 border-b border-white/10 pb-12 mb-14">
+          <Link href="/" className="flex items-center gap-4 text-center md:text-left group">
+            <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-[var(--accent-gold)] bg-black shadow-lg shrink-0 transition-transform group-hover:scale-105">
+              <Image
+                src="/logo.png"
+                alt="Mythris Gleams"
+                fill
+                sizes="56px"
+                className="object-cover"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif text-2xl md:text-3xl font-semibold tracking-tight text-white group-hover:text-[var(--accent-gold)] transition-colors">
+                Mythris <span className="text-[var(--accent-gold)]">Gleams</span>
+              </span>
+              <span className="text-[10px] tracking-[0.25em] uppercase text-white/70">
+                Handcrafted Clay Art • Chennai, India
+              </span>
+            </div>
+          </Link>
           
           {/* Social Icons */}
           <div className="flex gap-4">
@@ -8798,7 +15585,7 @@ export default function Footer() {
             <div className="flex flex-col gap-6 text-[14px] text-white/80 font-light">
               <div className="flex items-start gap-4 hover:text-[var(--accent-light)] transition-colors duration-300 cursor-default">
                 <MapPin size={18} className="shrink-0 text-white/60 mt-1" strokeWidth={1.5} />
-                <p className="leading-relaxed">Mythris Gleams Studio,<br />Chrompet, Chennai,<br />Tamil Nadu - 600044</p>
+                <p className="leading-relaxed">Mythris Gleams Studio,<br />2nd St, AE Block, C-Sector,<br />Anna Nagar West Extension,<br />Chennai, Tamil Nadu 600101</p>
               </div>
               <div className="flex items-center gap-4 hover:text-[var(--accent-light)] transition-colors duration-300 cursor-default">
                 <Mail size={18} className="shrink-0 text-white/60" strokeWidth={1.5} />
@@ -8973,128 +15760,594 @@ export default function Hero() {
 ```typescript
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { User, Hexagon, ChevronDown, ShoppingBag } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  User,
+  ShoppingBag,
+  ChevronDown,
+  MapPin,
+  Phone,
+  Menu,
+  X,
+  Truck,
+  Sparkles,
+} from "lucide-react";
+import { useCart } from "@/hooks/useCart";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { fetchCollections } from "@/redux/slices/collectionSlice";
+import { fetchOccasions } from "@/redux/slices/occasionSlice";
 import { RootState } from "@/redux/store";
-import { useCart } from "@/hooks/useCart";
+
+/* ────────────────────────────────────────────────────────────
+   MEGA MENU STRUCTURE
+   Each top-level item can have:
+   - columns: array of { heading, links[] }
+   - featured: optional right-rail promo card
+──────────────────────────────────────────────────────────── */
+const MEGA_MENU = [
+  {
+    label: "Occasions",
+    href: "/occasion/all",
+    columns: [
+      {
+        heading: "Celebrations",
+        links: [
+          { name: "Birthday", href: "/occasion/birthday" },
+          { name: "Wedding", href: "/occasion/wedding" },
+          { name: "Anniversary", href: "/occasion/anniversary" },
+          { name: "Congratulations", href: "/occasion/congratulations" },
+        ],
+      },
+      {
+        heading: "Seasons & Events",
+        links: [
+          { name: "Festivals & Religious Events", href: "/occasion/festivals" },
+          { name: "Housewarming", href: "/occasion/housewarming" },
+          { name: "Naming Ceremony", href: "/occasion/naming-ceremony" },
+          { name: "Baby Shower", href: "/occasion/baby-shower" },
+        ],
+      },
+    ],
+    featured: {
+      title: "New Arrivals",
+      subtitle: "Fresh from the Studio",
+      href: "/category/all?sort=newest",
+      img: "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=400&q=80",
+    },
+  },
+  {
+    label: "Collections",
+    href: "/category/all",
+    columns: [
+      {
+        heading: "Wall Clocks",
+        links: [
+          { name: "All Wall Clocks", href: "/category/wall-clocks" },
+          { name: "Food-Themed Clocks", href: "/category/food-themed-clocks" },
+          { name: "Custom Scenes", href: "/category/custom-scenes" },
+          { name: "Name Clocks", href: "/category/name-clocks" },
+        ],
+      },
+      {
+        heading: "Art & Décor",
+        links: [
+          { name: "All Wall Décor", href: "/category/wall-decor" },
+          { name: "Miniature Spatulas", href: "/category/mini-spatulas" },
+          { name: "Kitchen Miniatures", href: "/category/kitchen-miniatures" },
+          { name: "Shops & Scenes", href: "/category/shops-scenes" },
+        ],
+      },
+      {
+        heading: "Miniatures & Figures",
+        links: [
+          { name: "All Dolls & Figures", href: "/category/dolls-figures" },
+          { name: "Acrylic Dolls", href: "/category/acrylic-dolls" },
+          { name: "Fridge Magnets", href: "/category/fridge-magnets" },
+          { name: "Supplies & Clay", href: "/category/supplies" },
+        ],
+      },
+      {
+        heading: "Festive",
+        links: [
+          { name: "Golu & Navaratri", href: "/category/golu-navaratri" },
+          { name: "Navaratri Thamboolam", href: "/category/navaratri-thamboolam" },
+          { name: "Golu Themes", href: "/category/golu-themes" },
+          { name: "Madurai Nagaram", href: "/category/madurai-nagaram" },
+        ],
+      },
+    ],
+    featured: {
+      title: "Bestsellers",
+      subtitle: "Loved by Thousands",
+      href: "/#bestsellers",
+      img: "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400&q=80",
+    },
+  },
+];
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
-  const dispatch = useAppDispatch();
-  const { collections } = useAppSelector((s: RootState) => s.collections);
+  const router = useRouter();
   const { totalItems, open } = useCart();
+  const dispatch = useAppDispatch();
+  const { collections } = useAppSelector((state: RootState) => state.collections);
+  const { occasions } = useAppSelector((state: RootState) => state.occasions);
+
+  const [activeMega, setActiveMega] = useState<string | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [scrolled, setScrolled] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     dispatch(fetchCollections());
-    
-    const onScroll = () => {
-      setScrolled(window.scrollY > 50);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    dispatch(fetchOccasions());
   }, [dispatch]);
 
-  const staticLinks = [
-    { label: "Best Sellers", href: "/#products" },
-    { label: "Custom Order", href: "/#custom" },
-    { label: "Bulk Orders", href: "/#bulk" },
-    { label: "Contact", href: "/contact" },
-  ];
+  /* Build the Collections mega-menu columns from live categories + subcategories */
+  const collectionColumns = useMemo(() => {
+    const mains = collections.filter((c) => !c.parent);
+    if (mains.length === 0) {
+      return MEGA_MENU.find((item) => item.label === "Collections")?.columns || [];
+    }
+    return mains.map((main) => ({
+      heading: main.name,
+      href: `/category/${main.slug}`,
+      links: [
+        { name: `All ${main.name}`, href: `/category/${main.slug}` },
+        ...collections
+          .filter((c) => {
+            const parentId = typeof c.parent === "object" && c.parent ? c.parent._id : c.parent;
+            return parentId === main._id;
+          })
+          .map((c) => ({ name: c.name, href: `/category/${c.slug}` })),
+      ],
+    }));
+  }, [collections]);
+
+  /* Build the Occasions mega-menu columns from live occasions + subcategories */
+  const occasionColumns = useMemo(() => {
+    const mains = occasions.filter((o) => !o.parent);
+    if (mains.length === 0) {
+      return MEGA_MENU.find((item) => item.label === "Occasions")?.columns || [];
+    }
+    return mains.map((main) => ({
+      heading: main.name,
+      href: `/occasion/${main.slug}`,
+      links: [
+        { name: `All ${main.name}`, href: `/occasion/${main.slug}` },
+        ...occasions
+          .filter((o) => {
+            const parentId = typeof o.parent === "object" && o.parent ? o.parent._id : o.parent;
+            return parentId === main._id;
+          })
+          .map((o) => ({ name: o.name, href: `/occasion/${o.slug}` })),
+      ],
+    }));
+  }, [occasions]);
+
+  /* Sticky shadow on scroll */
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* Close mobile drawer when a link is clicked (accordion summaries stay open) */
+  const handleDrawerLinkClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("a")) setMobileOpen(false);
+  };
+
+  /* Hover intent for mega menu (small delay on leave to prevent flicker) */
+  const handleMouseEnter = (label: string) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setActiveMega(label);
+  };
+  const handleMouseLeave = () => {
+    closeTimer.current = setTimeout(() => setActiveMega(null), 150);
+  };
+
+  const getItemColumns = (itemLabel: string, itemColumns: typeof MEGA_MENU[0]["columns"]) =>
+    itemLabel === "Occasions"
+      ? occasionColumns
+      : itemLabel === "Collections"
+      ? collectionColumns
+      : itemColumns;
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    router.push(`/category/all?search=${encodeURIComponent(searchQuery.trim())}`);
+    setSearchOpen(false);
+    setSearchQuery("");
+  };
 
   return (
-    <header 
-      className={`fixed top-0 left-0 right-0 z-[100] w-full pointer-events-auto transition-all duration-500 ease-in-out flex items-center justify-between ${
-        scrolled 
-          ? "px-6 py-4 md:px-10 md:py-4 bg-[#b46a36]/95 backdrop-blur-md shadow-xl border-b border-white/10" 
-          : "px-8 py-8 md:px-12 md:py-10 bg-transparent"
-      }`}
-    >
-      
-      {/* ── Brand Mythrie ── */}
-      <Link href="/" className="flex items-center gap-3 text-white">
-        <Hexagon size={32} fill="white" strokeWidth={1} />
-        <span className="font-sans text-[13px] font-semibold tracking-[0.2em] uppercase">
-          Mythrie
-        </span>
-      </Link>
-
-      {/* ── Desktop Nav ── */}
-      <nav className="hidden lg:flex items-center gap-8">
-        
-        {/* Collections Dropdown */}
-        <div className="relative group py-2">
-          <button className="flex items-center gap-2 text-[12px] font-medium tracking-[0.15em] uppercase text-white hover:opacity-70 transition-opacity">
-            Collections
-            <ChevronDown size={14} strokeWidth={2} className="group-hover:rotate-180 transition-transform duration-300" />
-          </button>
-
-          {/* Dropdown Menu */}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 opacity-0 invisible translate-y-3 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-300">
-            <div className="bg-white/95 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl p-2 min-w-[200px] flex flex-col">
-              <Link 
-                href="/category/all" 
-                className="px-4 py-3 text-[11px] font-bold tracking-[0.15em] uppercase text-[var(--text)] hover:bg-[#b46a36]/10 hover:text-[#b46a36] rounded-lg transition-colors border-b border-[var(--bg-muted)]"
+    <>
+      {/* ══════════════════════════════════════════════════════════
+          HEADER WRAPPER (sticky)
+      ═══════════════════════════════════════════════════════════ */}
+      <header
+        className={`fixed top-0 left-0 right-0 z-[100] w-full transition-shadow duration-300 ${
+          scrolled ? "shadow-lg" : ""
+        }`}
+      >
+        {/* ─── TIER 1: TOP UTILITY BAR ─── */}
+        <div className="hidden md:block bg-[#1f1a16] text-white">
+          <div className="max-w-[1440px] mx-auto px-6 sm:px-8 flex items-center justify-between h-9 text-[11px]">
+            <div className="flex items-center gap-6">
+              <button className="flex items-center gap-1.5 hover:text-[var(--accent-light)] transition-colors">
+                <MapPin size={12} />
+                <span className="font-medium">Where to deliver?</span>
+              </button>
+              <a
+                href="https://wa.me/918300034451"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 hover:text-[var(--accent-light)] transition-colors"
               >
-                All Collections
-              </Link>
-              {collections?.map((cat: any) => (
-                <Link 
-                  key={cat.slug} 
-                  href={`/category/${cat.slug}`} 
-                  className="px-4 py-3 text-[11px] font-semibold tracking-[0.1em] uppercase text-[var(--text-muted)] hover:bg-[#b46a36]/10 hover:text-[#b46a36] rounded-lg transition-colors"
-                >
-                  {cat.name}
-                </Link>
-              ))}
+                <Phone size={12} />
+                <span className="font-medium">+91 83000 34451</span>
+              </a>
+            </div>
+
+            <div className="flex items-center gap-6">
+              <span className="flex items-center gap-1.5 text-[var(--accent-light)] font-semibold">
+                <Sparkles size={12} />
+                Free shipping within India above ₹4,999
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Static Links */}
-        {staticLinks.map((link) => (
-          <Link
-            key={link.label}
-            href={link.href}
-            className="text-[12px] font-medium tracking-[0.15em] uppercase text-white hover:opacity-70 transition-opacity py-2"
-          >
-            {link.label}
-          </Link>
-        ))}
-      </nav>
+        {/* ─── TIER 2: MAIN BAR (logo + search + actions) ─── */}
+        <div className="bg-[var(--accent)] text-white">
+          <div className="max-w-[1440px] mx-auto px-3 sm:px-6 md:px-8 h-16 md:h-20 flex items-center justify-between gap-2 sm:gap-4 md:gap-8 min-w-0">
 
-      {/* ── Right Action ── */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={open}
-          className={`relative rounded-full border flex items-center justify-center text-white hover:bg-white hover:text-[#b46a36] transition-all duration-300 ${
-            scrolled ? "w-9 h-9 border-white/30" : "w-10 h-10 border-white/50 bg-white/10"
-          }`}
-        >
-          <ShoppingBag size={16} strokeWidth={1.5} />
-          {totalItems > 0 && (
-            <span className="absolute -top-1 -right-1 bg-white text-[#b46a36] text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-md">
-              {totalItems}
-            </span>
+            {/* Mobile: hamburger + Logo group */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
+              {/* Mobile: hamburger */}
+              <button
+                onClick={() => setMobileOpen(true)}
+                className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors shrink-0"
+                aria-label="Open menu"
+              >
+                <Menu size={20} />
+              </button>
+
+              {/* Logo */}
+              <Link href="/" className="flex items-center gap-2 sm:gap-3 min-w-0 group">
+                <div className="relative w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-full overflow-hidden border-2 border-[var(--accent-gold)] shadow-md bg-black shrink-0 transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src="/logo.png"
+                    alt="Mythris Gleams"
+                    fill
+                    sizes="48px"
+                    className="object-cover"
+                    priority
+                  />
+                </div>
+                <div className="flex flex-col leading-none min-w-0">
+                  <span className="font-serif text-[16px] sm:text-[20px] md:text-[23px] font-bold tracking-tight text-white flex items-center gap-1 truncate">
+                    Mythris <span className="text-[var(--accent-gold)]">Gleams</span>
+                  </span>
+                  <span className="text-[7.5px] sm:text-[9px] tracking-[0.12em] sm:tracking-[0.25em] uppercase text-white/80 mt-0.5 font-medium truncate">
+                    Handcrafted Clay Art
+                  </span>
+                </div>
+              </Link>
+            </div>
+
+{/* Search bar (desktop) */}
+            <form
+              onSubmit={handleSearchSubmit}
+              className="hidden lg:flex flex-1 max-w-[480px] relative"
+            >
+              <Search
+                size={16}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/60 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search for gifts, occasions, collections…"
+                className="w-full h-11 pl-11 pr-4 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white placeholder:text-white/60 text-[13px] focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all"
+              />
+            </form>
+
+            {/* Nav links (desktop, inline in header) */}
+            <ul
+              className="hidden lg:flex items-stretch gap-1"
+              onMouseLeave={handleMouseLeave}
+            >
+              {MEGA_MENU.map((item) => (
+                <li key={item.label} className="relative flex items-stretch">
+                  <Link
+                    href={item.href}
+                    onMouseEnter={() => handleMouseEnter(item.label)}
+                    className={`flex items-center gap-1 px-3 py-2 text-[13px] font-semibold tracking-wide whitespace-nowrap transition-colors ${
+                      activeMega === item.label
+                        ? "text-white"
+                        : "text-white/85 hover:text-white"
+                    }`}
+                  >
+                    {item.label}
+                    <ChevronDown
+                      size={14}
+                      className={`transition-transform duration-200 ${
+                        activeMega === item.label ? "rotate-180" : ""
+                      }`}
+                    />
+                  </Link>
+
+                  {/* Mega menu panel */}
+                  {activeMega === item.label && item.columns && (
+                    <div
+                      onMouseEnter={() => handleMouseEnter(item.label)}
+                      className="absolute left-1/2 -translate-x-1/2 top-full pt-0 z-50"
+                    >
+                      <div
+                        className={`bg-white border border-[var(--border)] shadow-2xl rounded-b-2xl p-8 ${
+                          item.label === "Collections" || item.label === "Occasions"
+                            ? "w-[860px] grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-7"
+                            : "w-[720px] flex gap-8"
+                        }`}
+                      >
+                        {/* Columns */}
+                        {getItemColumns(item.label, item.columns).map((col, ci) => (
+                          <div key={ci} className="min-w-0">
+                            <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent)] mb-3">
+                              {col.heading}
+                            </h4>
+                            <ul className="space-y-2">
+                              {col.links.map((l) => (
+                                <li key={l.name}>
+                                  <Link
+                                    href={l.href}
+                                    className="text-[12px] text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors block leading-snug"
+                                  >
+                                    {l.name}
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+
+                        {/* Featured card */}
+                        {item.label !== "Collections" && item.label !== "Occasions" && item.featured && (
+                          <div className="w-[220px] shrink-0">
+                            <Link
+                              href={item.featured.href}
+                              className="group block rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--bg-subtle)]"
+                            >
+                              <div className="aspect-[4/3] overflow-hidden">
+                                <img
+                                  src={item.featured.img}
+                                  alt={item.featured.title}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                />
+                              </div>
+                              <div className="p-4">
+                                <p className="text-[13px] font-bold text-[var(--text)] leading-tight">
+                                  {item.featured.title}
+                                </p>
+                                <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                  {item.featured.subtitle}
+                                </p>
+                                <span className="inline-block mt-2 text-[10px] font-bold tracking-wider uppercase text-[var(--accent)] group-hover:underline">
+                                  Explore →
+                                </span>
+                              </div>
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </li>
+              ))}
+
+              {/* Contact Us */}
+              <li className="relative flex items-stretch">
+                <Link
+                  href="/contact"
+                  className="flex items-center gap-1 px-3 py-2 text-[13px] font-semibold tracking-wide whitespace-nowrap text-white/85 hover:text-white transition-colors"
+                >
+                  Contact Us
+                </Link>
+              </li>
+            </ul>
+
+            {/* Right actions */}
+            <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 ml-auto shrink-0">
+              {/* Mobile: search toggle */}
+              <button
+                onClick={() => setSearchOpen(!searchOpen)}
+                className="lg:hidden w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0"
+                aria-label="Search"
+              >
+                <Search size={17} />
+              </button>
+
+              {/* Account */}
+              <Link
+                href="/account"
+                className="w-8 h-8 sm:w-9 sm:h-9 md:w-auto md:px-3 md:py-2 flex items-center justify-center gap-2 rounded-full hover:bg-white/10 transition-colors shrink-0"
+              >
+                <User size={18} />
+                <span className="text-[12px] font-medium hidden md:inline">
+                  Account
+                </span>
+              </Link>
+
+              {/* Cart */}
+              <button
+                onClick={open}
+                className="relative w-8 h-8 sm:w-9 sm:h-9 md:w-auto md:px-3 md:py-2 flex items-center justify-center gap-2 rounded-full hover:bg-white/10 transition-colors shrink-0"
+                aria-label="Cart"
+              >
+                <ShoppingBag size={18} />
+                <span className="text-[12px] font-medium hidden md:inline">
+                  Cart
+                </span>
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 md:top-1 md:right-1 bg-white text-[var(--accent)] text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-xs">
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile search bar (expands) */}
+          {searchOpen && (
+            <div className="lg:hidden border-t border-white/20 px-4 pb-3">
+              <form onSubmit={handleSearchSubmit} className="relative mt-3">
+                <Search
+                  size={16}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white/60"
+                />
+                <input
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search gifts…"
+                  className="w-full h-11 pl-11 pr-4 rounded-full bg-white/10 border border-white/20 text-white placeholder:text-white/60 text-[13px] focus:outline-none focus:bg-white/20"
+                />
+              </form>
+            </div>
           )}
-        </button>
+        </div>
 
-        <Link
-          href="/account"
-          className={`rounded-full border flex items-center justify-center text-white hover:bg-white hover:text-[#b46a36] transition-all duration-300 ${
-            scrolled ? "w-9 h-9 border-white/30" : "w-10 h-10 border-white/50 bg-white/10"
-          }`}
-        >
-          <User size={16} strokeWidth={1.5} />
-        </Link>
-      </div>
-      
-    </header>
+        </header>
+
+      {/* ══════════════════════════════════════════════════════════
+          SPACER (push content below fixed header)
+      ═══════════════════════════════════════════════════════════ */}
+      <div className="h-[64px] md:h-[116px]" aria-hidden />
+
+      {/* ══════════════════════════════════════════════════════════
+          MOBILE DRAWER
+      ═══════════════════════════════════════════════════════════ */}
+      {mobileOpen && (
+        <>
+          <div
+            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[998] lg:hidden"
+          />
+          <div className="fixed top-0 left-0 bottom-0 w-[85vw] max-w-[340px] bg-white z-[999] lg:hidden overflow-y-auto"
+            onClick={handleDrawerLinkClick}
+          >
+            {/* Drawer header */}
+            <div className="bg-[var(--accent)] text-white p-5 flex items-center justify-between">
+              <Link href="/" className="flex items-center gap-2.5">
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border border-[var(--accent-gold)] bg-black shrink-0">
+                  <Image
+                    src="/logo.png"
+                    alt="Mythris Gleams"
+                    fill
+                    sizes="32px"
+                    className="object-cover"
+                  />
+                </div>
+                <div className="flex flex-col leading-none">
+                  <span className="font-serif text-[17px] font-bold text-white">
+                    Mythris <span className="text-[var(--accent-gold)]">Gleams</span>
+                  </span>
+                  <span className="text-[8px] tracking-[0.2em] uppercase text-white/75 mt-0.5">
+                    Handcrafted Clay Art
+                  </span>
+                </div>
+              </Link>
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10"
+                aria-label="Close menu"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Quick links */}
+            <div className="p-4 border-b border-[var(--border)]">
+              <Link
+                href="/account/orders"
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
+              >
+                <Truck size={18} className="text-[var(--accent)]" />
+                <span className="text-[14px] font-medium">Track Order</span>
+              </Link>
+              <Link
+                href="/contact"
+                className="flex items-center gap-3 p-3 rounded-lg hover:bg-[var(--bg-subtle)] transition-colors"
+              >
+                <Phone size={18} className="text-[var(--accent)]" />
+                <span className="text-[14px] font-medium">Contact Us</span>
+              </Link>
+            </div>
+
+            {/* Accordion nav */}
+            <nav className="p-4">
+              {MEGA_MENU.map((item) => (
+                <details key={item.label} className="group border-b border-[var(--bg-subtle)]">
+                  <summary className="flex items-center justify-between py-4 cursor-pointer list-none">
+                    <span className="text-[14px] font-semibold text-[var(--text)]">
+                      {item.label}
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className="text-[var(--text-muted)] group-open:rotate-180 transition-transform"
+                    />
+                  </summary>
+                  <div className="pb-3 pl-2">
+                    {getItemColumns(item.label, item.columns).map((col, ci) => (
+                      <div key={ci} className="mb-3">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--accent)] mb-2">
+                          {col.heading}
+                        </p>
+                        <ul className="space-y-2">
+                          {col.links.map((l) => (
+                            <li key={l.name}>
+                              <Link
+                                href={l.href}
+                                className="text-[13px] text-[var(--text-muted)] block py-1"
+                              >
+                                {l.name}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </nav>
+
+            {/* Drawer footer CTA */}
+            <div className="p-4 bg-[var(--bg-subtle)]">
+              <a
+                href="https://wa.me/918300034451"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 py-3 bg-[var(--accent)] text-white rounded-full text-[12px] font-bold tracking-widest uppercase"
+              >
+                <Phone size={14} /> WhatsApp Us
+              </a>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 }
-
 ```
 
 ## File: `frontend/src/components/ProductCard.tsx`
@@ -9119,7 +16372,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const productSlug  = product.slug || product.id;
   const productId    = (product as any)._id || String(product.id);
-  const productImage = (product as any).images?.[0] ?? null;
+  const productImage = (product as any).images?.[0] ?? (product as any).image ?? null;
   const productPrice = product.price;
   const productMRP   = (product as any).mrp || (product as any).oldPrice;
 
@@ -9131,6 +16384,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       name:      product.name,
       image:     productImage || "",
       price:     productPrice,
+      weight:    product.weight || 0,
       quantity:  1,
     });
   };
@@ -9139,75 +16393,97 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   return (
     <div className="group relative w-full rounded-xl bg-white overflow-hidden shadow-[0_1px_10px_-2px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_24px_-6px_rgba(0,0,0,0.08)] transition-all duration-500 ease-out border border-gray-100 flex flex-col">
-      <Link href={`/product/${productSlug}`} className="block relative w-full aspect-square overflow-hidden bg-[#faf9f8]">
-        {/* Image */}
-        {productImage ? (
-          <img
-            src={getImageUrl(productImage)}
-            alt={product.name}
-            className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-105"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 font-light font-serif italic">
-            No Image
-          </div>
-        )}
+      <div className="relative w-full aspect-square overflow-hidden bg-[#faf9f8]">
+        <Link href={`/product/${productSlug}`} className="block absolute inset-0">
+          {/* Image */}
+          {productImage ? (
+            <img
+              src={getImageUrl(productImage)}
+              alt={product.name}
+              className="w-full h-full object-cover transform transition-transform duration-700 ease-out group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 font-light font-serif italic">
+              No Image
+            </div>
+          )}
 
-        {/* Overlay gradient on hover for contrast */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
+          {/* Overlay gradient on hover for contrast */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
 
-        {/* Badges */}
-        {((product as any).badge || (productMRP && productMRP > productPrice)) && (
-          <div className="absolute top-2 left-2 z-10 transition-transform duration-500 group-hover:translate-y-0.5">
-            <span className="px-2 py-1 rounded-full text-[8px] tracking-wider uppercase bg-white/90 backdrop-blur-sm text-gray-900 font-bold shadow-sm">
-              {(product as any).badge === "new" ? "New" : (product as any).badge === "hot" ? "Trending" : "Artisanal"}
-            </span>
-          </div>
-        )}
+          {/* Badges */}
+          {((product as any).badge || (productMRP && productMRP > productPrice)) && (
+            <div className="absolute top-2 left-2 z-10 transition-transform duration-500 group-hover:translate-y-0.5">
+              <span className="px-2 py-1 rounded-full text-[8px] tracking-wider uppercase bg-white/90 backdrop-blur-sm text-gray-900 font-bold shadow-sm">
+                {(product as any).badge || "Artisanal"}
+              </span>
+            </div>
+          )}
+        </Link>
 
-        {/* Hover Quick Add Button (Bottom slide-up) */}
+        {/* Desktop Hover Quick Add Button (Bottom slide-up) */}
         {requiresImage ? (
           <Link
             href={`/product/${productSlug}`}
             onClick={(e) => { e.stopPropagation(); }}
-            className="absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 flex items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
+            className="hidden md:flex absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
           >
             <ShoppingBag size={12} strokeWidth={2} /> Upload Photo
           </Link>
         ) : (
           <button
             onClick={handleAddToCart}
-            className="absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 flex items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
+            className="hidden md:flex absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
           >
             <ShoppingBag size={12} strokeWidth={2} /> Quick Add
           </button>
         )}
-      </Link>
+      </div>
 
       {/* Details Section */}
-      <div className="p-3 flex flex-col flex-1 bg-white z-10 relative">
-        <div className="flex justify-between items-start gap-2 mb-1">
+      <div className="p-2.5 sm:p-3 flex flex-col flex-1 bg-white z-10 relative">
+        <div className="flex justify-between items-start gap-1.5 sm:gap-2 mb-1">
           <Link href={`/product/${productSlug}`} className="flex-1">
-            <h3 className="text-[12px] font-bold text-[#2d2926] leading-snug line-clamp-2 group-hover:text-[#a69076] transition-colors duration-300">
+            <h3 className="text-[11px] sm:text-[12px] font-bold text-[#2d2926] leading-snug line-clamp-2 group-hover:text-[var(--accent)] transition-colors duration-300">
               {product.name}
             </h3>
           </Link>
           <div className="flex flex-col items-end shrink-0 pt-0.5">
-            <span className="text-[12px] font-bold text-[#2d2926] leading-none">
+            <span className="text-[12px] sm:text-[13px] font-bold text-[#2d2926] leading-none">
               ₹{productPrice.toLocaleString()}
             </span>
+            {productMRP && productMRP > productPrice && (
+              <span className="text-[9px] text-gray-400 line-through font-medium mt-0.5">
+                ₹{productMRP.toLocaleString()}
+              </span>
+            )}
           </div>
         </div>
         
-        <div className="flex justify-between items-end mt-auto pt-1">
-          <span className="text-[8px] uppercase tracking-[0.2em] font-semibold text-[#a69076]/90">
+        <div className="flex justify-between items-center mt-auto pt-2 border-t border-gray-50">
+          <span className="text-[8px] uppercase tracking-[0.15em] font-semibold text-[#a69076]/90 line-clamp-1">
             {catTitle}
           </span>
-          {productMRP && productMRP > productPrice && (
-            <span className="text-[9px] text-gray-400 line-through font-medium">
-              ₹{productMRP.toLocaleString()}
-            </span>
-          )}
+          {/* Mobile Direct Action Button */}
+          <div className="md:hidden">
+            {requiresImage ? (
+              <Link
+                href={`/product/${productSlug}`}
+                onClick={(e) => { e.stopPropagation(); }}
+                className="inline-flex items-center gap-1 bg-[var(--bg-subtle)] text-[var(--accent)] px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider border border-[var(--border)] active:scale-95"
+              >
+                <ShoppingBag size={10} /> Photo
+              </Link>
+            ) : (
+              <button
+                onClick={handleAddToCart}
+                className="inline-flex items-center gap-1 bg-[var(--accent)] text-white px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider active:scale-95 shadow-sm"
+                aria-label={`Add ${product.name} to cart`}
+              >
+                <ShoppingBag size={10} /> Add
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -9510,100 +16786,664 @@ export const useCart = () => {
 
 ```typescript
 export const CATEGORIES = {
-  miniature: {
-    title: 'Miniature Collections',
+  'wall-clocks': {
+    title: 'Custom Miniature Wall Clocks',
     eyebrow: 'Hand-Sculpted Clay',
-    desc: 'Explore our full range of handmade miniature food clocks, magnets, keychains and wall spatulas — each piece sculpted by hand with intricate detail by Uma Gayathri.',
-    emoji: '🍱',
-    seoTitle: 'Miniature Collections – Handmade Miniature Food Clock & Clay Gifts | Mythris Gleams',
-    seoDesc: 'Shop handmade miniature food clocks, keychains, magnets and return gifts. Premium clay handcrafted products in India by Uma Gayathri.',
+    desc: 'Explore our full range of handmade custom miniature wall clocks — food-themed, name-personalised and custom scene clocks, each sculpted by hand with intricate detail by Uma Gayathri.',
+    emoji: '🕰️',
+    seoTitle: 'Custom Miniature Wall Clocks – Food-Themed & Personalized Clay Clocks | Mythris Gleams',
+    seoDesc: 'Shop handmade custom miniature wall clocks, name clocks and food-themed clocks. Premium clay handcrafted products in India by Uma Gayathri.',
     subcategories: [
-      { key:'all', label:'All Miniatures' },
-      { key:'food-clock', label:'Food Clocks' },
-      { key:'wall-spatula', label:'Wall Spatulas' },
-      { key:'magnets', label:'Food Magnets' },
-      { key:'keychains', label:'Keychains' },
-      { key:'navaratri', label:'Navaratri' },
+      { key: 'all', label: 'All Wall Clocks' },
+      { key: 'food-themed-clocks', label: 'Personalized Food-Themed Clocks' },
+      { key: 'custom-scenes', label: 'Custom Miniature Scenes' },
+      { key: 'name-clocks', label: 'Name / Personalized Clocks' },
     ]
   },
-  kawaii: {
-    title: 'Kawaii Collections',
-    eyebrow: 'Cute & Adorable',
-    desc: 'Adorable kawaii-themed clay creations — from fridge magnets and keychains to trinket trays and kids games. Each piece is irresistibly cute and handcrafted.',
-    emoji: '🌸',
-    seoTitle: 'Kawaii Collections – Cute Clay Keychains & Magnets | Mythris Gleams',
-    seoDesc: 'Shop kawaii clay fridge magnets, keychains, trinket trays and kids tic tac toe games handcrafted in India.',
+  'wall-decor': {
+    title: 'Miniature Art & Wall Décor',
+    eyebrow: 'Miniature Wall Art',
+    desc: 'Beautiful miniature wall décor and art — spatulas, kitchen-themed miniatures and decorative pieces that add a handmade touch to your kitchen and walls.',
+    emoji: '🖼️',
+    seoTitle: 'Miniature Art & Wall Décor – Kitchen-Themed Clay Miniatures | Mythris Gleams',
+    seoDesc: 'Shop handmade miniature wall décor, wall spatulas, kitchen-themed miniatures and decorative clay art handcrafted in India.',
     subcategories: [
-      { key:'all', label:'All Kawaii' },
-      { key:'magnets', label:'Fridge Magnets' },
-      { key:'keychains', label:'Keychains' },
-      { key:'games', label:'Kids Games' },
-      { key:'trinket', label:'Trinket Trays' },
-      { key:'decor', label:'Cute Decor' },
+      { key: 'all', label: 'All Wall Décor' },
+      { key: 'mini-wall-decor', label: 'Miniature Wall Décor' },
+      { key: 'mini-spatulas', label: 'Miniature Spatulas' },
+      { key: 'kitchen-miniatures', label: 'Kitchen-Themed Miniatures' },
+      { key: 'decorative-miniatures', label: 'Other Decorative Miniatures' },
     ]
   },
-  gifts: {
-    title: 'Gift Collections',
-    eyebrow: 'For Every Occasion',
-    desc: 'From Valentine\'s Day to housewarming — find the perfect handmade gift for every occasion. Custom and bulk return gift orders welcome.',
-    emoji: '🎁',
-    seoTitle: 'Gift Collections – Handmade Return Gifts & Custom Gifts India | Mythris Gleams',
-    seoDesc: 'Unique handmade clay gifts for Valentine\'s Day, Mother\'s Day, birthday, naming ceremony, and housewarming. Return gifts in bulk available.',
+  'shops-scenes': {
+    title: 'Miniature Shops & Scenes',
+    eyebrow: 'Tiny Storefronts',
+    desc: 'Step into miniature worlds — individual shops, sungudi saree shops, flower shops, food stalls and festival setups, each a tiny handcrafted storefront.',
+    emoji: '🏪',
+    seoTitle: 'Miniature Shops & Scenes – Handmade Clay Storefronts India | Mythris Gleams',
+    seoDesc: 'Shop handmade miniature shops and scenes — solo storefronts, saree shops, flower shops, food stalls and festival setups from India.',
     subcategories: [
-      { key:'all', label:'All Gifts' },
-      { key:'valentine', label:"Valentine's Day" },
-      { key:'mothers', label:"Mother's Day" },
-      { key:'fathers', label:"Father's Day" },
-      { key:'birthday', label:'Birthday' },
-      { key:'naming', label:'Naming Ceremony' },
-      { key:'housewarming', label:'Housewarming' },
-      { key:'return', label:'Return Gifts' },
+      { key: 'all', label: 'All Shops & Scenes' },
+      { key: 'individual-shops', label: 'Individual Miniature Shops' },
+      { key: 'sungudi-saree-shop', label: 'Sungudi Saree Shop' },
+      { key: 'flower-shop', label: 'Flower Shop' },
+      { key: 'food-shops', label: 'Food Shops' },
+      { key: 'festival-stalls', label: 'Festival Stalls' },
+      { key: 'standalone-setups', label: 'Other Standalone Miniature Setups' },
     ]
   },
-  utility: {
-    title: 'Utility & Decor',
-    eyebrow: 'Functional Art',
-    desc: 'Beautiful clay utility items that add a handmade touch to your home — pen holders, car charms, agarbathi holders and tabletop decor.',
-    emoji: '🏺',
-    seoTitle: 'Utility & Decor – Handmade Clay Pen Holders, Agarbathi Holders | Mythris Gleams',
-    seoDesc: 'Shop handmade clay pen holders, car charms, agarbathi holders and table top decor. Premium clay crafts in India.',
+  'golu-navaratri': {
+    title: 'Golu & Navaratri Collections',
+    eyebrow: 'Festive Traditions',
+    desc: 'Celebrate Navaratri with our golu themes — thamboolam gifts, Sai Baba sets, Madurai Nagaram, village and temple festival themes, and custom golu scenes.',
+    emoji: '🪔',
+    seoTitle: 'Golu & Navaratri Collections – Thamboolam & Golu Themes | Mythris Gleams',
+    seoDesc: 'Shop handmade Navaratri thamboolam gifts, golu themes, Sai Baba sets, Madurai Nagaram and custom golu scenes for the festive season in India.',
     subcategories: [
-      { key:'all', label:'All Utility' },
-      { key:'pen-holder', label:'Pen Holders' },
-      { key:'car-charm', label:'Car Charms' },
-      { key:'agarbathi', label:'Agarbathi Holders' },
-      { key:'tabletop', label:'Table Top Decor' },
+      { key: 'all', label: 'All Golu & Navaratri' },
+      { key: 'navaratri-thamboolam', label: 'Navaratri Thamboolam Gifts' },
+      { key: 'golu-themes', label: 'Golu Themes' },
+      { key: 'sai-baba-set', label: 'Sai Baba Set' },
+      { key: 'madurai-nagaram', label: 'Madurai Nagaram' },
+      { key: 'village-theme', label: 'Village Theme' },
+      { key: 'temple-festival-theme', label: 'Temple Festival Theme' },
+      { key: 'custom-golu-scenes', label: 'Custom Golu Scenes' },
     ]
   },
-  jewellery: {
-    title: 'Jewellery Collections',
-    eyebrow: 'Wearable Art',
-    desc: 'Handcrafted polymer clay, terracotta and air dry clay jewellery — lightweight, vibrant and uniquely artistic. Made to wear and be noticed.',
-    emoji: '💍',
-    seoTitle: 'Clay Jewellery – Polymer Clay, Terracotta & Air Dry Clay | Mythris Gleams',
-    seoDesc: 'Buy handmade polymer clay earrings, terracotta jewellery, and air dry clay necklaces. Unique wearable art from India.',
+  'dolls-figures': {
+    title: 'Miniature Dolls & Figures',
+    eyebrow: 'Little Characters',
+    desc: 'Adorable miniature dolls and figures — acrylic dolls, miniature characters and festival-cultural figures, each full of charm and handcrafted detail.',
+    emoji: '🧸',
+    seoTitle: 'Miniature Dolls & Figures – Acrylic Dolls & Clay Characters | Mythris Gleams',
+    seoDesc: 'Shop handmade miniature dolls, acrylic dolls, miniature characters and festival-cultural clay figures crafted in India.',
     subcategories: [
-      { key:'all', label:'All Jewellery' },
-      { key:'polymer', label:'Polymer Clay' },
-      { key:'terracotta', label:'Terracotta' },
-      { key:'airdry', label:'Air Dry Clay' },
+      { key: 'all', label: 'All Dolls & Figures' },
+      { key: 'acrylic-dolls', label: 'Acrylic Dolls' },
+      { key: 'mini-characters', label: 'Miniature Characters' },
+      { key: 'cultural-figures', label: 'Festival and Cultural Figures' },
     ]
   },
-  corporate: {
-    title: 'Corporate & Bulk Orders',
-    eyebrow: 'For Businesses',
-    desc: 'Premium handcrafted corporate gifts, return gift sets, and custom bulk orders. Add your brand story to every piece. Pan-India delivery.',
-    emoji: '🏢',
-    seoTitle: 'Corporate & Bulk Orders – Handmade Return Gifts India | Mythris Gleams',
-    seoDesc: 'Bulk handmade return gifts and corporate gifting solutions. Custom clay products for events, offices and ceremonies across India.',
+  'fridge-magnets': {
+    title: 'Fridge Magnets',
+    eyebrow: 'Kitchen Charms',
+    desc: 'Delightful miniature fridge magnets — food magnets, customised magnets and theme-based magnets. Each piece is irresistibly cute and handcrafted.',
+    emoji: '🧲',
+    seoTitle: 'Fridge Magnets – Handmade Clay Miniature Food Magnets | Mythris Gleams',
+    seoDesc: 'Shop handmade miniature food fridge magnets, customised magnets and theme-based clay magnets handcrafted in India.',
     subcategories: [
-      { key:'all', label:'All' },
-      { key:'corporate', label:'Corporate Gifts' },
-      { key:'bulk', label:'Bulk Return Gifts' },
-      { key:'custom', label:'Custom Orders' },
+      { key: 'all', label: 'All Magnets' },
+      { key: 'food-magnets', label: 'Miniature Food Magnets' },
+      { key: 'custom-magnets', label: 'Customized Magnets' },
+      { key: 'theme-magnets', label: 'Theme-Based Magnets' },
+    ]
+  },
+  supplies: {
+    title: 'Clay & Miniature-Making Supplies',
+    eyebrow: 'Studio Essentials',
+    desc: 'Everything you need to craft — clay, miniature-making materials, tools and accessories for your own tiny creations and workshops.',
+    emoji: '🎨',
+    seoTitle: 'Clay & Miniature-Making Supplies – Materials & Tools India | Mythris Gleams',
+    seoDesc: 'Shop clay, miniature-making materials, tools and accessories for crafters and workshops. Premium supplies from India.',
+    subcategories: [
+      { key: 'all', label: 'All Supplies' },
+      { key: 'clay', label: 'Clay' },
+      { key: 'materials', label: 'Miniature-Making Materials' },
+      { key: 'tools', label: 'Tools' },
+      { key: 'accessories', label: 'Accessories' },
     ]
   }
 };
+```
+
+## File: `frontend/src/data/excelProducts.ts`
+
+```typescript
+export interface ExcelCatalogProduct {
+  sku: string;
+  name: string;
+  slug: string;
+  group: 'miniature-shops' | 'fruit-baskets' | 'vegetable-crates' | 'navaratri-thamboolam';
+  category: string;
+  subcategory: string;
+  price: number;
+  mrp: number;
+  badge?: string;
+  image: string;
+  shortDesc: string;
+  rating: number;
+  reviewsCount: number;
+}
+
+export const EXCEL_PRODUCTS: ExcelCatalogProduct[] = [  {
+    sku: 'MG-NM-001',
+    name: 'Traditional Jigarthanda Shop Miniature',
+    slug: 'traditional-jigarthanda-shop-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 2499,
+    mrp: 4499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/jigardhanda.png',
+    shortDesc: 'A handcrafted miniature Jigarthanda shop inspired by traditional Tamil Nadu drink stalls, created for Golu and Navaratri displays.',
+    rating: 4.9,
+    reviewsCount: 33
+  },
+  {
+    sku: 'MG-NM-002',
+    name: 'Traditional Idly Shop Miniature',
+    slug: 'traditional-idly-shop-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 2499,
+    mrp: 4499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/idlykadai.png',
+    shortDesc: 'A detailed handmade miniature Idly shop with traditional vessels, food, customers and a shopkeeper, perfect for Golu and Navaratri displays.',
+    rating: 4.9,
+    reviewsCount: 26
+  },
+  {
+    sku: 'MG-NM-003',
+    name: 'Traditional Dosa Shop Miniature',
+    slug: 'traditional-dosa-shop-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 2499,
+    mrp: 4499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/dosashop.png',
+    shortDesc: 'A handcrafted miniature Dosa shop inspired by a traditional South Indian tiffin stall, made for Golu, Navaratri and miniature street displays.',
+    rating: 4.9,
+    reviewsCount: 26
+  },
+  {
+    sku: 'MG-NM-004',
+    name: 'Traditional Sungudi Saree Shop Miniature',
+    slug: 'traditional-sungudi-saree-shop-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 2499,
+    mrp: 4499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/sungudi.png',
+    shortDesc: 'A colourful handmade miniature Sungudi saree shop featuring tiny sarees, a shopkeeper and customers, inspired by traditional textile shopping streets of Tamil Nadu.',
+    rating: 4.9,
+    reviewsCount: 15
+  },
+  {
+    sku: 'MG-NM-005',
+    name: 'Traditional Malligai Poo Shop Miniature',
+    slug: 'traditional-malligai-poo-shop-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 2499,
+    mrp: 4499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/Malligaipoo.png',
+    shortDesc: 'A beautiful handmade Malligai Poo shop miniature with flower garlands, baskets, flower sellers and a customer, perfect for a traditional Golu display.',
+    rating: 4.9,
+    reviewsCount: 34
+  },
+  {
+    sku: 'MG-NM-006',
+    name: 'Traditional Sugarcane Juice Cart Miniature',
+    slug: 'traditional-sugarcane-juice-cart-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 1699,
+    mrp: 4199,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/Sugarcane.png',
+    shortDesc: 'A handmade miniature sugarcane juice cart with a traditional juicing machine and vendor, perfect for a Tamil Nadu village, street or Golu display.',
+    rating: 4.9,
+    reviewsCount: 17
+  },
+  {
+    sku: 'MG-NM-007',
+    name: 'Traditional Lemon Soda Cart Miniature',
+    slug: 'traditional-lemon-soda-cart-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 1799,
+    mrp: 4499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/Limesoda.png',
+    shortDesc: 'A colourful handmade lemon soda cart miniature with bottles, lemons, a vendor and customer, inspired by traditional roadside drink carts.',
+    rating: 4.9,
+    reviewsCount: 32
+  },
+  {
+    sku: 'MG-NM-008',
+    name: 'Traditional Tender Coconut Seller Bicycle Miniature',
+    slug: 'tender-coconut-seller-bicycle-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 1299,
+    mrp: 3799,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/tendercoconut.png',
+    shortDesc: 'A handmade miniature tender coconut seller with a bicycle, coconuts and a traditional roadside-selling scene for Golu displays.',
+    rating: 4.9,
+    reviewsCount: 26
+  },
+  {
+    sku: 'MG-NM-009',
+    name: 'Traditional South Indian Tiffin Stall Miniature',
+    slug: 'traditional-south-indian-tiffin-stall-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 1999,
+    mrp: 4299,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/tiffen.png',
+    shortDesc: 'A detailed handmade South Indian tiffin stall miniature with idlis, vadas, chutneys, banana leaves, cooking vessels and a woman serving food.',
+    rating: 4.9,
+    reviewsCount: 22
+  },
+  {
+    sku: 'MG-NM-010',
+    name: 'Traditional Street Sweet Corn Cart Miniature',
+    slug: 'traditional-street-vegetable-cart-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 1999,
+    mrp: 4499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/sweetcorn.png',
+    shortDesc: 'A colourful handmade miniature street sweet corn cart with a vendor and fresh produce, perfect for traditional Golu and village-market scenes.',
+    rating: 4.9,
+    reviewsCount: 19
+  },
+  {
+    sku: 'MG-FB-001',
+    name: 'Miniature Apple Fruit Basket',
+    slug: 'miniature-apple-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/apple.png',
+    shortDesc: 'Handcrafted miniature apple basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 23
+  },
+  {
+    sku: 'MG-FB-002',
+    name: 'Miniature Banana Fruit Basket',
+    slug: 'miniature-banana-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/Banana.png',
+    shortDesc: 'Handcrafted miniature banana basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 24
+  },
+  {
+    sku: 'MG-FB-003',
+    name: 'Miniature Mango Fruit Basket',
+    slug: 'miniature-mango-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/mango.png',
+    shortDesc: 'Handcrafted miniature mango basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 23
+  },
+  {
+    sku: 'MG-FB-004',
+    name: 'Miniature Papaya Fruit Basket',
+    slug: 'miniature-papaya-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/papaya.png',
+    shortDesc: 'Handcrafted miniature papaya basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 24
+  },
+  {
+    sku: 'MG-FB-005',
+    name: 'Miniature Strawberry Fruit Basket',
+    slug: 'miniature-strawberry-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/strawberry.png',
+    shortDesc: 'Handcrafted miniature strawberry basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 28
+  },
+  {
+    sku: 'MG-FB-006',
+    name: 'Miniature Orange Fruit Basket',
+    slug: 'miniature-orange-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/Orange.png',
+    shortDesc: 'Handcrafted miniature orange basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 27
+  },
+  {
+    sku: 'MG-FB-007',
+    name: 'Miniature Pear Fruit Basket',
+    slug: 'miniature-pear-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/pears.png',
+    shortDesc: 'Handcrafted miniature pear basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 22
+  },
+  {
+    sku: 'MG-FB-008',
+    name: 'Miniature Watermelon Fruit Basket',
+    slug: 'miniature-watermelon-fruit-basket',
+    group: 'fruit-baskets',
+    category: 'Miniature Fruit Baskets',
+    subcategory: 'Handcrafted Fruit Baskets',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Fruit baskets/watermelon.png',
+    shortDesc: 'Handcrafted miniature watermelon basket made with detailed clay fruit miniatures in a charming traditional basket.',
+    rating: 4.9,
+    reviewsCount: 28
+  },
+
+  {
+    sku: 'MG-VG-002',
+    name: 'Miniature Potato Vegetable Crate',
+    slug: 'miniature-potato-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/potato.png',
+    shortDesc: 'Handcrafted miniature potato crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 27
+  },
+  {
+    sku: 'MG-VG-003',
+    name: 'Miniature Brinjal Vegetable Crate',
+    slug: 'miniature-brinjal-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/brinjal.png',
+    shortDesc: 'Handcrafted miniature brinjal crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 28
+  },
+
+  {
+    sku: 'MG-VG-005',
+    name: 'Miniature Drumstick Vegetable Crate',
+    slug: 'miniature-drumstick-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/drumstick.png',
+    shortDesc: 'Handcrafted miniature drumstick crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 30
+  },
+  {
+    sku: 'MG-VG-006',
+    name: 'Miniature Banana Stem Vegetable Crate',
+    slug: 'miniature-banana-stem-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/banana stem.png',
+    shortDesc: 'Handcrafted miniature banana stem crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 32
+  },
+  {
+    sku: 'MG-VG-007',
+    name: 'Miniature Carrot Vegetable Crate',
+    slug: 'miniature-carrot-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/carrot.png',
+    shortDesc: 'Handcrafted miniature carrot crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 27
+  },
+  {
+    sku: 'MG-VG-008',
+    name: 'Miniature Radish Vegetable Crate',
+    slug: 'miniature-radish-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/raddish.png',
+    shortDesc: 'Handcrafted miniature radish crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 27
+  },
+  {
+    sku: 'MG-VG-009',
+    name: 'Miniature Beetroot Vegetable Crate',
+    slug: 'miniature-beetroot-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/beetroot.png',
+    shortDesc: 'Handcrafted miniature beetroot crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 29
+  },
+  {
+    sku: 'MG-VG-010',
+    name: 'Miniature Lemon Vegetable Crate',
+    slug: 'miniature-lemon-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/lemon.png',
+    shortDesc: 'Handcrafted miniature lemon crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 26
+  },
+  {
+    sku: 'MG-VG-011',
+    name: 'Miniature Pumpkin Vegetable Crate',
+    slug: 'miniature-pumpkin-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/pumkin.png',
+    shortDesc: 'Handcrafted miniature pumpkin crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 28
+  },
+  {
+    sku: 'MG-VG-001',
+    name: 'Miniature Cucumber Vegetable Crate',
+    slug: 'miniature-cucumber-vegetable-crate',
+    group: 'vegetable-crates',
+    category: 'Miniature Vegetable Crates',
+    subcategory: 'Handcrafted Vegetable Crates',
+    price: 199,
+    mrp: 300,
+    badge: 'Collector Pick',
+    image: '/Vegetable Baskets/cucumber.png',
+    shortDesc: 'Handcrafted miniature cucumber crate made with detailed clay vegetable miniatures, designed for realistic Golu and miniature market displays.',
+    rating: 4.9,
+    reviewsCount: 33
+  },
+  {
+    sku: 'MG-NT-001',
+    name: 'Navaratri Miniature Thamboolam – Real Cloth Edition',
+    slug: 'navaratri-miniature-thamboolam-real-cloth',
+    group: 'navaratri-thamboolam',
+    category: 'Navaratri Thamboolam Collections',
+    subcategory: 'Navaratri Thamboolam Gifts',
+    price: 350,
+    mrp: 700,
+    badge: 'Festive Return Gift',
+    image: '/Navarathri Thamboolam/Navaratri Thamboolam 13.png',
+    shortDesc: 'A beautifully handcrafted Navaratri Thamboolam gift set featuring a real miniature cloth, traditional festive essentials and a decorative gold-toned tray.',
+    rating: 4.9,
+    reviewsCount: 26
+  },
+  {
+    sku: 'MG-NT-002',
+    name: 'Navaratri Miniature Thamboolam – Clay Cloth Tray Edition',
+    slug: 'navaratri-miniature-thamboolam-clay-cloth-tray',
+    group: 'navaratri-thamboolam',
+    category: 'Navaratri Thamboolam Collections',
+    subcategory: 'Navaratri Thamboolam Gifts',
+    price: 250,
+    mrp: 350,
+    badge: 'Festive Return Gift',
+    image: '/Navarathri Thamboolam/Navaratri Thamboolam 2.png',
+    shortDesc: 'A handcrafted Navaratri miniature Thamboolam arranged on a decorative tray, featuring a miniature cloth recreated in clay and traditional festive elements.',
+    rating: 4.9,
+    reviewsCount: 31
+  },
+  {
+    sku: 'MG-NT-003',
+    name: 'Navaratri Miniature Thamboolam – Ornate Clay Cloth Edition',
+    slug: 'navaratri-miniature-thamboolam-ornate-clay-cloth',
+    group: 'navaratri-thamboolam',
+    category: 'Navaratri Thamboolam Collections',
+    subcategory: 'Navaratri Thamboolam Gifts',
+    price: 250,
+    mrp: 350,
+    badge: 'Festive Return Gift',
+    image: '/Navarathri Thamboolam/Navaratri Thamboolam 1.png',
+    shortDesc: 'A traditional-style Navaratri miniature Thamboolam with an ornate decorative base, clay-made miniature cloth and festive return-gift elements.',
+    rating: 4.9,
+    reviewsCount: 33
+  },
+  {
+    sku: 'MG-NM-011',
+    name: 'Traditional Pani Puri Cart Miniature',
+    slug: 'traditional-pani-puri-cart-miniature',
+    group: 'miniature-shops',
+    category: 'Navaratri Miniature Shops',
+    subcategory: 'Miniature Shops',
+    price: 1799,
+    mrp: 3499,
+    badge: 'Golu Bestseller',
+    image: '/Miniature shops/Paanipoori.png',
+    shortDesc: 'A colourful handmade miniature Pani Puri and chaat cart with tiny puris, flavoured water pots, vendor and customer for Golu and street displays.',
+    rating: 4.9,
+    reviewsCount: 24
+  },
+
+  {
+    sku: 'MG-SV-001',
+    name: 'Karnataka Yakshagana & Oota Heritage Souvenir',
+    slug: 'karnataka-yakshagana-and-oota-heritage-souvenir',
+    group: 'miniature-shops',
+    category: 'Miniature Art & Wall DÃ©cor',
+    subcategory: 'Cultural Souvenirs',
+    price: 1499,
+    mrp: 2499,
+    badge: 'Heritage Souvenir',
+    image: '/souvenirs/Karnataka yakshagana and oota.png',
+    shortDesc: 'A magnificent South Indian cultural souvenir capturing Karnataka\'s iconic Yakshagana performer and traditional meal platter in handcrafted clay.',
+    rating: 4.9,
+    reviewsCount: 29
+  },
+  {
+    sku: 'MG-SV-002',
+    name: 'Kerala Onam Sadya Miniature Souvenir',
+    slug: 'kerala-onam-sadya-miniature-souvenir',
+    group: 'miniature-shops',
+    category: 'Miniature Art & Wall DÃ©cor',
+    subcategory: 'Cultural Souvenirs',
+    price: 1499,
+    mrp: 2499,
+    badge: 'Heritage Souvenir',
+    image: '/souvenirs/Kerala Sadya.png',
+    shortDesc: 'An artisanal miniature tribute to Kerala\'s celebrated Grand Sadya feast with traditional side dishes on a banana leaf.',
+    rating: 4.9,
+    reviewsCount: 29
+  },
+  {
+    sku: 'MG-SV-003',
+    name: 'Tamil Nadu Bharatanatyam & Vazhaillai Sapadu Souvenir',
+    slug: 'tamil-nadu-bharatanatyam-vazhaillai-sapadu-souvenir',
+    group: 'miniature-shops',
+    category: 'Miniature Art & Wall DÃ©cor',
+    subcategory: 'Cultural Souvenirs',
+    price: 1499,
+    mrp: 2499,
+    badge: 'Heritage Souvenir',
+    image: '/souvenirs/tamilnadu vazhaillai sapadu and bharathanatyam 1.png',
+    shortDesc: 'A celebration of Tamil culture depicting a classical Bharatanatyam dancer alongside an authentic Vazhaillai virundhu sapadu.',
+    rating: 4.9,
+    reviewsCount: 29
+  }
+];
 
 ```
 
@@ -9616,9 +17456,16 @@ export interface Product {
   slug?: string; // SEO Slug
   name: string;
   category: string;
+  categories?: string[];
   subcategory?: string;
+  subcategories?: string[];
+  occasion?: string;
+  occasions?: string[];
+  occasionSub?: string;
+  occasionSubs?: string[];
   price: number;
   mrp?: number; // Backend valuation
+  weight?: number; // grams
   oldPrice: number | null;
   emoji: string;
   bg: string;
@@ -9954,6 +17801,7 @@ interface AddPayload {
   name: string;
   image: string;
   price: number;
+  weight?: number;
   quantity?: number;
   selectedVariant?: string;
   selectedColor?: string;
@@ -9975,6 +17823,7 @@ export function useCart() {
         name: payload.name,
         image: payload.image,
         price: payload.price,
+        weight: payload.weight ?? 0,
         quantity: payload.quantity ?? 1,
         selectedVariant: payload.selectedVariant ?? "",
         selectedColor: payload.selectedColor ?? "",
@@ -10005,11 +17854,12 @@ export function useCart() {
 
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
   const totalPrice = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const totalWeight = items.reduce((s, i) => s + (i.weight || 0) * i.quantity, 0);
 
   return {
     items, loading, isOpen, isAuth,
     addToCart, setQty, remove, clear,
-    totalItems, totalPrice,
+    totalItems, totalPrice, totalWeight,
     open:   () => dispatch(openCart()),
     close:  () => dispatch(closeCart()),
     toggle: () => dispatch(toggleCart()),
@@ -10162,6 +18012,7 @@ export interface CartItem {
     name: string;
     image: string;
     price: number;
+    weight?: number;
     quantity: number;
     selectedVariant?: string;
     selectedColor?: string;
@@ -10195,7 +18046,7 @@ export const fetchCart = createAsyncThunk('cart/fetch', async (_, thunkAPI) => {
 
 export const addItemToCart = createAsyncThunk(
     'cart/add',
-    async (payload: { productId: string; name: string; image: string; price: number; quantity?: number; selectedVariant?: string; selectedColor?: string; customerImage?: string }, thunkAPI) => {
+    async (payload: { productId: string; name: string; image: string; price: number; weight?: number; quantity?: number; selectedVariant?: string; selectedColor?: string; customerImage?: string }, thunkAPI) => {
         try {
             const { data } = await api.post('/cart', payload);
             return data.data as CartItem[];
@@ -10307,8 +18158,21 @@ export default cartSlice.reducer;
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../utils/api';
 
+export interface CollectionItem {
+    _id: string;
+    name: string;
+    slug: string;
+    description?: string;
+    metaDescription?: string;
+    image?: string;
+    parent?: string | { _id: string; name: string; slug: string } | null;
+    isActive?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
 interface CollectionState {
-    collections: any[];
+    collections: CollectionItem[];
     loading: boolean;
     error: string | null;
     success: boolean;
@@ -10326,7 +18190,7 @@ export const fetchCollections = createAsyncThunk(
     async (_, thunkAPI) => {
         try {
             const { data } = await api.get('/collections');
-            return data.data;
+            return data.data as CollectionItem[];
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
@@ -10338,7 +18202,19 @@ export const createCollection = createAsyncThunk(
     async (formData: FormData, thunkAPI) => {
         try {
             const { data } = await api.post('/collections', formData);
-            return data.data;
+            return data.data as CollectionItem;
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+export const updateCollection = createAsyncThunk(
+    'collections/update',
+    async ({ id, formData }: { id: string; formData: FormData }, thunkAPI) => {
+        try {
+            const { data } = await api.put(`/collections/${id}`, formData);
+            return data.data as CollectionItem;
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
@@ -10383,14 +18259,182 @@ const collectionSlice = createSlice({
                 state.collections.unshift(action.payload);
                 state.success = true;
             })
+            .addCase(updateCollection.fulfilled, (state, action) => {
+                state.collections = state.collections.map(c => c._id === action.payload._id ? action.payload : c);
+                state.success = true;
+            })
             .addCase(deleteCollection.fulfilled, (state, action) => {
-                state.collections = state.collections.filter(c => c._id !== action.payload);
+                state.collections = state.collections.filter(c => c._id !== action.payload && !(typeof c.parent === 'object' && c.parent && c.parent._id === action.payload));
             });
     }
 });
 
 export const { resetCollectionState } = collectionSlice.actions;
 export default collectionSlice.reducer;
+```
+
+## File: `frontend/src/redux/slices/homepageSettingsSlice.ts`
+
+```typescript
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import api from '../../utils/api';
+
+export interface HomepageSettingsReference {
+    _id: string;
+    name: string;
+    slug: string;
+    parent?: string | HomepageSettingsReference | null;
+    isActive?: boolean;
+}
+
+export type HomepageSettingsReferenceValue = string | HomepageSettingsReference | null;
+
+export interface SeasonalSection {
+    _id?: string;
+    name: string;
+    enabled: boolean;
+    badge: string;
+    heading: string;
+    description: string;
+    collectionIds: HomepageSettingsReferenceValue[];
+    occasionIds: HomepageSettingsReferenceValue[];
+}
+
+export interface HomepageSettings {
+    _id: string;
+    key: string;
+    seasonalSections: SeasonalSection[];
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface SeasonalSectionPayload {
+    _id?: string;
+    name: string;
+    enabled: boolean;
+    badge: string;
+    heading: string;
+    description: string;
+    collectionIds: string[];
+    occasionIds: string[];
+}
+
+export interface HomepageSettingsPayload {
+    seasonalSections: SeasonalSectionPayload[];
+}
+
+type RequestError = {
+    response?: {
+        data?: {
+            error?: string;
+            message?: string;
+        };
+    };
+};
+
+const getRequestError = (error: unknown) => {
+    if (typeof error === 'object' && error !== null && 'response' in error) {
+        const response = (error as RequestError).response;
+        if (response?.data?.error) return response.data.error;
+        if (response?.data?.message) return response.data.message;
+    }
+    return error instanceof Error ? error.message : 'The request could not be completed.';
+};
+
+interface HomepageSettingsState {
+    settings: HomepageSettings | null;
+    loaded: boolean;
+    loading: boolean;
+    saving: boolean;
+    error: string | null;
+    fetchError: string | null;
+    success: boolean;
+}
+
+const initialState: HomepageSettingsState = {
+    settings: null,
+    loaded: false,
+    loading: false,
+    saving: false,
+    error: null,
+    fetchError: null,
+    success: false
+};
+
+export const fetchHomepageSettings = createAsyncThunk(
+    'homepageSettings/fetch',
+    async (_, thunkAPI) => {
+        try {
+            const { data } = await api.get('/homepage-settings');
+            return data.data as HomepageSettings | null;
+        } catch (error: unknown) {
+            return thunkAPI.rejectWithValue(getRequestError(error));
+        }
+    }
+);
+
+export const updateHomepageSettings = createAsyncThunk(
+    'homepageSettings/update',
+    async (payload: HomepageSettingsPayload, thunkAPI) => {
+        try {
+            const { data } = await api.put('/homepage-settings', payload);
+            return data.data as HomepageSettings;
+        } catch (error: unknown) {
+            return thunkAPI.rejectWithValue(getRequestError(error));
+        }
+    }
+);
+
+const homepageSettingsSlice = createSlice({
+    name: 'homepageSettings',
+    initialState,
+    reducers: {
+        resetHomepageSettingsState: (state) => {
+            state.error = null;
+            state.fetchError = null;
+            state.success = false;
+        }
+    },
+    extraReducers: (builder) => {
+        builder
+            .addCase(fetchHomepageSettings.pending, (state) => {
+                state.loading = true;
+                state.loaded = false;
+                state.error = null;
+                state.fetchError = null;
+            })
+            .addCase(fetchHomepageSettings.fulfilled, (state, action) => {
+                state.settings = action.payload;
+                state.loading = false;
+                state.loaded = true;
+                state.error = null;
+                state.fetchError = null;
+            })
+            .addCase(fetchHomepageSettings.rejected, (state, action) => {
+                state.loading = false;
+                state.loaded = true;
+                state.fetchError = action.payload as string;
+            })
+            .addCase(updateHomepageSettings.pending, (state) => {
+                state.saving = true;
+                state.error = null;
+                state.success = false;
+            })
+            .addCase(updateHomepageSettings.fulfilled, (state, action) => {
+                state.settings = action.payload;
+                state.saving = false;
+                state.error = null;
+                state.success = true;
+            })
+            .addCase(updateHomepageSettings.rejected, (state, action) => {
+                state.saving = false;
+                state.error = action.payload as string;
+            });
+    }
+});
+
+export const { resetHomepageSettingsState } = homepageSettingsSlice.actions;
+export default homepageSettingsSlice.reducer;
 
 ```
 
@@ -10512,6 +18556,127 @@ export default inquirySlice.reducer;
 
 ```
 
+## File: `frontend/src/redux/slices/occasionSlice.ts`
+
+```typescript
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import api from '../../utils/api';
+
+export interface OccasionItem {
+    _id: string;
+    name: string;
+    slug: string;
+    description?: string;
+    metaDescription?: string;
+    image?: string;
+    parent?: string | { _id: string; name: string; slug: string } | null;
+    isActive?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+interface OccasionState {
+    occasions: OccasionItem[];
+    loading: boolean;
+    error: string | null;
+    success: boolean;
+}
+
+const initialState: OccasionState = {
+    occasions: [],
+    loading: false,
+    error: null,
+    success: false
+};
+
+export const fetchOccasions = createAsyncThunk(
+    'occasions/fetchAll',
+    async (_, thunkAPI) => {
+        try {
+            const { data } = await api.get('/occasions');
+            return data.data as OccasionItem[];
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+export const createOccasion = createAsyncThunk(
+    'occasions/create',
+    async (formData: FormData, thunkAPI) => {
+        try {
+            const { data } = await api.post('/occasions', formData);
+            return data.data as OccasionItem;
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+export const updateOccasion = createAsyncThunk(
+    'occasions/update',
+    async ({ id, formData }: { id: string; formData: FormData }, thunkAPI) => {
+        try {
+            const { data } = await api.put(`/occasions/${id}`, formData);
+            return data.data as OccasionItem;
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+export const deleteOccasion = createAsyncThunk(
+    'occasions/delete',
+    async (id: string, thunkAPI) => {
+        try {
+            await api.delete(`/occasions/${id}`);
+            return id;
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.message || error.message);
+        }
+    }
+);
+
+const occasionSlice = createSlice({
+    name: 'occasions',
+    initialState,
+    reducers: {
+        resetOccasionState: (state) => {
+            state.success = false;
+            state.error = null;
+        }
+    },
+    extraReducers: (builder) => {
+        builder
+            .addCase(fetchOccasions.pending, (state) => {
+                state.loading = true;
+            })
+            .addCase(fetchOccasions.fulfilled, (state, action) => {
+                state.occasions = action.payload;
+                state.loading = false;
+            })
+            .addCase(fetchOccasions.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload as string;
+            })
+            .addCase(createOccasion.fulfilled, (state, action) => {
+                state.occasions.unshift(action.payload);
+                state.success = true;
+            })
+            .addCase(updateOccasion.fulfilled, (state, action) => {
+                state.occasions = state.occasions.map(o => o._id === action.payload._id ? action.payload : o);
+                state.success = true;
+            })
+            .addCase(deleteOccasion.fulfilled, (state, action) => {
+                state.occasions = state.occasions.filter(o => o._id !== action.payload && !(typeof o.parent === 'object' && o.parent && o.parent._id === action.payload));
+            });
+    }
+});
+
+export const { resetOccasionState } = occasionSlice.actions;
+export default occasionSlice.reducer;
+```
+
 ## File: `frontend/src/redux/slices/orderSlice.ts`
 
 ```typescript
@@ -10521,6 +18686,7 @@ import api from '../../utils/api';
 interface OrderState {
     orders: any[];
     currentOrder: any | null;
+    customOrder: any | null;
     loading: boolean;
     error: string | null;
     success: boolean;
@@ -10529,6 +18695,7 @@ interface OrderState {
 const initialState: OrderState = {
     orders: [],
     currentOrder: null,
+    customOrder: null,
     loading: false,
     error: null,
     success: false,
@@ -10584,6 +18751,33 @@ export const updateOrderStatus = createAsyncThunk(
     }
 );
 
+export interface AdminCustomOrderPayload {
+    customerName: string;
+    customerEmail?: string;
+    customerPhone: string;
+    customerStreet?: string;
+    customerCity?: string;
+    customerState?: string;
+    customerZip?: string;
+    amount: number;
+    title?: string;
+    description?: string;
+    image?: string;
+    weight?: number;
+}
+
+export const createAdminCustomOrder = createAsyncThunk(
+    'orders/createAdminCustom',
+    async (payload: AdminCustomOrderPayload, thunkAPI) => {
+        try {
+            const { data } = await api.post('/orders/admin/custom', payload);
+            return data.data;
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
 const orderSlice = createSlice({
     name: 'orders',
     initialState,
@@ -10591,6 +18785,11 @@ const orderSlice = createSlice({
         resetOrderSuccess: (state) => {
             state.success = false;
             state.currentOrder = null;
+            state.error = null;
+        },
+        clearCustomOrder: (state) => {
+            state.customOrder = null;
+            state.success = false;
             state.error = null;
         }
     },
@@ -10616,11 +18815,26 @@ const orderSlice = createSlice({
             .addCase(updateOrderStatus.rejected, (state, action) => {
                 state.error = action.payload as string;
                 state.success = false;
+            })
+            .addCase(createAdminCustomOrder.pending, (state) => {
+                state.loading = true;
+                state.error = null;
+                state.success = false;
+            })
+            .addCase(createAdminCustomOrder.fulfilled, (state, action) => {
+                state.customOrder = action.payload;
+                state.loading = false;
+                state.success = true;
+            })
+            .addCase(createAdminCustomOrder.rejected, (state, action) => {
+                state.loading = false;
+                state.error = action.payload as string;
+                state.success = false;
             });
     }
 });
 
-export const { resetOrderSuccess } = orderSlice.actions;
+export const { resetOrderSuccess, clearCustomOrder } = orderSlice.actions;
 export default orderSlice.reducer;
 
 ```
@@ -10848,6 +19062,8 @@ import orderReducer from './slices/orderSlice';
 import inquiryReducer from './slices/inquirySlice';
 import userReducer from './slices/userSlice';
 import collectionReducer from './slices/collectionSlice';
+import occasionReducer from './slices/occasionSlice';
+import homepageSettingsReducer from './slices/homepageSettingsSlice';
 import cartReducer from './slices/cartSlice';
 
 export const store = configureStore({
@@ -10858,6 +19074,8 @@ export const store = configureStore({
         inquiries: inquiryReducer,
         users: userReducer,
         collections: collectionReducer,
+        occasions: occasionReducer,
+        homepageSettings: homepageSettingsReducer,
         cart: cartReducer,
     }
 });
@@ -10954,15 +19172,44 @@ export const compressImageFile = (file: File, maxSize = 480, quality = 0.72): Pr
 };
 ```
 
+## File: `frontend/src/utils/formatWeight.ts`
+
+```typescript
+export function formatWeight(grams: number | undefined | null): string {
+    const g = Number(grams) || 0;
+    if (g <= 0) return "";
+    if (g >= 1000) {
+        const kg = g / 1000;
+        return `${kg % 1 === 0 ? kg.toFixed(0) : kg.toFixed(2)} kg`;
+    }
+    return `${g} g`;
+}
+```
+
 ## File: `frontend/src/utils/getImageUrl.ts`
 
 ```typescript
 export const getImageUrl = (path: string | undefined | null) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || '';
-    return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    if (path.startsWith('/uploads')) {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || '';
+        return `${baseUrl}${encodeURI(path)}`;
+    }
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return encodeURI(cleanPath);
 };
+
+```
+
+## File: `frontend/src/utils/shipping.ts`
+
+```typescript
+export const FREE_SHIPPING_THRESHOLD = 4999;
+export const SHIPPING_FEE = 200;
+
+export const calculateShipping = (itemsPrice: number): number =>
+  itemsPrice >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE;
 
 ```
 
@@ -11009,6 +19256,6 @@ export const getImageUrl = (path: string | undefined | null) => {
 ## File: `frontend/tsconfig.tsbuildinfo`
 
 ```
-{"fileNames":["./node_modules/typescript/lib/lib.es5.d.ts","./node_modules/typescript/lib/lib.es2015.d.ts","./node_modules/typescript/lib/lib.es2016.d.ts","./node_modules/typescript/lib/lib.es2017.d.ts","./node_modules/typescript/lib/lib.es2018.d.ts","./node_modules/typescript/lib/lib.es2019.d.ts","./node_modules/typescript/lib/lib.es2020.d.ts","./node_modules/typescript/lib/lib.es2021.d.ts","./node_modules/typescript/lib/lib.es2022.d.ts","./node_modules/typescript/lib/lib.es2023.d.ts","./node_modules/typescript/lib/lib.es2024.d.ts","./node_modules/typescript/lib/lib.esnext.d.ts","./node_modules/typescript/lib/lib.dom.d.ts","./node_modules/typescript/lib/lib.dom.iterable.d.ts","./node_modules/typescript/lib/lib.es2015.core.d.ts","./node_modules/typescript/lib/lib.es2015.collection.d.ts","./node_modules/typescript/lib/lib.es2015.generator.d.ts","./node_modules/typescript/lib/lib.es2015.iterable.d.ts","./node_modules/typescript/lib/lib.es2015.promise.d.ts","./node_modules/typescript/lib/lib.es2015.proxy.d.ts","./node_modules/typescript/lib/lib.es2015.reflect.d.ts","./node_modules/typescript/lib/lib.es2015.symbol.d.ts","./node_modules/typescript/lib/lib.es2015.symbol.wellknown.d.ts","./node_modules/typescript/lib/lib.es2016.array.include.d.ts","./node_modules/typescript/lib/lib.es2016.intl.d.ts","./node_modules/typescript/lib/lib.es2017.arraybuffer.d.ts","./node_modules/typescript/lib/lib.es2017.date.d.ts","./node_modules/typescript/lib/lib.es2017.object.d.ts","./node_modules/typescript/lib/lib.es2017.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2017.string.d.ts","./node_modules/typescript/lib/lib.es2017.intl.d.ts","./node_modules/typescript/lib/lib.es2017.typedarrays.d.ts","./node_modules/typescript/lib/lib.es2018.asyncgenerator.d.ts","./node_modules/typescript/lib/lib.es2018.asynciterable.d.ts","./node_modules/typescript/lib/lib.es2018.intl.d.ts","./node_modules/typescript/lib/lib.es2018.promise.d.ts","./node_modules/typescript/lib/lib.es2018.regexp.d.ts","./node_modules/typescript/lib/lib.es2019.array.d.ts","./node_modules/typescript/lib/lib.es2019.object.d.ts","./node_modules/typescript/lib/lib.es2019.string.d.ts","./node_modules/typescript/lib/lib.es2019.symbol.d.ts","./node_modules/typescript/lib/lib.es2019.intl.d.ts","./node_modules/typescript/lib/lib.es2020.bigint.d.ts","./node_modules/typescript/lib/lib.es2020.date.d.ts","./node_modules/typescript/lib/lib.es2020.promise.d.ts","./node_modules/typescript/lib/lib.es2020.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2020.string.d.ts","./node_modules/typescript/lib/lib.es2020.symbol.wellknown.d.ts","./node_modules/typescript/lib/lib.es2020.intl.d.ts","./node_modules/typescript/lib/lib.es2020.number.d.ts","./node_modules/typescript/lib/lib.es2021.promise.d.ts","./node_modules/typescript/lib/lib.es2021.string.d.ts","./node_modules/typescript/lib/lib.es2021.weakref.d.ts","./node_modules/typescript/lib/lib.es2021.intl.d.ts","./node_modules/typescript/lib/lib.es2022.array.d.ts","./node_modules/typescript/lib/lib.es2022.error.d.ts","./node_modules/typescript/lib/lib.es2022.intl.d.ts","./node_modules/typescript/lib/lib.es2022.object.d.ts","./node_modules/typescript/lib/lib.es2022.string.d.ts","./node_modules/typescript/lib/lib.es2022.regexp.d.ts","./node_modules/typescript/lib/lib.es2023.array.d.ts","./node_modules/typescript/lib/lib.es2023.collection.d.ts","./node_modules/typescript/lib/lib.es2023.intl.d.ts","./node_modules/typescript/lib/lib.es2024.arraybuffer.d.ts","./node_modules/typescript/lib/lib.es2024.collection.d.ts","./node_modules/typescript/lib/lib.es2024.object.d.ts","./node_modules/typescript/lib/lib.es2024.promise.d.ts","./node_modules/typescript/lib/lib.es2024.regexp.d.ts","./node_modules/typescript/lib/lib.es2024.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2024.string.d.ts","./node_modules/typescript/lib/lib.esnext.array.d.ts","./node_modules/typescript/lib/lib.esnext.collection.d.ts","./node_modules/typescript/lib/lib.esnext.intl.d.ts","./node_modules/typescript/lib/lib.esnext.disposable.d.ts","./node_modules/typescript/lib/lib.esnext.promise.d.ts","./node_modules/typescript/lib/lib.esnext.decorators.d.ts","./node_modules/typescript/lib/lib.esnext.iterator.d.ts","./node_modules/typescript/lib/lib.esnext.float16.d.ts","./node_modules/typescript/lib/lib.esnext.error.d.ts","./node_modules/typescript/lib/lib.esnext.sharedmemory.d.ts","./node_modules/typescript/lib/lib.decorators.d.ts","./node_modules/typescript/lib/lib.decorators.legacy.d.ts","./node_modules/@types/react/global.d.ts","./node_modules/csstype/index.d.ts","./node_modules/@types/react/index.d.ts","./node_modules/next/dist/styled-jsx/types/css.d.ts","./node_modules/next/dist/styled-jsx/types/macro.d.ts","./node_modules/next/dist/styled-jsx/types/style.d.ts","./node_modules/next/dist/styled-jsx/types/global.d.ts","./node_modules/next/dist/styled-jsx/types/index.d.ts","./node_modules/next/dist/server/get-page-files.d.ts","./node_modules/@types/node/compatibility/disposable.d.ts","./node_modules/@types/node/compatibility/indexable.d.ts","./node_modules/@types/node/compatibility/iterators.d.ts","./node_modules/@types/node/compatibility/index.d.ts","./node_modules/@types/node/globals.typedarray.d.ts","./node_modules/@types/node/buffer.buffer.d.ts","./node_modules/@types/node/globals.d.ts","./node_modules/@types/node/web-globals/abortcontroller.d.ts","./node_modules/@types/node/web-globals/domexception.d.ts","./node_modules/@types/node/web-globals/events.d.ts","./node_modules/undici-types/header.d.ts","./node_modules/undici-types/readable.d.ts","./node_modules/undici-types/file.d.ts","./node_modules/undici-types/fetch.d.ts","./node_modules/undici-types/formdata.d.ts","./node_modules/undici-types/connector.d.ts","./node_modules/undici-types/client.d.ts","./node_modules/undici-types/errors.d.ts","./node_modules/undici-types/dispatcher.d.ts","./node_modules/undici-types/global-dispatcher.d.ts","./node_modules/undici-types/global-origin.d.ts","./node_modules/undici-types/pool-stats.d.ts","./node_modules/undici-types/pool.d.ts","./node_modules/undici-types/handlers.d.ts","./node_modules/undici-types/balanced-pool.d.ts","./node_modules/undici-types/agent.d.ts","./node_modules/undici-types/mock-interceptor.d.ts","./node_modules/undici-types/mock-agent.d.ts","./node_modules/undici-types/mock-client.d.ts","./node_modules/undici-types/mock-pool.d.ts","./node_modules/undici-types/mock-errors.d.ts","./node_modules/undici-types/proxy-agent.d.ts","./node_modules/undici-types/env-http-proxy-agent.d.ts","./node_modules/undici-types/retry-handler.d.ts","./node_modules/undici-types/retry-agent.d.ts","./node_modules/undici-types/api.d.ts","./node_modules/undici-types/interceptors.d.ts","./node_modules/undici-types/util.d.ts","./node_modules/undici-types/cookies.d.ts","./node_modules/undici-types/patch.d.ts","./node_modules/undici-types/websocket.d.ts","./node_modules/undici-types/eventsource.d.ts","./node_modules/undici-types/filereader.d.ts","./node_modules/undici-types/diagnostics-channel.d.ts","./node_modules/undici-types/content-type.d.ts","./node_modules/undici-types/cache.d.ts","./node_modules/undici-types/index.d.ts","./node_modules/@types/node/web-globals/fetch.d.ts","./node_modules/@types/node/assert.d.ts","./node_modules/@types/node/assert/strict.d.ts","./node_modules/@types/node/async_hooks.d.ts","./node_modules/@types/node/buffer.d.ts","./node_modules/@types/node/child_process.d.ts","./node_modules/@types/node/cluster.d.ts","./node_modules/@types/node/console.d.ts","./node_modules/@types/node/constants.d.ts","./node_modules/@types/node/crypto.d.ts","./node_modules/@types/node/dgram.d.ts","./node_modules/@types/node/diagnostics_channel.d.ts","./node_modules/@types/node/dns.d.ts","./node_modules/@types/node/dns/promises.d.ts","./node_modules/@types/node/domain.d.ts","./node_modules/@types/node/events.d.ts","./node_modules/@types/node/fs.d.ts","./node_modules/@types/node/fs/promises.d.ts","./node_modules/@types/node/http.d.ts","./node_modules/@types/node/http2.d.ts","./node_modules/@types/node/https.d.ts","./node_modules/@types/node/inspector.generated.d.ts","./node_modules/@types/node/module.d.ts","./node_modules/@types/node/net.d.ts","./node_modules/@types/node/os.d.ts","./node_modules/@types/node/path.d.ts","./node_modules/@types/node/perf_hooks.d.ts","./node_modules/@types/node/process.d.ts","./node_modules/@types/node/punycode.d.ts","./node_modules/@types/node/querystring.d.ts","./node_modules/@types/node/readline.d.ts","./node_modules/@types/node/readline/promises.d.ts","./node_modules/@types/node/repl.d.ts","./node_modules/@types/node/sea.d.ts","./node_modules/@types/node/stream.d.ts","./node_modules/@types/node/stream/promises.d.ts","./node_modules/@types/node/stream/consumers.d.ts","./node_modules/@types/node/stream/web.d.ts","./node_modules/@types/node/string_decoder.d.ts","./node_modules/@types/node/test.d.ts","./node_modules/@types/node/timers.d.ts","./node_modules/@types/node/timers/promises.d.ts","./node_modules/@types/node/tls.d.ts","./node_modules/@types/node/trace_events.d.ts","./node_modules/@types/node/tty.d.ts","./node_modules/@types/node/url.d.ts","./node_modules/@types/node/util.d.ts","./node_modules/@types/node/v8.d.ts","./node_modules/@types/node/vm.d.ts","./node_modules/@types/node/wasi.d.ts","./node_modules/@types/node/worker_threads.d.ts","./node_modules/@types/node/zlib.d.ts","./node_modules/@types/node/index.d.ts","./node_modules/@types/react/canary.d.ts","./node_modules/@types/react/experimental.d.ts","./node_modules/@types/react-dom/index.d.ts","./node_modules/@types/react-dom/canary.d.ts","./node_modules/@types/react-dom/experimental.d.ts","./node_modules/next/dist/lib/fallback.d.ts","./node_modules/next/dist/compiled/webpack/webpack.d.ts","./node_modules/next/dist/shared/lib/modern-browserslist-target.d.ts","./node_modules/next/dist/shared/lib/entry-constants.d.ts","./node_modules/next/dist/shared/lib/constants.d.ts","./node_modules/next/dist/lib/bundler.d.ts","./node_modules/next/dist/server/config.d.ts","./node_modules/next/dist/lib/load-custom-routes.d.ts","./node_modules/next/dist/shared/lib/image-config.d.ts","./node_modules/next/dist/build/webpack/plugins/subresource-integrity-plugin.d.ts","./node_modules/next/dist/server/body-streams.d.ts","./node_modules/next/dist/server/request/search-params.d.ts","./node_modules/next/dist/shared/lib/segment-cache/vary-params-decoding.d.ts","./node_modules/next/dist/server/app-render/vary-params.d.ts","./node_modules/next/dist/server/request/params.d.ts","./node_modules/next/dist/server/route-kind.d.ts","./node_modules/next/dist/server/route-definitions/route-definition.d.ts","./node_modules/next/dist/server/route-matches/route-match.d.ts","./node_modules/next/dist/client/components/app-router-headers.d.ts","./node_modules/next/dist/server/lib/cache-control.d.ts","./node_modules/next/dist/shared/lib/app-router-types.d.ts","./node_modules/next/dist/server/lib/cache-handlers/types.d.ts","./node_modules/next/dist/server/use-cache/use-cache-wrapper.d.ts","./node_modules/next/dist/server/resume-data-cache/cache-store.d.ts","./node_modules/next/dist/server/resume-data-cache/resume-data-cache.d.ts","./node_modules/next/dist/lib/constants.d.ts","./node_modules/next/dist/server/render-result.d.ts","./node_modules/next/dist/server/response-cache/types.d.ts","./node_modules/next/dist/server/response-cache/index.d.ts","./node_modules/@types/react/jsx-runtime.d.ts","./node_modules/next/dist/next-devtools/userspace/pages/pages-dev-overlay-setup.d.ts","./node_modules/next/dist/build/static-paths/types.d.ts","./node_modules/next/dist/server/route-definitions/app-page-route-definition.d.ts","./node_modules/next/dist/build/adapter/setup-node-env.external.d.ts","./node_modules/next/dist/server/instrumentation/types.d.ts","./node_modules/next/dist/lib/setup-exception-listeners.d.ts","./node_modules/next/dist/lib/worker.d.ts","./node_modules/next/dist/server/lib/experimental/ppr.d.ts","./node_modules/next/dist/lib/page-types.d.ts","./node_modules/next/dist/build/segment-config/app/app-segment-config.d.ts","./node_modules/next/dist/build/segment-config/pages/pages-segment-config.d.ts","./node_modules/next/dist/build/analysis/get-page-static-info.d.ts","./node_modules/next/dist/build/webpack/loaders/get-module-build-info.d.ts","./node_modules/next/dist/build/webpack/plugins/middleware-plugin.d.ts","./node_modules/next/dist/server/require-hook.d.ts","./node_modules/next/dist/server/node-polyfill-crypto.d.ts","./node_modules/next/dist/server/node-environment-baseline.d.ts","./node_modules/next/dist/server/node-environment-extensions/error-inspect.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-file.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-exit.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-dim.external.d.ts","./node_modules/next/dist/server/node-environment-extensions/unhandled-rejection.external.d.ts","./node_modules/next/dist/server/node-environment-extensions/random.d.ts","./node_modules/next/dist/server/node-environment-extensions/date.d.ts","./node_modules/next/dist/server/node-environment-extensions/web-crypto.d.ts","./node_modules/next/dist/server/node-environment-extensions/node-crypto.d.ts","./node_modules/next/dist/server/node-environment-extensions/fast-set-immediate.external.d.ts","./node_modules/next/dist/server/node-environment.d.ts","./node_modules/next/dist/build/page-extensions-type.d.ts","./node_modules/next/dist/server/route-modules/app-page/module.compiled.d.ts","./node_modules/next/dist/server/route-definitions/app-route-route-definition.d.ts","./node_modules/next/dist/server/lib/i18n-provider.d.ts","./node_modules/next/dist/server/web/next-url.d.ts","./node_modules/next/dist/compiled/@edge-runtime/cookies/index.d.ts","./node_modules/next/dist/server/web/spec-extension/cookies.d.ts","./node_modules/next/dist/server/web/spec-extension/request.d.ts","./node_modules/next/dist/shared/lib/deep-readonly.d.ts","./node_modules/next/dist/server/lib/incremental-cache/index.d.ts","./node_modules/next/dist/shared/lib/router/utils/middleware-route-matcher.d.ts","./node_modules/next/dist/build/webpack/plugins/flight-manifest-plugin.d.ts","./node_modules/next/dist/build/webpack/plugins/next-font-manifest-plugin.d.ts","./node_modules/next/dist/server/route-definitions/locale-route-definition.d.ts","./node_modules/next/dist/server/route-definitions/pages-route-definition.d.ts","./node_modules/next/dist/shared/lib/mitt.d.ts","./node_modules/next/dist/client/with-router.d.ts","./node_modules/next/dist/client/router.d.ts","./node_modules/next/dist/client/route-loader.d.ts","./node_modules/next/dist/client/page-loader.d.ts","./node_modules/next/dist/shared/lib/bloom-filter.d.ts","./node_modules/next/dist/shared/lib/router/router.d.ts","./node_modules/next/dist/shared/lib/router-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/loadable-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/loadable.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/image-config-context.shared-runtime.d.ts","./node_modules/next/dist/client/components/readonly-url-search-params.d.ts","./node_modules/next/dist/shared/lib/hooks-client-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/head-manager-context.shared-runtime.d.ts","./node_modules/next/dist/client/flight-data-helpers.d.ts","./node_modules/next/dist/client/components/segment-cache/cache-key.d.ts","./node_modules/next/dist/client/components/router-reducer/fetch-server-response.d.ts","./node_modules/next/dist/client/components/segment-cache/types.d.ts","./node_modules/next/dist/shared/lib/segment-cache/segment-value-encoding.d.ts","./node_modules/next/dist/client/components/segment-cache/scheduler.d.ts","./node_modules/next/dist/client/components/segment-cache/cache-map.d.ts","./node_modules/next/dist/client/components/segment-cache/vary-path.d.ts","./node_modules/next/dist/client/components/segment-cache/cache.d.ts","./node_modules/next/dist/client/components/router-reducer/ppr-navigations.d.ts","./node_modules/next/dist/client/components/segment-cache/navigation.d.ts","./node_modules/next/dist/client/components/router-reducer/router-reducer-types.d.ts","./node_modules/next/dist/shared/lib/app-router-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/server-inserted-html.shared-runtime.d.ts","./node_modules/next/dist/server/route-modules/pages/vendored/contexts/entrypoints.d.ts","./node_modules/next/dist/server/route-modules/pages/module.compiled.d.ts","./node_modules/next/dist/build/templates/pages.d.ts","./node_modules/next/dist/server/route-modules/pages/module.d.ts","./node_modules/next/dist/server/render.d.ts","./node_modules/next/dist/build/webpack/plugins/pages-manifest-plugin.d.ts","./node_modules/next/dist/server/route-definitions/pages-api-route-definition.d.ts","./node_modules/next/dist/server/route-matches/pages-api-route-match.d.ts","./node_modules/next/dist/server/route-matchers/route-matcher.d.ts","./node_modules/next/dist/server/route-matcher-providers/route-matcher-provider.d.ts","./node_modules/next/dist/server/route-matcher-managers/route-matcher-manager.d.ts","./node_modules/next/dist/server/normalizers/normalizer.d.ts","./node_modules/next/dist/server/normalizers/locale-route-normalizer.d.ts","./node_modules/next/dist/server/normalizers/request/pathname-normalizer.d.ts","./node_modules/next/dist/server/normalizers/request/suffix.d.ts","./node_modules/next/dist/server/normalizers/request/rsc.d.ts","./node_modules/next/dist/server/normalizers/request/next-data.d.ts","./node_modules/next/dist/server/after/builtin-request-context.d.ts","./node_modules/next/dist/server/normalizers/request/segment-prefix-rsc.d.ts","./node_modules/next/dist/server/route-modules/pages/builtin/_error.d.ts","./node_modules/next/dist/server/load-default-error-components.d.ts","./node_modules/next/dist/server/base-server.d.ts","./node_modules/next/dist/server/after/after.d.ts","./node_modules/next/dist/server/after/after-context.d.ts","./node_modules/next/dist/server/use-cache/cache-life.d.ts","./node_modules/next/dist/server/app-render/work-async-storage-instance.d.ts","./node_modules/next/dist/server/lib/lazy-result.d.ts","./node_modules/next/dist/server/app-render/create-error-handler.d.ts","./node_modules/next/dist/shared/lib/action-revalidation-kind.d.ts","./node_modules/next/dist/server/app-render/work-async-storage.external.d.ts","./node_modules/next/dist/server/async-storage/work-store.d.ts","./node_modules/next/dist/server/web/http.d.ts","./node_modules/next/dist/client/components/hooks-server-context.d.ts","./node_modules/next/dist/server/route-modules/app-route/shared-modules.d.ts","./node_modules/next/dist/client/components/redirect-status-code.d.ts","./node_modules/next/dist/client/components/redirect-error.d.ts","./node_modules/next/dist/server/web/spec-extension/adapters/request-cookies.d.ts","./node_modules/next/dist/server/async-storage/draft-mode-provider.d.ts","./node_modules/next/dist/server/web/spec-extension/adapters/headers.d.ts","./node_modules/next/dist/server/app-render/cache-signal.d.ts","./node_modules/next/dist/server/app-render/instant-validation/boundary-tracking.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-validation-error.d.ts","./node_modules/next/dist/shared/lib/router/utils/parse-relative-url.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-samples.d.ts","./node_modules/next/dist/server/app-render/dynamic-rendering.d.ts","./node_modules/next/dist/server/app-render/work-unit-async-storage-instance.d.ts","./node_modules/next/dist/server/lib/implicit-tags.d.ts","./node_modules/next/dist/server/app-render/staged-rendering.d.ts","./node_modules/next/dist/server/app-render/work-unit-async-storage.external.d.ts","./node_modules/next/dist/build/templates/app-route.d.ts","./node_modules/next/dist/server/app-render/action-async-storage-instance.d.ts","./node_modules/next/dist/server/app-render/action-async-storage.external.d.ts","./node_modules/next/dist/server/route-modules/app-route/module.d.ts","./node_modules/next/dist/server/route-modules/app-route/module.compiled.d.ts","./node_modules/next/dist/build/segment-config/app/app-segments.d.ts","./node_modules/next/dist/build/get-supported-browsers.d.ts","./node_modules/next/dist/build/utils.d.ts","./node_modules/next/dist/build/rendering-mode.d.ts","./node_modules/next/dist/server/lib/router-utils/build-prefetch-segment-data-route.d.ts","./node_modules/next/dist/server/lib/cpu-profile.d.ts","./node_modules/next/dist/build/turborepo-access-trace/types.d.ts","./node_modules/next/dist/build/turborepo-access-trace/result.d.ts","./node_modules/next/dist/build/turborepo-access-trace/helpers.d.ts","./node_modules/next/dist/build/turborepo-access-trace/index.d.ts","./node_modules/next/dist/export/routes/types.d.ts","./node_modules/next/dist/export/types.d.ts","./node_modules/next/dist/export/worker.d.ts","./node_modules/next/dist/build/worker.d.ts","./node_modules/next/dist/build/index.d.ts","./node_modules/next/dist/lib/coalesced-function.d.ts","./node_modules/next/dist/server/lib/router-utils/types.d.ts","./node_modules/next/dist/trace/types.d.ts","./node_modules/next/dist/trace/trace.d.ts","./node_modules/next/dist/trace/shared.d.ts","./node_modules/next/dist/trace/index.d.ts","./node_modules/next/dist/build/load-jsconfig.d.ts","./node_modules/@next/env/dist/index.d.ts","./node_modules/next/dist/build/webpack/plugins/telemetry-plugin/use-cache-tracker-utils.d.ts","./node_modules/next/dist/build/webpack/plugins/telemetry-plugin/telemetry-plugin.d.ts","./node_modules/next/dist/telemetry/storage.d.ts","./node_modules/next/dist/build/build-context.d.ts","./node_modules/next/dist/build/webpack-config.d.ts","./node_modules/next/dist/build/swc/generated-native.d.ts","./node_modules/next/dist/build/define-env.d.ts","./node_modules/next/dist/build/swc/index.d.ts","./node_modules/next/dist/build/swc/types.d.ts","./node_modules/next/dist/server/dev/parse-version-info.d.ts","./node_modules/next/dist/next-devtools/shared/types.d.ts","./node_modules/next/dist/server/dev/dev-indicator-server-state.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/cache-indicator.d.ts","./node_modules/next/dist/server/lib/parse-stack.d.ts","./node_modules/next/dist/next-devtools/server/shared.d.ts","./node_modules/next/dist/next-devtools/shared/stack-frame.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/utils/get-error-by-type.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/container/runtime-error/render-error.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/shared.d.ts","./node_modules/next/dist/server/dev/debug-channel.d.ts","./node_modules/next/dist/server/dev/hot-reloader-types.d.ts","./node_modules/next/dist/server/web/spec-extension/fetch-event.d.ts","./node_modules/next/dist/server/web/spec-extension/response.d.ts","./node_modules/next/dist/build/segment-config/middleware/middleware-config.d.ts","./node_modules/next/dist/server/web/types.d.ts","./node_modules/next/dist/shared/lib/router/utils/parse-url.d.ts","./node_modules/next/dist/server/base-http/node.d.ts","./node_modules/next/dist/server/lib/async-callback-set.d.ts","./node_modules/next/dist/shared/lib/router/utils/route-regex.d.ts","./node_modules/next/dist/shared/lib/router/utils/route-matcher.d.ts","./node_modules/sharp/lib/index.d.ts","./node_modules/next/dist/server/image-optimizer.d.ts","./node_modules/next/dist/server/next-server.d.ts","./node_modules/next/dist/server/lib/types.d.ts","./node_modules/next/dist/server/lib/lru-cache.d.ts","./node_modules/next/dist/server/lib/dev-bundler-service.d.ts","./node_modules/next/dist/server/dev/static-paths-worker.d.ts","./node_modules/next/dist/server/dev/next-dev-server.d.ts","./node_modules/next/dist/server/next.d.ts","./node_modules/next/dist/server/lib/render-server.d.ts","./node_modules/next/dist/server/lib/router-server.d.ts","./node_modules/next/dist/shared/lib/router/utils/path-match.d.ts","./node_modules/next/dist/server/lib/router-utils/filesystem.d.ts","./node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.d.ts","./node_modules/next/dist/server/lib/router-utils/router-server-context.d.ts","./node_modules/next/dist/server/route-modules/route-module.d.ts","./node_modules/next/dist/server/load-components.d.ts","./node_modules/next/dist/server/web/adapter.d.ts","./node_modules/next/dist/server/app-render/types.d.ts","./node_modules/next/dist/build/webpack/loaders/metadata/types.d.ts","./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.d.ts","./node_modules/next/dist/server/lib/app-dir-module.d.ts","./node_modules/next/dist/server/app-render/app-render.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/contexts/entrypoints.d.ts","./node_modules/next/dist/client/components/error-boundary.d.ts","./node_modules/next/dist/client/components/layout-router.d.ts","./node_modules/next/dist/client/components/render-from-template-context.d.ts","./node_modules/next/dist/client/components/client-page.d.ts","./node_modules/next/dist/client/components/client-segment.d.ts","./node_modules/next/dist/client/components/http-access-fallback/error-boundary.d.ts","./node_modules/next/dist/lib/metadata/types/alternative-urls-types.d.ts","./node_modules/next/dist/lib/metadata/types/extra-types.d.ts","./node_modules/next/dist/lib/metadata/types/metadata-types.d.ts","./node_modules/next/dist/lib/metadata/types/manifest-types.d.ts","./node_modules/next/dist/lib/metadata/types/opengraph-types.d.ts","./node_modules/next/dist/lib/metadata/types/twitter-types.d.ts","./node_modules/next/dist/lib/metadata/types/metadata-interface.d.ts","./node_modules/next/dist/lib/metadata/types/resolvers.d.ts","./node_modules/next/dist/lib/metadata/types/icons.d.ts","./node_modules/next/dist/lib/metadata/resolve-metadata.d.ts","./node_modules/next/dist/lib/metadata/metadata.d.ts","./node_modules/next/dist/lib/framework/boundary-components.d.ts","./node_modules/next/dist/server/app-render/rsc/preloads.d.ts","./node_modules/next/dist/server/app-render/rsc/postpone.d.ts","./node_modules/next/dist/server/app-render/rsc/taint.d.ts","./node_modules/next/dist/server/app-render/collect-segment-data.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-validation.d.ts","./node_modules/next/dist/next-devtools/userspace/app/segment-explorer-node.d.ts","./node_modules/next/dist/server/app-render/entry-base.d.ts","./node_modules/next/dist/build/templates/app-page.d.ts","./node_modules/next/dist/server/route-modules/app-page/helpers/prerender-manifest-matcher.d.ts","./node_modules/@types/react/jsx-dev-runtime.d.ts","./node_modules/@types/react/compiler-runtime.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/rsc/entrypoints.d.ts","./node_modules/@types/react-dom/client.d.ts","./node_modules/@types/react-dom/static.d.ts","./node_modules/@types/react-dom/server.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/ssr/entrypoints.d.ts","./node_modules/next/dist/server/route-modules/app-page/module.d.ts","./node_modules/next/dist/server/request/fallback-params.d.ts","./node_modules/next/dist/server/web/spec-extension/image-response.d.ts","./node_modules/next/dist/server/web/spec-extension/user-agent.d.ts","./node_modules/next/dist/server/web/spec-extension/url-pattern.d.ts","./node_modules/next/dist/server/after/index.d.ts","./node_modules/next/dist/server/request/connection.d.ts","./node_modules/next/dist/server/web/exports/index.d.ts","./node_modules/next/dist/server/request-meta.d.ts","./node_modules/next/dist/cli/next-test.d.ts","./node_modules/next/dist/shared/lib/size-limit.d.ts","./node_modules/next/dist/server/config-shared.d.ts","./node_modules/next/dist/server/base-http/index.d.ts","./node_modules/next/dist/server/api-utils/index.d.ts","./node_modules/next/dist/build/adapter/build-complete.d.ts","./node_modules/next/dist/types.d.ts","./node_modules/next/dist/shared/lib/html-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/utils.d.ts","./node_modules/next/dist/pages/_app.d.ts","./node_modules/next/app.d.ts","./node_modules/next/dist/server/web/spec-extension/unstable-cache.d.ts","./node_modules/next/dist/server/web/spec-extension/revalidate.d.ts","./node_modules/next/dist/server/web/spec-extension/unstable-no-store.d.ts","./node_modules/next/dist/server/use-cache/cache-tag.d.ts","./node_modules/next/cache.d.ts","./node_modules/next/dist/pages/_document.d.ts","./node_modules/next/document.d.ts","./node_modules/next/dist/shared/lib/dynamic.d.ts","./node_modules/next/dynamic.d.ts","./node_modules/next/dist/pages/_error.d.ts","./node_modules/next/dist/client/components/catch-error.d.ts","./node_modules/next/dist/api/error.d.ts","./node_modules/next/error.d.ts","./node_modules/next/dist/shared/lib/head.d.ts","./node_modules/next/head.d.ts","./node_modules/next/dist/server/request/cookies.d.ts","./node_modules/next/dist/server/request/headers.d.ts","./node_modules/next/dist/server/request/draft-mode.d.ts","./node_modules/next/headers.d.ts","./node_modules/next/dist/shared/lib/get-img-props.d.ts","./node_modules/next/dist/client/image-component.d.ts","./node_modules/next/dist/shared/lib/image-external.d.ts","./node_modules/next/image.d.ts","./node_modules/next/dist/client/link.d.ts","./node_modules/next/link.d.ts","./node_modules/next/dist/client/components/unrecognized-action-error.d.ts","./node_modules/next/dist/client/components/redirect.d.ts","./node_modules/next/dist/client/components/not-found.d.ts","./node_modules/next/dist/client/components/forbidden.d.ts","./node_modules/next/dist/client/components/unauthorized.d.ts","./node_modules/next/dist/client/components/unstable-rethrow.server.d.ts","./node_modules/next/dist/client/components/unstable-rethrow.d.ts","./node_modules/next/dist/client/components/navigation.react-server.d.ts","./node_modules/next/dist/client/components/navigation.d.ts","./node_modules/next/navigation.d.ts","./node_modules/next/router.d.ts","./node_modules/next/dist/client/script.d.ts","./node_modules/next/script.d.ts","./node_modules/next/dist/compiled/@edge-runtime/primitives/url.d.ts","./node_modules/next/dist/compiled/@vercel/og/satori/index.d.ts","./node_modules/next/dist/compiled/@vercel/og/types.d.ts","./node_modules/next/server.d.ts","./node_modules/next/types/global.d.ts","./node_modules/next/types/compiled.d.ts","./node_modules/next/types.d.ts","./node_modules/next/index.d.ts","./node_modules/next/image-types/global.d.ts","./.next/dev/types/routes.d.ts","./next-env.d.ts","./next.config.ts","./src/data/categories.ts","./src/data/products.ts","./node_modules/redux/dist/redux.d.ts","./node_modules/react-redux/dist/react-redux.d.ts","./node_modules/immer/dist/immer.d.ts","./node_modules/reselect/dist/reselect.d.ts","./node_modules/redux-thunk/dist/redux-thunk.d.ts","./node_modules/@reduxjs/toolkit/dist/uncheckedindexed.ts","./node_modules/@reduxjs/toolkit/dist/index.d.mts","./node_modules/axios/index.d.ts","./src/utils/api.ts","./src/redux/slices/authslice.ts","./src/redux/slices/productslice.ts","./src/redux/slices/orderslice.ts","./src/redux/slices/inquiryslice.ts","./src/redux/slices/userslice.ts","./src/redux/slices/collectionslice.ts","./src/redux/slices/cartslice.ts","./src/redux/store.ts","./src/redux/hooks.ts","./src/hooks/usecart.ts","./src/utils/compressimage.ts","./src/utils/getimageurl.ts","./node_modules/next/dist/compiled/@next/font/dist/types.d.ts","./node_modules/next/dist/compiled/@next/font/dist/google/index.d.ts","./node_modules/next/font/google/index.d.ts","./node_modules/lucide-react/dist/lucide-react.d.ts","./src/components/navbar.tsx","./src/components/footer.tsx","./src/components/announcementbar.tsx","./node_modules/motion-utils/dist/index.d.ts","./node_modules/motion-dom/dist/index.d.ts","./node_modules/framer-motion/dist/types.d-docc-kzb.d.ts","./node_modules/framer-motion/dist/types/index.d.ts","./src/components/cartdrawer.tsx","./src/components/reduxprovider.tsx","./node_modules/goober/goober.d.ts","./node_modules/react-hot-toast/dist/index.d.ts","./src/app/layout.tsx","./src/components/sectionheader.tsx","./src/components/hero.tsx","./src/components/productcard.tsx","./src/app/page.tsx","./src/components/breadcrumbhero.tsx","./src/app/account/page.tsx","./src/components/breadcrumb.tsx","./src/app/account/orders/page.tsx","./src/app/account/orders/[id]/page.tsx","./src/app/account/profile/page.tsx","./src/components/admin/adminsidebar.tsx","./src/app/admin/layout.tsx","./src/app/admin/page.tsx","./node_modules/react-hook-form/dist/constants.d.ts","./node_modules/react-hook-form/dist/utils/createsubject.d.ts","./node_modules/react-hook-form/dist/types/events.d.ts","./node_modules/react-hook-form/dist/types/path/common.d.ts","./node_modules/react-hook-form/dist/types/path/eager.d.ts","./node_modules/react-hook-form/dist/types/path/index.d.ts","./node_modules/react-hook-form/dist/types/fieldarray.d.ts","./node_modules/react-hook-form/dist/types/resolvers.d.ts","./node_modules/react-hook-form/dist/types/form.d.ts","./node_modules/react-hook-form/dist/types/utils.d.ts","./node_modules/react-hook-form/dist/types/fields.d.ts","./node_modules/react-hook-form/dist/types/errors.d.ts","./node_modules/react-hook-form/dist/types/validator.d.ts","./node_modules/react-hook-form/dist/types/controller.d.ts","./node_modules/react-hook-form/dist/types/watch.d.ts","./node_modules/react-hook-form/dist/types/index.d.ts","./node_modules/react-hook-form/dist/controller.d.ts","./node_modules/react-hook-form/dist/form.d.ts","./node_modules/react-hook-form/dist/formstatesubscribe.d.ts","./node_modules/react-hook-form/dist/logic/appenderrors.d.ts","./node_modules/react-hook-form/dist/logic/createformcontrol.d.ts","./node_modules/react-hook-form/dist/logic/index.d.ts","./node_modules/react-hook-form/dist/usecontroller.d.ts","./node_modules/react-hook-form/dist/usefieldarray.d.ts","./node_modules/react-hook-form/dist/useform.d.ts","./node_modules/react-hook-form/dist/useformcontext.d.ts","./node_modules/react-hook-form/dist/useformstate.d.ts","./node_modules/react-hook-form/dist/usewatch.d.ts","./node_modules/react-hook-form/dist/utils/get.d.ts","./node_modules/react-hook-form/dist/utils/set.d.ts","./node_modules/react-hook-form/dist/utils/index.d.ts","./node_modules/react-hook-form/dist/watch.d.ts","./node_modules/react-hook-form/dist/index.d.ts","./node_modules/zod/v3/helpers/typealiases.d.cts","./node_modules/zod/v3/helpers/util.d.cts","./node_modules/zod/v3/zoderror.d.cts","./node_modules/zod/v3/locales/en.d.cts","./node_modules/zod/v3/errors.d.cts","./node_modules/zod/v3/helpers/parseutil.d.cts","./node_modules/zod/v3/helpers/enumutil.d.cts","./node_modules/zod/v3/helpers/errorutil.d.cts","./node_modules/zod/v3/helpers/partialutil.d.cts","./node_modules/zod/v3/standard-schema.d.cts","./node_modules/zod/v3/types.d.cts","./node_modules/zod/v3/external.d.cts","./node_modules/zod/v3/index.d.cts","./node_modules/zod/v4/core/json-schema.d.cts","./node_modules/zod/v4/core/standard-schema.d.cts","./node_modules/zod/v4/core/registries.d.cts","./node_modules/zod/v4/core/to-json-schema.d.cts","./node_modules/zod/v4/core/util.d.cts","./node_modules/zod/v4/core/versions.d.cts","./node_modules/zod/v4/core/schemas.d.cts","./node_modules/zod/v4/core/checks.d.cts","./node_modules/zod/v4/core/errors.d.cts","./node_modules/zod/v4/core/core.d.cts","./node_modules/zod/v4/core/parse.d.cts","./node_modules/zod/v4/core/regexes.d.cts","./node_modules/zod/v4/locales/ar.d.cts","./node_modules/zod/v4/locales/az.d.cts","./node_modules/zod/v4/locales/be.d.cts","./node_modules/zod/v4/locales/bg.d.cts","./node_modules/zod/v4/locales/ca.d.cts","./node_modules/zod/v4/locales/cs.d.cts","./node_modules/zod/v4/locales/da.d.cts","./node_modules/zod/v4/locales/de.d.cts","./node_modules/zod/v4/locales/en.d.cts","./node_modules/zod/v4/locales/eo.d.cts","./node_modules/zod/v4/locales/es.d.cts","./node_modules/zod/v4/locales/fa.d.cts","./node_modules/zod/v4/locales/fi.d.cts","./node_modules/zod/v4/locales/fr.d.cts","./node_modules/zod/v4/locales/fr-ca.d.cts","./node_modules/zod/v4/locales/he.d.cts","./node_modules/zod/v4/locales/hu.d.cts","./node_modules/zod/v4/locales/hy.d.cts","./node_modules/zod/v4/locales/id.d.cts","./node_modules/zod/v4/locales/is.d.cts","./node_modules/zod/v4/locales/it.d.cts","./node_modules/zod/v4/locales/ja.d.cts","./node_modules/zod/v4/locales/ka.d.cts","./node_modules/zod/v4/locales/kh.d.cts","./node_modules/zod/v4/locales/km.d.cts","./node_modules/zod/v4/locales/ko.d.cts","./node_modules/zod/v4/locales/lt.d.cts","./node_modules/zod/v4/locales/mk.d.cts","./node_modules/zod/v4/locales/ms.d.cts","./node_modules/zod/v4/locales/nl.d.cts","./node_modules/zod/v4/locales/no.d.cts","./node_modules/zod/v4/locales/ota.d.cts","./node_modules/zod/v4/locales/ps.d.cts","./node_modules/zod/v4/locales/pl.d.cts","./node_modules/zod/v4/locales/pt.d.cts","./node_modules/zod/v4/locales/ru.d.cts","./node_modules/zod/v4/locales/sl.d.cts","./node_modules/zod/v4/locales/sv.d.cts","./node_modules/zod/v4/locales/ta.d.cts","./node_modules/zod/v4/locales/th.d.cts","./node_modules/zod/v4/locales/tr.d.cts","./node_modules/zod/v4/locales/ua.d.cts","./node_modules/zod/v4/locales/uk.d.cts","./node_modules/zod/v4/locales/ur.d.cts","./node_modules/zod/v4/locales/uz.d.cts","./node_modules/zod/v4/locales/vi.d.cts","./node_modules/zod/v4/locales/zh-cn.d.cts","./node_modules/zod/v4/locales/zh-tw.d.cts","./node_modules/zod/v4/locales/yo.d.cts","./node_modules/zod/v4/locales/index.d.cts","./node_modules/zod/v4/core/doc.d.cts","./node_modules/zod/v4/core/api.d.cts","./node_modules/zod/v4/core/json-schema-processors.d.cts","./node_modules/zod/v4/core/json-schema-generator.d.cts","./node_modules/zod/v4/core/index.d.cts","./node_modules/@hookform/resolvers/zod/dist/zod.d.ts","./node_modules/@hookform/resolvers/zod/dist/index.d.ts","./node_modules/zod/v4/classic/errors.d.cts","./node_modules/zod/v4/classic/parse.d.cts","./node_modules/zod/v4/classic/schemas.d.cts","./node_modules/zod/v4/classic/checks.d.cts","./node_modules/zod/v4/classic/compat.d.cts","./node_modules/zod/v4/classic/from-json-schema.d.cts","./node_modules/zod/v4/classic/iso.d.cts","./node_modules/zod/v4/classic/coerce.d.cts","./node_modules/zod/v4/classic/external.d.cts","./node_modules/zod/index.d.cts","./src/components/admin/emptystate.tsx","./src/components/ui/modal.tsx","./src/app/admin/collections/page.tsx","./src/app/admin/customers/page.tsx","./src/app/admin/inquiries/page.tsx","./src/app/admin/login/page.tsx","./src/app/admin/orders/page.tsx","./src/components/admin/productmodal.tsx","./src/app/admin/products/page.tsx","./src/app/admin/users/page.tsx","./src/app/category/[slug]/page.tsx","./src/app/checkout/page.tsx","./src/app/contact/page.tsx","./src/app/login/page.tsx","./src/app/product/[slug]/page.tsx","./src/context/cartcontext.tsx","./.next/types/cache-life.d.ts","./.next/types/routes.d.ts","./.next/types/validator.ts","./.next/dev/types/cache-life.d.ts","./.next/dev/types/validator.ts","./node_modules/@types/estree/index.d.ts","./node_modules/@types/json-schema/index.d.ts","./node_modules/@types/json5/index.d.ts","./node_modules/@types/use-sync-external-store/index.d.ts"],"fileIdsList":[[97,143,483,484,485,486,726],[97,143,726,729],[97,143,226,527,530,571,575,577,579,580,581,583,584,712,713,714,715,716,718,719,720,721,722,723,724,726,729],[97,143,483,484,485,486,729],[97,143,226,527,571,575,577,579,580,581,583,584,712,713,714,715,716,718,719,720,721,722,723,724,726,727,729],[97,143,528,529,530,726,729],[97,143,226,528,726,729],[97,143,698,726,729],[97,143,617,630,697,726,729],[97,143,535,537,538,539,540,726,729],[97,143,226,726,729],[97,140,143,726,729],[97,142,143,726,729],[143,726,729],[97,143,148,176,726,729],[97,143,144,149,154,162,173,184,726,729],[97,143,144,145,154,162,726,729],[92,93,94,97,143,726,729],[97,143,146,185,726,729],[97,143,147,148,155,163,726,729],[97,143,148,173,181,726,729],[97,143,149,151,154,162,726,729],[97,142,143,150,726,729],[97,143,151,152,726,729],[97,143,153,154,726,729],[97,142,143,154,726,729],[97,143,154,155,156,173,184,726,729],[97,143,154,155,156,169,173,176,726,729],[97,143,151,154,157,162,173,184,726,729],[97,143,154,155,157,158,162,173,181,184,726,729],[97,143,157,159,173,181,184,726,729],[95,96,97,98,99,100,101,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,726,729],[97,143,154,160,726,729],[97,143,161,184,189,726,729],[97,143,151,154,162,173,726,729],[97,143,163,726,729],[97,143,164,726,729],[97,142,143,165,726,729],[97,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,726,729],[97,143,167,726,729],[97,143,168,726,729],[97,143,154,169,170,726,729],[97,143,169,171,185,187,726,729],[97,143,154,173,174,176,726,729],[97,143,175,176,726,729],[97,143,173,174,726,729],[97,143,176,726,729],[97,143,177,726,729],[97,140,143,173,178,726,729],[97,143,154,179,180,726,729],[97,143,179,180,726,729],[97,143,148,162,173,181,726,729],[97,143,182,726,729],[97,143,162,183,726,729],[97,143,157,168,184,726,729],[97,143,148,185,726,729],[97,143,173,186,726,729],[97,143,161,187,726,729],[97,143,188,726,729],[97,138,143,726,729],[97,138,143,154,156,165,173,176,184,187,189,726,729],[97,143,173,190,726,729],[85,89,97,143,192,193,194,196,478,523,726,729],[85,97,143,726,729],[85,89,97,143,192,193,194,195,459,478,523,726,729],[85,89,97,143,192,193,195,196,478,523,726,729],[85,97,143,196,459,460,726,729],[85,97,143,196,459,726,729],[85,89,97,143,193,194,195,196,478,523,726,729],[85,89,97,143,192,194,195,196,478,523,726,729],[83,84,97,143,726,729],[85,97,143,564,726,729],[85,97,143,226,563,564,565,726,729],[84,97,143,726,729],[97,143,563,726,729],[97,143,481,726,729],[97,143,483,484,485,486,726,729],[97,143,429,492,493,726,729],[97,143,201,202,204,216,240,355,366,474,726,729],[97,143,204,235,236,237,239,474,726,729],[97,143,204,372,374,376,377,379,474,476,726,729],[97,143,204,238,275,474,726,729],[97,143,202,204,215,216,222,228,233,354,355,356,365,474,476,726,729],[97,143,474,726,729],[97,143,211,217,236,256,351,726,729],[97,143,204,726,729],[97,143,197,211,217,726,729],[97,143,383,726,729],[97,143,380,381,383,726,729],[97,143,380,382,474,726,729],[97,143,157,256,453,471,726,729],[97,143,157,327,330,346,351,471,726,729],[97,143,157,299,471,726,729],[97,143,359,726,729],[97,143,358,359,360,726,729],[97,143,358,726,729],[91,97,143,157,197,204,216,222,228,234,236,240,241,254,255,322,352,353,366,474,478,726,729],[97,143,201,204,238,275,372,373,378,474,526,726,729],[97,143,238,526,726,729],[97,143,201,255,424,474,526,726,729],[97,143,526,726,729],[97,143,204,238,239,526,726,729],[97,143,375,526,726,729],[97,143,241,354,357,364,726,729],[85,97,143,429,726,729],[97,143,168,211,226,726,729],[97,143,211,226,726,729],[85,97,143,296,726,729],[85,97,143,226,726,729],[85,97,143,217,226,429,726,729],[97,143,211,282,296,297,508,515,726,729],[97,143,281,509,510,511,512,514,726,729],[97,143,332,726,729],[97,143,332,333,726,729],[97,143,215,217,284,285,726,729],[97,143,217,291,292,726,729],[97,143,217,286,294,726,729],[97,143,291,726,729],[97,143,209,217,284,285,286,287,288,289,290,291,294,726,729],[97,143,217,284,291,292,293,295,726,729],[97,143,217,285,287,288,726,729],[97,143,285,287,290,292,726,729],[97,143,513,726,729],[97,143,217,726,729],[85,97,143,205,502,726,729],[85,97,143,184,726,729],[85,97,143,238,273,726,729],[85,97,143,238,366,726,729],[97,143,271,276,726,729],[85,97,143,272,480,726,729],[97,143,556,726,729],[85,89,97,143,157,192,193,194,195,196,478,522,726,729],[97,143,157,217,726,729],[97,143,157,216,221,302,319,361,362,366,421,423,474,475,726,729],[97,143,254,363,726,729],[97,143,478,726,729],[97,143,203,726,729],[85,97,143,208,211,426,442,444,726,729],[97,143,168,211,426,441,442,443,525,726,729],[97,143,435,436,437,438,439,440,726,729],[97,143,437,726,729],[97,143,441,726,729],[97,143,226,390,391,393,726,729],[85,97,143,217,384,385,386,387,392,726,729],[97,143,390,392,726,729],[97,143,388,726,729],[97,143,389,726,729],[85,97,143,226,272,480,726,729],[85,97,143,226,479,480,726,729],[85,97,143,226,480,726,729],[97,143,319,320,726,729],[97,143,320,726,729],[97,143,157,475,480,726,729],[97,143,349,726,729],[97,142,143,348,726,729],[97,143,211,217,223,225,327,340,344,346,423,426,463,464,471,475,726,729],[97,143,217,266,288,726,729],[97,143,327,338,341,346,726,729],[85,97,143,208,211,327,330,346,349,383,430,431,432,433,434,445,446,447,448,449,450,451,452,526,726,729],[97,143,208,211,236,327,334,335,336,339,340,726,729],[97,143,173,217,236,338,345,426,427,471,726,729],[97,143,342,726,729],[97,143,157,168,205,217,221,231,263,264,267,319,322,387,421,422,463,474,475,476,478,526,726,729],[97,143,208,209,211,726,729],[97,143,327,726,729],[97,142,143,236,263,264,321,322,323,324,325,326,475,726,729],[97,143,346,726,729],[97,142,143,210,211,221,225,261,327,334,335,336,337,338,341,342,343,344,345,464,726,729],[97,143,157,261,262,334,475,476,726,729],[97,143,236,264,319,322,327,423,475,726,729],[97,143,157,474,476,726,729],[97,143,157,173,471,475,476,726,729],[97,143,157,168,197,211,216,223,225,228,231,238,258,263,264,265,266,267,302,303,305,308,310,313,314,315,316,318,366,421,423,471,474,475,476,726,729],[97,143,157,173,726,729],[97,143,204,205,206,234,471,472,473,478,480,526,726,729],[97,143,201,202,474,726,729],[97,143,395,726,729],[97,143,157,173,184,213,379,383,384,385,386,387,393,394,526,726,729],[97,143,168,184,197,211,213,225,228,264,303,308,318,319,372,399,400,401,407,410,411,421,423,471,474,726,729],[97,143,228,234,241,254,264,322,474,726,729],[97,143,157,184,205,216,225,264,405,471,474,726,729],[97,143,425,726,729],[97,143,157,395,408,409,418,726,729],[97,143,471,474,726,729],[97,143,324,464,726,729],[97,143,225,263,366,480,726,729],[97,143,157,168,203,308,368,372,401,407,410,413,471,726,729],[97,143,157,241,254,372,414,726,729],[97,143,204,265,366,416,474,476,726,729],[97,143,157,184,387,474,726,729],[97,143,157,238,265,366,367,368,377,395,415,417,474,726,729],[91,97,143,157,263,420,478,480,726,729],[97,143,317,421,726,729],[97,143,157,168,211,214,216,217,223,225,231,240,241,254,264,267,303,305,315,318,319,366,399,400,401,402,404,406,421,423,471,480,726,729],[97,143,157,173,241,407,412,418,471,726,729],[97,143,244,245,246,247,248,249,250,251,252,253,726,729],[97,143,258,309,726,729],[97,143,311,726,729],[97,143,309,726,729],[97,143,311,312,726,729],[97,143,157,215,216,217,221,222,475,726,729],[97,143,157,168,203,205,223,227,263,266,267,301,421,471,476,478,480,726,729],[97,143,157,168,184,207,214,215,225,227,264,419,464,470,475,726,729],[97,143,334,726,729],[97,143,335,726,729],[97,143,217,228,463,726,729],[97,143,336,726,729],[97,143,210,726,729],[97,143,212,224,726,729],[97,143,157,212,216,223,726,729],[97,143,219,224,726,729],[97,143,220,726,729],[97,143,212,213,726,729],[97,143,212,268,726,729],[97,143,212,726,729],[97,143,214,258,307,726,729],[97,143,306,726,729],[97,143,211,213,214,726,729],[97,143,214,304,726,729],[97,143,211,213,726,729],[97,143,263,366,726,729],[97,143,463,726,729],[97,143,157,184,223,225,229,263,366,420,423,426,427,428,454,455,458,462,464,471,475,726,729],[97,143,277,280,282,283,296,297,726,729],[85,97,143,194,196,226,456,457,726,729],[85,97,143,194,196,226,456,457,461,726,729],[97,143,350,726,729],[97,143,236,257,262,263,327,328,329,330,331,333,346,347,349,352,420,423,474,476,726,729],[97,143,296,726,729],[97,143,157,301,471,726,729],[97,143,301,726,729],[97,143,157,223,269,298,300,302,420,471,478,480,726,729],[97,143,277,278,279,280,282,283,296,297,479,726,729],[91,97,143,157,168,184,212,213,225,231,263,264,267,366,418,419,421,471,474,475,478,726,729],[97,143,208,211,218,726,729],[97,143,262,264,396,399,726,729],[97,143,262,397,465,466,467,468,469,726,729],[97,143,157,258,474,726,729],[97,143,157,726,729],[97,143,261,346,726,729],[97,143,260,726,729],[97,143,262,315,726,729],[97,143,259,261,474,726,729],[97,143,157,207,262,396,397,398,471,474,475,726,729],[85,97,143,211,217,295,726,729],[85,97,143,209,726,729],[97,143,199,200,726,729],[85,97,143,205,726,729],[85,97,143,211,281,726,729],[85,91,97,143,263,267,478,480,726,729],[97,143,205,502,503,726,729],[85,97,143,276,726,729],[85,97,143,168,184,203,270,272,274,275,480,726,729],[97,143,211,238,475,726,729],[97,143,211,403,726,729],[85,97,143,155,157,168,201,203,276,374,478,479,726,729],[85,97,143,192,193,194,195,196,478,523,726,729],[85,86,87,88,89,97,143,726,729],[97,143,148,726,729],[97,143,369,370,371,726,729],[97,143,369,726,729],[85,89,97,143,157,159,168,191,192,193,194,195,196,197,203,231,236,413,441,476,477,480,523,726,729],[97,143,488,726,729],[97,143,490,726,729],[97,143,494,726,729],[97,143,557,726,729],[97,143,496,726,729],[97,143,498,499,500,726,729],[97,143,504,726,729],[90,97,143,482,487,489,491,495,497,501,505,507,517,518,520,524,525,526,527,726,729],[97,143,506,726,729],[97,143,516,726,729],[97,143,272,726,729],[97,143,519,726,729],[97,142,143,262,396,397,399,465,466,468,469,521,523,726,729],[97,143,191,726,729],[85,97,143,600,726,729],[97,143,600,601,602,603,606,607,608,609,610,611,612,615,616,726,729],[97,143,600,726,729],[97,143,604,605,726,729],[85,97,143,597,600,726,729],[97,143,594,595,597,726,729],[97,143,590,593,595,597,726,729],[97,143,594,597,726,729],[85,97,143,585,586,587,590,591,592,594,595,596,597,726,729],[97,143,587,590,591,592,593,594,595,596,597,598,599,726,729],[97,143,594,726,729],[97,143,588,594,595,726,729],[97,143,588,589,726,729],[97,143,593,595,596,726,729],[97,143,593,726,729],[97,143,585,590,593,595,596,726,729],[85,97,143,590,593,594,595,726,729],[97,143,613,614,726,729],[85,97,143,569,726,729],[85,97,143,535,726,729],[97,143,535,726,729],[97,143,173,191,726,729],[97,110,114,143,184,726,729],[97,110,143,173,184,726,729],[97,105,143,726,729],[97,107,110,143,181,184,726,729],[97,143,162,181,726,729],[97,105,143,191,726,729],[97,107,110,143,162,184,726,729],[97,102,103,106,109,143,154,173,184,726,729],[97,110,117,143,726,729],[97,102,108,143,726,729],[97,110,131,132,143,726,729],[97,106,110,143,176,184,191,726,729],[97,131,143,191,726,729],[97,104,105,143,191,726,729],[97,110,143,726,729],[97,104,105,106,107,108,109,110,111,112,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,132,133,134,135,136,137,143,726,729],[97,110,125,143,726,729],[97,110,117,118,143,726,729],[97,108,110,118,119,143,726,729],[97,109,143,726,729],[97,102,105,110,143,726,729],[97,110,114,118,119,143,726,729],[97,114,143,726,729],[97,108,110,113,143,184,726,729],[97,102,107,110,117,143,726,729],[97,143,173,726,729],[97,105,110,131,143,189,191,726,729],[97,143,708,726,729],[97,143,620,621,726,729],[97,143,618,619,620,622,623,628,726,729],[97,143,619,620,726,729],[97,143,628,726,729],[97,143,629,726,729],[97,143,620,726,729],[97,143,618,619,620,623,624,625,626,627,726,729],[97,143,618,619,630,726,729],[97,143,697,726,729],[97,143,697,702,726,729],[97,143,692,695,697,700,701,702,703,704,705,706,707,726,729],[97,143,631,633,702,726,729],[97,143,697,700,726,729],[97,143,632,697,701,726,729],[97,143,633,635,637,638,639,640,726,729],[97,143,635,637,639,640,726,729],[97,143,635,637,639,726,729],[97,143,632,635,637,638,640,726,729],[97,143,631,633,634,635,636,637,638,639,640,641,642,692,693,694,695,696,726,729],[97,143,631,633,634,637,726,729],[97,143,633,634,637,726,729],[97,143,637,640,726,729],[97,143,631,632,634,635,636,638,639,640,726,729],[97,143,631,632,633,637,697,726,729],[97,143,637,638,639,640,726,729],[97,143,639,726,729],[97,143,643,644,645,646,647,648,649,650,651,652,653,654,655,656,657,658,659,660,661,662,663,664,665,666,667,668,669,670,671,672,673,674,675,676,677,678,679,680,681,682,683,684,685,686,687,688,689,690,691,726,729],[85,97,143,226,507,517,543,552,555,559,566,578,726,729],[85,97,143,226,507,517,546,552,555,559,566,578,726,729],[85,97,143,226,507,517,544,550,552,559,566,576,726,729],[85,97,143,226,517,543,544,552,559,566,578,726,729],[85,97,143,226,549,551,552,555,559,566,570,617,699,709,710,711,726,729],[85,97,143,226,548,551,552,559,566,570,710,726,729],[85,97,143,226,547,551,552,555,559,566,570,710,726,729],[85,97,143,226,517,552,566,582,726,729],[85,97,143,226,507,517,544,552,559,566,617,699,709,726,729],[85,97,143,226,517,546,551,552,555,559,566,570,711,726,729],[85,97,143,226,507,545,546,552,559,726,729],[85,97,143,226,545,551,552,555,559,566,570,710,711,717,726,729],[85,97,143,226,507,548,551,552,559,570,710,726,729],[85,97,143,226,507,534,545,549,551,552,559,566,574,726,729],[85,97,143,226,507,517,520,543,546,550,552,553,555,559,566,576,726,729],[85,97,143,226,507,547,552,559,566,726,729],[85,97,143,226,517,525,558,560,561,562,567,568,570,726,729],[85,97,143,226,507,534,545,547,549,551,552,553,555,559,566,572,573,574,726,729],[85,97,143,226,507,534,545,552,553,554,555,559,566,574,726,729],[85,97,143,226,507,517,544,552,559,726,729],[85,97,143,226,559,566,726,729],[85,97,143,226,549,551,552,555,559,566,617,699,709,726,729],[85,97,143,226,507,559,566,726,729],[85,97,143,226,507,550,553,555,559,566,726,729],[97,143,226,507,551,552,559,726,729],[85,97,143,226,566,726,729],[85,97,143,226,507,549,551,552,553,559,726,729],[97,143,226,507,533,534,553,555,559,726,729],[97,143,226,536,551,726,729],[97,143,226,507,726,729],[85,97,143,226,534,726,729],[97,143,226,550,552,726,729],[97,143,226,541,543,726,729],[97,143,226,541,544,545,546,547,548,549,550,726,729],[97,143,226,542,726,729]],"fileInfos":[{"version":"c430d44666289dae81f30fa7b2edebf186ecc91a2d4c71266ea6ae76388792e1","affectsGlobalScope":true,"impliedFormat":1},{"version":"45b7ab580deca34ae9729e97c13cfd999df04416a79116c3bfb483804f85ded4","impliedFormat":1},{"version":"3facaf05f0c5fc569c5649dd359892c98a85557e3e0c847964caeb67076f4d75","impliedFormat":1},{"version":"e44bb8bbac7f10ecc786703fe0a6a4b952189f908707980ba8f3c8975a760962","impliedFormat":1},{"version":"5e1c4c362065a6b95ff952c0eab010f04dcd2c3494e813b493ecfd4fcb9fc0d8","impliedFormat":1},{"version":"68d73b4a11549f9c0b7d352d10e91e5dca8faa3322bfb77b661839c42b1ddec7","impliedFormat":1},{"version":"5efce4fc3c29ea84e8928f97adec086e3dc876365e0982cc8479a07954a3efd4","impliedFormat":1},{"version":"feecb1be483ed332fad555aff858affd90a48ab19ba7272ee084704eb7167569","impliedFormat":1},{"version":"ee7bad0c15b58988daa84371e0b89d313b762ab83cb5b31b8a2d1162e8eb41c2","impliedFormat":1},{"version":"27bdc30a0e32783366a5abeda841bc22757c1797de8681bbe81fbc735eeb1c10","impliedFormat":1},{"version":"8fd575e12870e9944c7e1d62e1f5a73fcf23dd8d3a321f2a2c74c20d022283fe","impliedFormat":1},{"version":"2ab096661c711e4a81cc464fa1e6feb929a54f5340b46b0a07ac6bbf857471f0","impliedFormat":1},{"version":"080941d9f9ff9307f7e27a83bcd888b7c8270716c39af943532438932ec1d0b9","affectsGlobalScope":true,"impliedFormat":1},{"version":"2e80ee7a49e8ac312cc11b77f1475804bee36b3b2bc896bead8b6e1266befb43","affectsGlobalScope":true,"impliedFormat":1},{"version":"c57796738e7f83dbc4b8e65132f11a377649c00dd3eee333f672b8f0a6bea671","affectsGlobalScope":true,"impliedFormat":1},{"version":"dc2df20b1bcdc8c2d34af4926e2c3ab15ffe1160a63e58b7e09833f616efff44","affectsGlobalScope":true,"impliedFormat":1},{"version":"515d0b7b9bea2e31ea4ec968e9edd2c39d3eebf4a2d5cbd04e88639819ae3b71","affectsGlobalScope":true,"impliedFormat":1},{"version":"0559b1f683ac7505ae451f9a96ce4c3c92bdc71411651ca6ddb0e88baaaad6a3","affectsGlobalScope":true,"impliedFormat":1},{"version":"0dc1e7ceda9b8b9b455c3a2d67b0412feab00bd2f66656cd8850e8831b08b537","affectsGlobalScope":true,"impliedFormat":1},{"version":"ce691fb9e5c64efb9547083e4a34091bcbe5bdb41027e310ebba8f7d96a98671","affectsGlobalScope":true,"impliedFormat":1},{"version":"8d697a2a929a5fcb38b7a65594020fcef05ec1630804a33748829c5ff53640d0","affectsGlobalScope":true,"impliedFormat":1},{"version":"4ff2a353abf8a80ee399af572debb8faab2d33ad38c4b4474cff7f26e7653b8d","affectsGlobalScope":true,"impliedFormat":1},{"version":"fb0f136d372979348d59b3f5020b4cdb81b5504192b1cacff5d1fbba29378aa1","affectsGlobalScope":true,"impliedFormat":1},{"version":"d15bea3d62cbbdb9797079416b8ac375ae99162a7fba5de2c6c505446486ac0a","affectsGlobalScope":true,"impliedFormat":1},{"version":"68d18b664c9d32a7336a70235958b8997ebc1c3b8505f4f1ae2b7e7753b87618","affectsGlobalScope":true,"impliedFormat":1},{"version":"eb3d66c8327153d8fa7dd03f9c58d351107fe824c79e9b56b462935176cdf12a","affectsGlobalScope":true,"impliedFormat":1},{"version":"38f0219c9e23c915ef9790ab1d680440d95419ad264816fa15009a8851e79119","affectsGlobalScope":true,"impliedFormat":1},{"version":"69ab18c3b76cd9b1be3d188eaf8bba06112ebbe2f47f6c322b5105a6fbc45a2e","affectsGlobalScope":true,"impliedFormat":1},{"version":"a680117f487a4d2f30ea46f1b4b7f58bef1480456e18ba53ee85c2746eeca012","affectsGlobalScope":true,"impliedFormat":1},{"version":"2f11ff796926e0832f9ae148008138ad583bd181899ab7dd768a2666700b1893","affectsGlobalScope":true,"impliedFormat":1},{"version":"4de680d5bb41c17f7f68e0419412ca23c98d5749dcaaea1896172f06435891fc","affectsGlobalScope":true,"impliedFormat":1},{"version":"954296b30da6d508a104a3a0b5d96b76495c709785c1d11610908e63481ee667","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac9538681b19688c8eae65811b329d3744af679e0bdfa5d842d0e32524c73e1c","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a969edff4bd52585473d24995c5ef223f6652d6ef46193309b3921d65dd4376","affectsGlobalScope":true,"impliedFormat":1},{"version":"9e9fbd7030c440b33d021da145d3232984c8bb7916f277e8ffd3dc2e3eae2bdb","affectsGlobalScope":true,"impliedFormat":1},{"version":"811ec78f7fefcabbda4bfa93b3eb67d9ae166ef95f9bff989d964061cbf81a0c","affectsGlobalScope":true,"impliedFormat":1},{"version":"717937616a17072082152a2ef351cb51f98802fb4b2fdabd32399843875974ca","affectsGlobalScope":true,"impliedFormat":1},{"version":"d7e7d9b7b50e5f22c915b525acc5a49a7a6584cf8f62d0569e557c5cfc4b2ac2","affectsGlobalScope":true,"impliedFormat":1},{"version":"71c37f4c9543f31dfced6c7840e068c5a5aacb7b89111a4364b1d5276b852557","affectsGlobalScope":true,"impliedFormat":1},{"version":"576711e016cf4f1804676043e6a0a5414252560eb57de9faceee34d79798c850","affectsGlobalScope":true,"impliedFormat":1},{"version":"89c1b1281ba7b8a96efc676b11b264de7a8374c5ea1e6617f11880a13fc56dc6","affectsGlobalScope":true,"impliedFormat":1},{"version":"74f7fa2d027d5b33eb0471c8e82a6c87216223181ec31247c357a3e8e2fddc5b","affectsGlobalScope":true,"impliedFormat":1},{"version":"d6d7ae4d1f1f3772e2a3cde568ed08991a8ae34a080ff1151af28b7f798e22ca","affectsGlobalScope":true,"impliedFormat":1},{"version":"063600664504610fe3e99b717a1223f8b1900087fab0b4cad1496a114744f8df","affectsGlobalScope":true,"impliedFormat":1},{"version":"934019d7e3c81950f9a8426d093458b65d5aff2c7c1511233c0fd5b941e608ab","affectsGlobalScope":true,"impliedFormat":1},{"version":"52ada8e0b6e0482b728070b7639ee42e83a9b1c22d205992756fe020fd9f4a47","affectsGlobalScope":true,"impliedFormat":1},{"version":"3bdefe1bfd4d6dee0e26f928f93ccc128f1b64d5d501ff4a8cf3c6371200e5e6","affectsGlobalScope":true,"impliedFormat":1},{"version":"59fb2c069260b4ba00b5643b907ef5d5341b167e7d1dbf58dfd895658bda2867","affectsGlobalScope":true,"impliedFormat":1},{"version":"639e512c0dfc3fad96a84caad71b8834d66329a1f28dc95e3946c9b58176c73a","affectsGlobalScope":true,"impliedFormat":1},{"version":"368af93f74c9c932edd84c58883e736c9e3d53cec1fe24c0b0ff451f529ceab1","affectsGlobalScope":true,"impliedFormat":1},{"version":"af3dd424cf267428f30ccfc376f47a2c0114546b55c44d8c0f1d57d841e28d74","affectsGlobalScope":true,"impliedFormat":1},{"version":"995c005ab91a498455ea8dfb63aa9f83fa2ea793c3d8aa344be4a1678d06d399","affectsGlobalScope":true,"impliedFormat":1},{"version":"959d36cddf5e7d572a65045b876f2956c973a586da58e5d26cde519184fd9b8a","affectsGlobalScope":true,"impliedFormat":1},{"version":"965f36eae237dd74e6cca203a43e9ca801ce38824ead814728a2807b1910117d","affectsGlobalScope":true,"impliedFormat":1},{"version":"3925a6c820dcb1a06506c90b1577db1fdbf7705d65b62b99dce4be75c637e26b","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a3d63ef2b853447ec4f749d3f368ce642264246e02911fcb1590d8c161b8005","affectsGlobalScope":true,"impliedFormat":1},{"version":"8cdf8847677ac7d20486e54dd3fcf09eda95812ac8ace44b4418da1bbbab6eb8","affectsGlobalScope":true,"impliedFormat":1},{"version":"8444af78980e3b20b49324f4a16ba35024fef3ee069a0eb67616ea6ca821c47a","affectsGlobalScope":true,"impliedFormat":1},{"version":"3287d9d085fbd618c3971944b65b4be57859f5415f495b33a6adc994edd2f004","affectsGlobalScope":true,"impliedFormat":1},{"version":"b4b67b1a91182421f5df999988c690f14d813b9850b40acd06ed44691f6727ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"df83c2a6c73228b625b0beb6669c7ee2a09c914637e2d35170723ad49c0f5cd4","affectsGlobalScope":true,"impliedFormat":1},{"version":"436aaf437562f276ec2ddbee2f2cdedac7664c1e4c1d2c36839ddd582eeb3d0a","affectsGlobalScope":true,"impliedFormat":1},{"version":"8e3c06ea092138bf9fa5e874a1fdbc9d54805d074bee1de31b99a11e2fec239d","affectsGlobalScope":true,"impliedFormat":1},{"version":"87dc0f382502f5bbce5129bdc0aea21e19a3abbc19259e0b43ae038a9fc4e326","affectsGlobalScope":true,"impliedFormat":1},{"version":"b1cb28af0c891c8c96b2d6b7be76bd394fddcfdb4709a20ba05a7c1605eea0f9","affectsGlobalScope":true,"impliedFormat":1},{"version":"2fef54945a13095fdb9b84f705f2b5994597640c46afeb2ce78352fab4cb3279","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac77cb3e8c6d3565793eb90a8373ee8033146315a3dbead3bde8db5eaf5e5ec6","affectsGlobalScope":true,"impliedFormat":1},{"version":"56e4ed5aab5f5920980066a9409bfaf53e6d21d3f8d020c17e4de584d29600ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"4ece9f17b3866cc077099c73f4983bddbcb1dc7ddb943227f1ec070f529dedd1","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a6282c8827e4b9a95f4bf4f5c205673ada31b982f50572d27103df8ceb8013c","affectsGlobalScope":true,"impliedFormat":1},{"version":"1c9319a09485199c1f7b0498f2988d6d2249793ef67edda49d1e584746be9032","affectsGlobalScope":true,"impliedFormat":1},{"version":"e3a2a0cee0f03ffdde24d89660eba2685bfbdeae955a6c67e8c4c9fd28928eeb","affectsGlobalScope":true,"impliedFormat":1},{"version":"811c71eee4aa0ac5f7adf713323a5c41b0cf6c4e17367a34fbce379e12bbf0a4","affectsGlobalScope":true,"impliedFormat":1},{"version":"51ad4c928303041605b4d7ae32e0c1ee387d43a24cd6f1ebf4a2699e1076d4fa","affectsGlobalScope":true,"impliedFormat":1},{"version":"60037901da1a425516449b9a20073aa03386cce92f7a1fd902d7602be3a7c2e9","affectsGlobalScope":true,"impliedFormat":1},{"version":"d4b1d2c51d058fc21ec2629fff7a76249dec2e36e12960ea056e3ef89174080f","affectsGlobalScope":true,"impliedFormat":1},{"version":"22adec94ef7047a6c9d1af3cb96be87a335908bf9ef386ae9fd50eeb37f44c47","affectsGlobalScope":true,"impliedFormat":1},{"version":"196cb558a13d4533a5163286f30b0509ce0210e4b316c56c38d4c0fd2fb38405","affectsGlobalScope":true,"impliedFormat":1},{"version":"73f78680d4c08509933daf80947902f6ff41b6230f94dd002ae372620adb0f60","affectsGlobalScope":true,"impliedFormat":1},{"version":"c5239f5c01bcfa9cd32f37c496cf19c61d69d37e48be9de612b541aac915805b","affectsGlobalScope":true,"impliedFormat":1},{"version":"8e7f8264d0fb4c5339605a15daadb037bf238c10b654bb3eee14208f860a32ea","affectsGlobalScope":true,"impliedFormat":1},{"version":"782dec38049b92d4e85c1585fbea5474a219c6984a35b004963b00beb1aab538","affectsGlobalScope":true,"impliedFormat":1},{"version":"7e29f41b158de217f94cb9676bf9cbd0cd9b5a46e1985141ed36e075c52bf6ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac51dd7d31333793807a6abaa5ae168512b6131bd41d9c5b98477fc3b7800f9f","impliedFormat":1},{"version":"dc0a7f107690ee5cd8afc8dbf05c4df78085471ce16bdd9881642ec738bc81fe","impliedFormat":1},{"version":"acd8fd5090ac73902278889c38336ff3f48af6ba03aa665eb34a75e7ba1dccc4","impliedFormat":1},{"version":"d6258883868fb2680d2ca96bc8b1352cab69874581493e6d52680c5ffecdb6cc","impliedFormat":1},{"version":"1b61d259de5350f8b1e5db06290d31eaebebc6baafd5f79d314b5af9256d7153","impliedFormat":1},{"version":"f258e3960f324a956fc76a3d3d9e964fff2244ff5859dcc6ce5951e5413ca826","impliedFormat":1},{"version":"643f7232d07bf75e15bd8f658f664d6183a0efaca5eb84b48201c7671a266979","impliedFormat":1},{"version":"21da358700a3893281ce0c517a7a30cbd46be020d9f0c3f2834d0a8ad1f5fc75","impliedFormat":1},{"version":"70521b6ab0dcba37539e5303104f29b721bfb2940b2776da4cc818c07e1fefc1","affectsGlobalScope":true,"impliedFormat":1},{"version":"ab41ef1f2cdafb8df48be20cd969d875602483859dc194e9c97c8a576892c052","affectsGlobalScope":true,"impliedFormat":1},{"version":"d153a11543fd884b596587ccd97aebbeed950b26933ee000f94009f1ab142848","affectsGlobalScope":true,"impliedFormat":1},{"version":"21d819c173c0cf7cc3ce57c3276e77fd9a8a01d35a06ad87158781515c9a438a","impliedFormat":1},{"version":"98cffbf06d6bab333473c70a893770dbe990783904002c4f1a960447b4b53dca","affectsGlobalScope":true,"impliedFormat":1},{"version":"ba481bca06f37d3f2c137ce343c7d5937029b2468f8e26111f3c9d9963d6568d","affectsGlobalScope":true,"impliedFormat":1},{"version":"6d9ef24f9a22a88e3e9b3b3d8c40ab1ddb0853f1bfbd5c843c37800138437b61","affectsGlobalScope":true,"impliedFormat":1},{"version":"1db0b7dca579049ca4193d034d835f6bfe73096c73663e5ef9a0b5779939f3d0","affectsGlobalScope":true,"impliedFormat":1},{"version":"9798340ffb0d067d69b1ae5b32faa17ab31b82466a3fc00d8f2f2df0c8554aaa","affectsGlobalScope":true,"impliedFormat":1},{"version":"f26b11d8d8e4b8028f1c7d618b22274c892e4b0ef5b3678a8ccbad85419aef43","affectsGlobalScope":true,"impliedFormat":1},{"version":"5929864ce17fba74232584d90cb721a89b7ad277220627cc97054ba15a98ea8f","impliedFormat":1},{"version":"763fe0f42b3d79b440a9b6e51e9ba3f3f91352469c1e4b3b67bfa4ff6352f3f4","impliedFormat":1},{"version":"25c8056edf4314820382a5fdb4bb7816999acdcb929c8f75e3f39473b87e85bc","impliedFormat":1},{"version":"c464d66b20788266e5353b48dc4aa6bc0dc4a707276df1e7152ab0c9ae21fad8","impliedFormat":1},{"version":"78d0d27c130d35c60b5e5566c9f1e5be77caf39804636bc1a40133919a949f21","impliedFormat":1},{"version":"c6fd2c5a395f2432786c9cb8deb870b9b0e8ff7e22c029954fabdd692bff6195","impliedFormat":1},{"version":"1d6e127068ea8e104a912e42fc0a110e2aa5a66a356a917a163e8cf9a65e4a75","impliedFormat":1},{"version":"5ded6427296cdf3b9542de4471d2aa8d3983671d4cac0f4bf9c637208d1ced43","impliedFormat":1},{"version":"7f182617db458e98fc18dfb272d40aa2fff3a353c44a89b2c0ccb3937709bfb5","impliedFormat":1},{"version":"cadc8aced301244057c4e7e73fbcae534b0f5b12a37b150d80e5a45aa4bebcbd","impliedFormat":1},{"version":"385aab901643aa54e1c36f5ef3107913b10d1b5bb8cbcd933d4263b80a0d7f20","impliedFormat":1},{"version":"9670d44354bab9d9982eca21945686b5c24a3f893db73c0dae0fd74217a4c219","impliedFormat":1},{"version":"0b8a9268adaf4da35e7fa830c8981cfa22adbbe5b3f6f5ab91f6658899e657a7","impliedFormat":1},{"version":"11396ed8a44c02ab9798b7dca436009f866e8dae3c9c25e8c1fbc396880bf1bb","impliedFormat":1},{"version":"ba7bc87d01492633cb5a0e5da8a4a42a1c86270e7b3d2dea5d156828a84e4882","impliedFormat":1},{"version":"4893a895ea92c85345017a04ed427cbd6a1710453338df26881a6019432febdd","impliedFormat":1},{"version":"c21dc52e277bcfc75fac0436ccb75c204f9e1b3fa5e12729670910639f27343e","impliedFormat":1},{"version":"13f6f39e12b1518c6650bbb220c8985999020fe0f21d818e28f512b7771d00f9","impliedFormat":1},{"version":"9b5369969f6e7175740bf51223112ff209f94ba43ecd3bb09eefff9fd675624a","impliedFormat":1},{"version":"4fe9e626e7164748e8769bbf74b538e09607f07ed17c2f20af8d680ee49fc1da","impliedFormat":1},{"version":"24515859bc0b836719105bb6cc3d68255042a9f02a6022b3187948b204946bd2","impliedFormat":1},{"version":"ea0148f897b45a76544ae179784c95af1bd6721b8610af9ffa467a518a086a43","impliedFormat":1},{"version":"24c6a117721e606c9984335f71711877293a9651e44f59f3d21c1ea0856f9cc9","impliedFormat":1},{"version":"dd3273ead9fbde62a72949c97dbec2247ea08e0c6952e701a483d74ef92d6a17","impliedFormat":1},{"version":"405822be75ad3e4d162e07439bac80c6bcc6dbae1929e179cf467ec0b9ee4e2e","impliedFormat":1},{"version":"0db18c6e78ea846316c012478888f33c11ffadab9efd1cc8bcc12daded7a60b6","impliedFormat":1},{"version":"e61be3f894b41b7baa1fbd6a66893f2579bfad01d208b4ff61daef21493ef0a8","impliedFormat":1},{"version":"bd0532fd6556073727d28da0edfd1736417a3f9f394877b6d5ef6ad88fba1d1a","impliedFormat":1},{"version":"89167d696a849fce5ca508032aabfe901c0868f833a8625d5a9c6e861ef935d2","impliedFormat":1},{"version":"615ba88d0128ed16bf83ef8ccbb6aff05c3ee2db1cc0f89ab50a4939bfc1943f","impliedFormat":1},{"version":"a4d551dbf8746780194d550c88f26cf937caf8d56f102969a110cfaed4b06656","impliedFormat":1},{"version":"8bd86b8e8f6a6aa6c49b71e14c4ffe1211a0e97c80f08d2c8cc98838006e4b88","impliedFormat":1},{"version":"317e63deeb21ac07f3992f5b50cdca8338f10acd4fbb7257ebf56735bf52ab00","impliedFormat":1},{"version":"4732aec92b20fb28c5fe9ad99521fb59974289ed1e45aecb282616202184064f","impliedFormat":1},{"version":"2e85db9e6fd73cfa3d7f28e0ab6b55417ea18931423bd47b409a96e4a169e8e6","impliedFormat":1},{"version":"c46e079fe54c76f95c67fb89081b3e399da2c7d109e7dca8e4b58d83e332e605","impliedFormat":1},{"version":"bf67d53d168abc1298888693338cb82854bdb2e69ef83f8a0092093c2d562107","impliedFormat":1},{"version":"b52476feb4a0cbcb25e5931b930fc73cb6643fb1a5060bf8a3dda0eeae5b4b68","affectsGlobalScope":true,"impliedFormat":1},{"version":"e2677634fe27e87348825bb041651e22d50a613e2fdf6a4a3ade971d71bac37e","impliedFormat":1},{"version":"7394959e5a741b185456e1ef5d64599c36c60a323207450991e7a42e08911419","impliedFormat":1},{"version":"8c0bcd6c6b67b4b503c11e91a1fb91522ed585900eab2ab1f61bba7d7caa9d6f","impliedFormat":1},{"version":"8cd19276b6590b3ebbeeb030ac271871b9ed0afc3074ac88a94ed2449174b776","affectsGlobalScope":true,"impliedFormat":1},{"version":"696eb8d28f5949b87d894b26dc97318ef944c794a9a4e4f62360cd1d1958014b","impliedFormat":1},{"version":"3f8fa3061bd7402970b399300880d55257953ee6d3cd408722cb9ac20126460c","impliedFormat":1},{"version":"35ec8b6760fd7138bbf5809b84551e31028fb2ba7b6dc91d95d098bf212ca8b4","affectsGlobalScope":true,"impliedFormat":1},{"version":"5524481e56c48ff486f42926778c0a3cce1cc85dc46683b92b1271865bcf015a","impliedFormat":1},{"version":"68bd56c92c2bd7d2339457eb84d63e7de3bd56a69b25f3576e1568d21a162398","affectsGlobalScope":true,"impliedFormat":1},{"version":"3e93b123f7c2944969d291b35fed2af79a6e9e27fdd5faa99748a51c07c02d28","impliedFormat":1},{"version":"9d19808c8c291a9010a6c788e8532a2da70f811adb431c97520803e0ec649991","impliedFormat":1},{"version":"87aad3dd9752067dc875cfaa466fc44246451c0c560b820796bdd528e29bef40","impliedFormat":1},{"version":"4aacb0dd020eeaef65426153686cc639a78ec2885dc72ad220be1d25f1a439df","impliedFormat":1},{"version":"f0bd7e6d931657b59605c44112eaf8b980ba7f957a5051ed21cb93d978cf2f45","impliedFormat":1},{"version":"8db0ae9cb14d9955b14c214f34dae1b9ef2baee2fe4ce794a4cd3ac2531e3255","affectsGlobalScope":true,"impliedFormat":1},{"version":"15fc6f7512c86810273af28f224251a5a879e4261b4d4c7e532abfbfc3983134","impliedFormat":1},{"version":"58adba1a8ab2d10b54dc1dced4e41f4e7c9772cbbac40939c0dc8ce2cdb1d442","impliedFormat":1},{"version":"641942a78f9063caa5d6b777c99304b7d1dc7328076038c6d94d8a0b81fc95c1","impliedFormat":1},{"version":"714435130b9015fae551788df2a88038471a5a11eb471f27c4ede86552842bc9","impliedFormat":1},{"version":"855cd5f7eb396f5f1ab1bc0f8580339bff77b68a770f84c6b254e319bbfd1ac7","impliedFormat":1},{"version":"5650cf3dace09e7c25d384e3e6b818b938f68f4e8de96f52d9c5a1b3db068e86","impliedFormat":1},{"version":"1354ca5c38bd3fd3836a68e0f7c9f91f172582ba30ab15bb8c075891b91502b7","affectsGlobalScope":true,"impliedFormat":1},{"version":"27fdb0da0daf3b337c5530c5f266efe046a6ceb606e395b346974e4360c36419","impliedFormat":1},{"version":"2d2fcaab481b31a5882065c7951255703ddbe1c0e507af56ea42d79ac3911201","impliedFormat":1},{"version":"a192fe8ec33f75edbc8d8f3ed79f768dfae11ff5735e7fe52bfa69956e46d78d","impliedFormat":1},{"version":"ca867399f7db82df981d6915bcbb2d81131d7d1ef683bc782b59f71dda59bc85","affectsGlobalScope":true,"impliedFormat":1},{"version":"372413016d17d804e1d139418aca0c68e47a83fb6669490857f4b318de8cccb3","affectsGlobalScope":true,"impliedFormat":1},{"version":"9e043a1bc8fbf2a255bccf9bf27e0f1caf916c3b0518ea34aa72357c0afd42ec","impliedFormat":1},{"version":"b4f70ec656a11d570e1a9edce07d118cd58d9760239e2ece99306ee9dfe61d02","impliedFormat":1},{"version":"3bc2f1e2c95c04048212c569ed38e338873f6a8593930cf5a7ef24ffb38fc3b6","impliedFormat":1},{"version":"6e70e9570e98aae2b825b533aa6292b6abd542e8d9f6e9475e88e1d7ba17c866","impliedFormat":1},{"version":"f9d9d753d430ed050dc1bf2667a1bab711ccbb1c1507183d794cc195a5b085cc","impliedFormat":1},{"version":"9eece5e586312581ccd106d4853e861aaaa1a39f8e3ea672b8c3847eedd12f6e","impliedFormat":1},{"version":"47ab634529c5955b6ad793474ae188fce3e6163e3a3fb5edd7e0e48f14435333","impliedFormat":1},{"version":"37ba7b45141a45ce6e80e66f2a96c8a5ab1bcef0fc2d0f56bb58df96ec67e972","impliedFormat":1},{"version":"45650f47bfb376c8a8ed39d4bcda5902ab899a3150029684ee4c10676d9fbaee","impliedFormat":1},{"version":"fad4e3c207fe23922d0b2d06b01acbfb9714c4f2685cf80fd384c8a100c82fd0","affectsGlobalScope":true,"impliedFormat":1},{"version":"74cf591a0f63db318651e0e04cb55f8791385f86e987a67fd4d2eaab8191f730","impliedFormat":1},{"version":"5eab9b3dc9b34f185417342436ec3f106898da5f4801992d8ff38ab3aff346b5","impliedFormat":1},{"version":"12ed4559eba17cd977aa0db658d25c4047067444b51acfdcbf38470630642b23","affectsGlobalScope":true,"impliedFormat":1},{"version":"f3ffabc95802521e1e4bcba4c88d8615176dc6e09111d920c7a213bdda6e1d65","impliedFormat":1},{"version":"809821b8a065e3234a55b3a9d7846231ed18d66dd749f2494c66288d890daf7f","impliedFormat":1},{"version":"ae56f65caf3be91108707bd8dfbccc2a57a91feb5daabf7165a06a945545ed26","impliedFormat":1},{"version":"a136d5de521da20f31631a0a96bf712370779d1c05b7015d7019a9b2a0446ca9","impliedFormat":1},{"version":"c3b41e74b9a84b88b1dca61ec39eee25c0dbc8e7d519ba11bb070918cfacf656","affectsGlobalScope":true,"impliedFormat":1},{"version":"4737a9dc24d0e68b734e6cfbcea0c15a2cfafeb493485e27905f7856988c6b29","affectsGlobalScope":true,"impliedFormat":1},{"version":"36d8d3e7506b631c9582c251a2c0b8a28855af3f76719b12b534c6edf952748d","impliedFormat":1},{"version":"1ca69210cc42729e7ca97d3a9ad48f2e9cb0042bada4075b588ae5387debd318","impliedFormat":1},{"version":"f5ebe66baaf7c552cfa59d75f2bfba679f329204847db3cec385acda245e574e","impliedFormat":1},{"version":"ed59add13139f84da271cafd32e2171876b0a0af2f798d0c663e8eeb867732cf","affectsGlobalScope":true,"impliedFormat":1},{"version":"b7c5e2ea4a9749097c347454805e933844ed207b6eefec6b7cfd418b5f5f7b28","impliedFormat":1},{"version":"b1810689b76fd473bd12cc9ee219f8e62f54a7d08019a235d07424afbf074d25","impliedFormat":1},{"version":"2beff543f6e9a9701df88daeee3cdd70a34b4a1c11cb4c734472195a5cb2af54","impliedFormat":1},{"version":"2e07abf27aa06353d46f4448c0bbac73431f6065eef7113128a5cd804d0c384d","impliedFormat":1},{"version":"be1cc4d94ea60cbe567bc29ed479d42587bf1e6cba490f123d329976b0fe4ee5","impliedFormat":1},{"version":"42bc0e1a903408137c3df2b06dfd7e402cdab5bbfa5fcfb871b22ebfdb30bd0b","impliedFormat":1},{"version":"9894dafe342b976d251aac58e616ac6df8db91fb9d98934ff9dd103e9e82578f","impliedFormat":1},{"version":"413df52d4ea14472c2fa5bee62f7a40abd1eb49be0b9722ee01ee4e52e63beb2","impliedFormat":1},{"version":"db6d2d9daad8a6d83f281af12ce4355a20b9a3e71b82b9f57cddcca0a8964a96","impliedFormat":1},{"version":"446a50749b24d14deac6f8843e057a6355dd6437d1fac4f9e5ce4a5071f34bff","impliedFormat":1},{"version":"182e9fcbe08ac7c012e0a6e2b5798b4352470be29a64fdc114d23c2bab7d5106","impliedFormat":1},{"version":"2f4e6b4d39426a1b85ecf4bdeb9dddbf4d9b3397d95d8555d46f925c9519ec7d","impliedFormat":1},{"version":"78a2869ad0cbf3f9045dda08c0d4562b7e1b2bfe07b19e0db072f5c3c56e9584","impliedFormat":1},{"version":"89d5d28d4f57e000b836ac273079be1b75710e28ce14750d081fb420d37e2ca5","impliedFormat":1},{"version":"fd4e24ccff3966390600d7f5d6aa1fed5a512e92ada735ea5fbc933d313ad3d3","impliedFormat":1},{"version":"b7cddfe1aa6b86b5fad3c9ccb30d05b3ccb165aebbf112f48d2d8a5f69dd98b1","impliedFormat":1},{"version":"a86f82d646a739041d6702101afa82dcb935c416dd93cbca7fd754fd0282ce1f","impliedFormat":1},{"version":"ad0d1d75d129b1c80f911be438d6b61bfa8703930a8ff2be2f0e1f8a91841c64","impliedFormat":1},{"version":"bd2c7ada3dee03653d3f601011d30072194bc3970cd93208f9588fbdc0c69347","impliedFormat":1},{"version":"e480da45d32313e7174b265674da504f075f59ef326852f0c5a5d863b438ae85","impliedFormat":1},{"version":"ad54850f61fcf5d014e11be80d2f46fea9265cfa7e77456da876f7833ef81769","impliedFormat":1},{"version":"6f7c9e8bd2b5b6a080b07080065f94900bd3c7e5ebbd3047bc33fcce2fab1dd8","impliedFormat":1},{"version":"3e7efde639c6a6c3edb9847b3f61e308bf7a69685b92f665048c45132f51c218","impliedFormat":1},{"version":"df45ca1176e6ac211eae7ddf51336dc075c5314bc5c253651bae639defd5eec5","impliedFormat":1},{"version":"8a0e762ceb20c7e72504feef83d709468a70af4abccb304f32d6b9bac1129b2c","impliedFormat":1},{"version":"da5950ee2a90721df6f3fba45f5d05308f7e4c35835392215dd2cd404505e2de","impliedFormat":1},{"version":"ce75b1aebb33d510ff28af960a9221410a3eaf7f18fc5f21f9404075fba77256","impliedFormat":1},{"version":"f42d5fed19610d485c646a0c430e768115567d078c7fc855c57b0c578b3d6cd3","impliedFormat":1},{"version":"ee8df1cb8d0faaca4013a1b442e99130769ce06f438d18d510fed95890067563","impliedFormat":1},{"version":"d5630f2ad9b4541e5ce891648121022f9412ecdca1820baa1f0104f70fd7eff7","impliedFormat":1},{"version":"4d15375ab13497104bc8fe56fdef2b5fd6853f29255737d23a33fa306ff7fd69","impliedFormat":1},{"version":"2cd3fc1d0d6a1e85baffd2d4f50f5efb192b5446eef567e97c94765402f0aad4","impliedFormat":1},{"version":"e4cbf2f1e89ecccaddd2c045e600ae41b732295953fb06247c7dcbc2d281ed30","impliedFormat":1},{"version":"27bbdb7509a5bb564020321fc5485764d0db3230a10d2336ae5ce2c1d401b0e7","impliedFormat":1},{"version":"8c1697d90c394a6fd955b98eae01238eff628e129b987a68aea10f898a48e7da","impliedFormat":1},{"version":"7580e62139cb2b44a0270c8d01abcbfcba2819a02514a527342447fa69b34ef1","impliedFormat":1},{"version":"42c169fb8c2d42f4f668c624a9a11e719d5d07dacbebb63cbcf7ef365b0a75b3","impliedFormat":1},{"version":"f374cb24e93e7798c4d9e83ff872fa52d2cdb36306392b840a6ddf46cb925cb6","impliedFormat":1},{"version":"d10d63718e1646c2279e3b33831f82c60e31f622b2b7020f1196409ca4c09242","impliedFormat":1},{"version":"106c6025f1d99fd468fd8bf6e5bda724e11e5905a4076c5d29790b6c3745e50c","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"148679c6d0f449210a96e7d2e562d589e56fcde87f843a92808b3ff103f1a774","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"02436d7e9ead85e09a2f8e27d5f47d9464bced31738dec138ca735390815c9f0","impliedFormat":1},{"version":"f8d5ff8eafd37499f2b6a98659dd9b45a321de186b8db6b6142faed0fea3de77","impliedFormat":1},{"version":"c86fe861cf1b4c46a0fb7d74dffe596cf679a2e5e8b1456881313170f092e3fa","impliedFormat":1},{"version":"a22dd55aa4d39906252000ab8e8a1b83b195eef7f4274eb51e457c1f11cf6580","impliedFormat":1},{"version":"540cc83ab772a2c6bc509fe1354f314825b5dba3669efdfbe4693ecd3048e34f","impliedFormat":1},{"version":"121b0696021ab885c570bbeb331be8ad82c6efe2f3b93a6e63874901bebc13e3","impliedFormat":1},{"version":"612d9da66bb046a9c1e2e8d026245ded881fc4b9f98cbfae714415d57ee0ae0b","impliedFormat":1},{"version":"32c2ad9494dad5d11b0564a619fee18f388db6c1e9e2cd3c360b3122549691eb","impliedFormat":1},{"version":"6c301d40aec56a74ec7bd7324e31a728dadf9bfba3e96def02938d3d973534ec","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"aa14cee20aa0db79f8df101fc027d929aec10feb5b8a8da3b9af3895d05b7ba2","impliedFormat":1},{"version":"493c700ac3bd317177b2eb913805c87fe60d4e8af4fb39c41f04ba81fae7e170","impliedFormat":1},{"version":"aeb554d876c6b8c818da2e118d8b11e1e559adbe6bf606cc9a611c1b6c09f670","impliedFormat":1},{"version":"acf5a2ac47b59ca07afa9abbd2b31d001bf7448b041927befae2ea5b1951d9f9","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"d71291eff1e19d8762a908ba947e891af44749f3a2cbc5bd2ec4b72f72ea795f","impliedFormat":1},{"version":"c0480e03db4b816dff2682b347c95f2177699525c54e7e6f6aa8ded890b76be7","impliedFormat":1},{"version":"25a5f6fd3a2243c859eddc99ab5fba11d970af2fe7a5df9c32b7668f76f97b01","impliedFormat":1},{"version":"8d207e1f9d2c30d6f77dfa693f3827c3fbf0d89240297e10bdfe1041d433df68","impliedFormat":1},{"version":"b620391fe8060cf9bedc176a4d01366e6574d7a71e0ac0ab344a4e76576fcbb8","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"2652448ac55a2010a1f71dd141f828b682298d39728f9871e1cdf8696ef443fd","impliedFormat":1},{"version":"d682336018141807fb602709e2d95a192828fcb8d5ba06dda3833a8ea98f69e3","impliedFormat":1},{"version":"6124e973eab8c52cabf3c07575204efc1784aca6b0a30c79eb85fe240a857efa","impliedFormat":1},{"version":"0d891735a21edc75df51f3eb995e18149e119d1ce22fd40db2b260c5960b914e","impliedFormat":1},{"version":"3b414b99a73171e1c4b7b7714e26b87d6c5cb03d200352da5342ab4088a54c85","impliedFormat":1},{"version":"4fbd3116e00ed3a6410499924b6403cc9367fdca303e34838129b328058ede40","impliedFormat":1},{"version":"9c82171d836c47486074e4ca8e059735bf97b205e70b196535b5efd40cbe1bc5","impliedFormat":1},{"version":"8c70ddc0c22d85e56011d49fddfaae3405eb53d47b59327b9dd589e82df672e7","impliedFormat":1},{"version":"2f9c89cbb29d362290531b48880a4024f258c6033aaeb7e59fbc62db26819650","impliedFormat":1},{"version":"a365c4d3bed3be4e4e20793c999c51f5cd7e6792322f14650949d827fbcd170f","impliedFormat":1},{"version":"c5426dbfc1cf90532f66965a7aa8c1136a78d4d0f96d8180ecbfc11d7722f1a5","impliedFormat":1},{"version":"65a15fc47900787c0bd18b603afb98d33ede930bed1798fc984d5ebb78b26cf9","impliedFormat":1},{"version":"9d202701f6e0744adb6314d03d2eb8fc994798fc83d91b691b75b07626a69801","impliedFormat":1},{"version":"de9d2df7663e64e3a91bf495f315a7577e23ba088f2949d5ce9ec96f44fba37d","impliedFormat":1},{"version":"c7af78a2ea7cb1cd009cfb5bdb48cd0b03dad3b54f6da7aab615c2e9e9d570c5","impliedFormat":1},{"version":"1ee45496b5f8bdee6f7abc233355898e5bf9bd51255db65f5ff7ede617ca0027","impliedFormat":1},{"version":"273782b8454e78f6a8b30d2cfbf6860499c930595095fcc1689637115f0eddda","affectsGlobalScope":true,"impliedFormat":1},{"version":"3fbdd025f9d4d820414417eeb4107ffa0078d454a033b506e22d3a23bc3d9c41","affectsGlobalScope":true,"impliedFormat":1},{"version":"dba114fb6a32b355a9cfc26ca2276834d72fe0e94cd2c3494005547025015369","impliedFormat":1},{"version":"a8f8e6ab2fa07b45251f403548b78eaf2022f3c2254df3dc186cb2671fe4996d","affectsGlobalScope":true,"impliedFormat":1},{"version":"fa6c12a7c0f6b84d512f200690bfc74819e99efae69e4c95c4cd30f6884c526e","impliedFormat":1},{"version":"f1c32f9ce9c497da4dc215c3bc84b722ea02497d35f9134db3bb40a8d918b92b","impliedFormat":1},{"version":"b73c319af2cc3ef8f6421308a250f328836531ea3761823b4cabbd133047aefa","affectsGlobalScope":true,"impliedFormat":1},{"version":"e433b0337b8106909e7953015e8fa3f2d30797cea27141d1c5b135365bb975a6","impliedFormat":1},{"version":"9f9bb6755a8ce32d656ffa4763a8144aa4f274d6b69b59d7c32811031467216e","impliedFormat":1},{"version":"5c32bdfbd2d65e8fffbb9fbda04d7165e9181b08dad61154961852366deb7540","impliedFormat":1},{"version":"ddff7fc6edbdc5163a09e22bf8df7bef75f75369ebd7ecea95ba55c4386e2441","impliedFormat":1},{"version":"0c05e9842ec4f8b7bfebfd3ca61604bb8c914ba8da9b5337c4f25da427a005f2","impliedFormat":1},{"version":"faed7a5153215dbd6ebe76dfdcc0af0cfe760f7362bed43284be544308b114cf","impliedFormat":1},{"version":"7029e566b8df176f703fb59fd437a38670c7a0e02c58b2d66dfb5b2e2b2defdb","impliedFormat":1},{"version":"7f2aa4d4989a82530aaac3f72b3dceca90e9c25bee0b1a327e8a08a1262435ad","impliedFormat":1},{"version":"d96b39301d0ded3f1a27b47759676a33a02f6f5049bfcbde81e533fd10f50dcb","impliedFormat":1},{"version":"e9f147ecca73d9346a4c073432843c159ccbe50bdcb678a78f6da10eae2cecf4","impliedFormat":1},{"version":"de061f7d72bd65c06fc1419f841dfdcb29a8e22fe6fa527d1e6eb20b897d4de0","impliedFormat":1},{"version":"663beafc2446079574570cba86e9b15f986f908ddb1b01274509970126fee945","impliedFormat":1},{"version":"a3102887d5058bf4cb5b37fa6964c09e9527c42053b3b5c642b89878620748de","impliedFormat":1},{"version":"0aaaa1727edd29673d85c9b26d7ca4d54e5407a48586903c51b48b7f7d196f61","impliedFormat":1},{"version":"d35bca0b261bff02635758c48e8ab99c61c420d0dfabbcf467e847171d876b7d","impliedFormat":1},{"version":"3bc12c40d90c342ff88a3d876996c555ed5cbee5fe8c3308a240b321f401ee46","impliedFormat":1},{"version":"ba130768aae855a5477e9e148e5c879548e6e7ccbcc56fd1934c8a18ea5b7569","impliedFormat":1},{"version":"2e4f37ffe8862b14d8e24ae8763daaa8340c0df0b859d9a9733def0eee7562d9","impliedFormat":1},{"version":"d38530db0601215d6d767f280e3a3c54b2a83b709e8d9001acb6f61c67e965fc","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"b499af2054a037a162b3b72cd886f48bbf32a3502c865c6e29fac7d2ab3ce0b5","impliedFormat":1},{"version":"b83cb14474fa60c5f3ec660146b97d122f0735627f80d82dd03e8caa39b4388c","impliedFormat":1},{"version":"d87f90d2df7b638204d81d6c57e1f2a8cc9317c45ca331c691c375649aa9255c","impliedFormat":1},{"version":"7274fbffbd7c9589d8d0ffba68157237afd5cecff1e99881ea3399127e60572f","impliedFormat":1},{"version":"b73cbf0a72c8800cf8f96a9acfe94f3ad32ca71342a8908b8ae484d61113f647","impliedFormat":1},{"version":"bae6dd176832f6423966647382c0d7ba9e63f8c167522f09a982f086cd4e8b23","impliedFormat":1},{"version":"20865ac316b8893c1a0cc383ccfc1801443fbcc2a7255be166cf90d03fac88c9","impliedFormat":1},{"version":"c9958eb32126a3843deedda8c22fb97024aa5d6dd588b90af2d7f2bfac540f23","impliedFormat":1},{"version":"461d0ad8ae5f2ff981778af912ba71b37a8426a33301daa00f21c6ccb27f8156","impliedFormat":1},{"version":"e927c2c13c4eaf0a7f17e6022eee8519eb29ef42c4c13a31e81a611ab8c95577","impliedFormat":1},{"version":"fcafff163ca5e66d3b87126e756e1b6dfa8c526aa9cd2a2b0a9da837d81bbd72","impliedFormat":1},{"version":"70246ad95ad8a22bdfe806cb5d383a26c0c6e58e7207ab9c431f1cb175aca657","impliedFormat":1},{"version":"f00f3aa5d64ff46e600648b55a79dcd1333458f7a10da2ed594d9f0a44b76d0b","impliedFormat":1},{"version":"772d8d5eb158b6c92412c03228bd9902ccb1457d7a705b8129814a5d1a6308fc","impliedFormat":1},{"version":"802e797bcab5663b2c9f63f51bdf67eff7c41bc64c0fd65e6da3e7941359e2f7","impliedFormat":1},{"version":"b01bd582a6e41457bc56e6f0f9de4cb17f33f5f3843a7cf8210ac9c18472fb0f","impliedFormat":1},{"version":"8b4327413e5af38cd8cb97c59f48c3c866015d5d642f28518e3a891c469f240e","impliedFormat":1},{"version":"4cceef18d7f088e797a463e90b7a9dad10c6bc667724b7686e3e740ae00122be","impliedFormat":1},{"version":"7ee86fbb3754388e004de0ef9e6505485ddfb3be7640783d6d015711c03d302d","impliedFormat":1},{"version":"cc1954b539604b1e562319119ac7e888172208b32ca873f9a357a92c826bd046","impliedFormat":1},{"version":"a67b87d0281c97dfc1197ef28dfe397fc2c865ccd41f7e32b53f647184cc7307","impliedFormat":1},{"version":"771ffb773f1ddd562492a6b9aaca648192ac3f056f0e1d997678ff97dbb6bf9b","impliedFormat":1},{"version":"43e96a3d5d1411ab40ba2f61d6a3192e58177bcf3b133a80ad2a16591611726d","impliedFormat":1},{"version":"232f70c0cf2b432f3a6e56a8dc3417103eb162292a9fd376d51a3a9ea5fbbf6f","impliedFormat":1},{"version":"bb8f2dbc03533abca2066ce4655c119bff353dd4514375beb93c08590c03e023","impliedFormat":1},{"version":"706dd95827e7ebaabda91d5db2b755233e0952d98570e9c032b0f066a15c1177","affectsGlobalScope":true,"impliedFormat":1},{"version":"0b103e9abfe82d14c0ad06a55d9f91d6747154ef7cacc73cf27ecad2bfb3afcf","impliedFormat":1},{"version":"990b8fad2327b77e6920cc792af320e8867e68f02ce849b12c0a6ab9a1aebb09","impliedFormat":1},{"version":"5eb8cd1cb0c9143d74a8190b577c522720878c31aef67d866fcd29973f83e955","impliedFormat":1},{"version":"120599fd965257b1f4d0ff794bc696162832d9d8467224f4665f713a3119078b","impliedFormat":1},{"version":"43ba4f2fa8c698f5c304d21a3ef596741e8e85a810b7c1f9b692653791d8d97a","impliedFormat":1},{"version":"5433f33b0a20300cca35d2f229a7fc20b0e8477c44be2affeb21cb464af60c76","impliedFormat":1},{"version":"db036c56f79186da50af66511d37d9fe77fa6793381927292d17f81f787bb195","impliedFormat":1},{"version":"a6805fcafed712aea7759f8bc731014f9d22738c1d6ef9d43b8091d1d48346d5","impliedFormat":1},{"version":"c49469a5349b3cc1965710b5b0f98ed6c028686aa8450bcb3796728873eb923e","impliedFormat":1},{"version":"4a889f2c763edb4d55cb624257272ac10d04a1cad2ed2948b10ed4a7fda2a428","impliedFormat":1},{"version":"7bb79aa2fead87d9d56294ef71e056487e848d7b550c9a367523ee5416c44cfa","impliedFormat":1},{"version":"d88ea80a6447d7391f52352ec97e56b52ebec934a4a4af6e2464cfd8b39c3ba8","impliedFormat":1},{"version":"142617b3cdf902b69c6464c9fbd942b60ab3e733ca18c032b19e0f7e2adbefe8","impliedFormat":1},{"version":"0b603555f1881f87256ffd6344d3e3ed6d466c2e701eabf381f28be8c2125892","impliedFormat":1},{"version":"897e4f7662488e3ecc79e743bdd3b78f13bdb69a97851afa5b440c4211e32ea9","impliedFormat":1},{"version":"e2e1c6d3b2d93add5200bd7bc1a8cccb4e446836b2111ece45db8683a2c765de","impliedFormat":1},{"version":"251b03d5cd243854ce870d9a9a39f491faf69898c5d6b5eee28cc7649c57417b","impliedFormat":1},{"version":"27ff4196654e6373c9af16b6165120e2dd2169f9ad6abb5c935af5abd8c7938c","impliedFormat":1},{"version":"2c4de79f406d137390608e8c0a44fba2ff8e00bacfcae7c9d1781fef10e9440d","impliedFormat":1},{"version":"07ba23a10465791be5d22deaf5ef7de7658774ddff53721e5ea17fedea1bc721","impliedFormat":1},{"version":"dca8c645c5afeb03b1ecedbf16323f33e7d0afaa6256c8e047e6e38087a97f53","impliedFormat":1},{"version":"775f181bd4a533d6f8b5e55ec1d9f1624559720ae8a70e9432258da26b38d27c","impliedFormat":1},{"version":"796273b2edc72e78a04e86d7c58ae94d370ab93a0ddf40b1aa85a37a1c29ecd7","impliedFormat":1},{"version":"5df15a69187d737d6d8d066e189ae4f97e41f4d53712a46b2710ff9f8563ec9f","impliedFormat":1},{"version":"9109a1291dd4b9f1541bea81ee11c247a2ca9e1ea89f87f13aa1811c3c069616","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"622694a8522b46f6310c2a9b5d2530dde1e2854cb5829354e6d1ff8f371cf469","impliedFormat":1},{"version":"cd8ce8d68567f62dd580b3c3c37777ac3f5b81944c7417f5ea83030eab533385","impliedFormat":1},{"version":"e374d1eaa05b7dc38580062942ac8351ce79cbe11f6dbce4946a582a5680582d","impliedFormat":1},{"version":"9e2739b32f741859263fdba0244c194ca8e96da49b430377930b8f721d77c000","impliedFormat":1},{"version":"a9e6c0ff3f8186fccd05752cf75fc94e147c02645087ac6de5cc16403323d870","impliedFormat":1},{"version":"49af4b52f0d4d2304c5f2c6fe5fab3e153e0acc38830d0202821b877c097dd02","impliedFormat":1},{"version":"49c346823ba6d4b12278c12c977fb3a31c06b9ca719015978cb145eb86da1c61","impliedFormat":1},{"version":"bfac6e50eaa7e73bb66b7e052c38fdc8ccfc8dbde2777648642af33cf349f7f1","impliedFormat":1},{"version":"92f7c1a4da7fbfd67a2228d1687d5c2e1faa0ba865a94d3550a3941d7527a45d","impliedFormat":1},{"version":"f53b120213a9289d9a26f5af90c4c686dd71d91487a0aa5451a38366c70dc64b","impliedFormat":1},{"version":"e68b8e5a1df7c1be2bc105141456ecba70215806e1c28bfbc5c12bfce4be6e68","impliedFormat":1},{"version":"511c8f02329808d47d00b859c532ae9115590048b17325a946c74dac48428650","impliedFormat":1},{"version":"57d67b72e06059adc5e9454de26bbfe567d412b962a501d263c75c2db430f40e","impliedFormat":1},{"version":"b5f9e66625783eefcbe3d2da074b2e7ba2066d61ce3fc6ef4f22805ad946cab4","impliedFormat":1},{"version":"e37115962d284b9f7a37c2bdd2add50f88365dde41f5e0ff591ffc48a8ec7575","impliedFormat":1},{"version":"6459054aabb306821a043e02b89d54da508e3a6966601a41e71c166e4ea1474f","impliedFormat":1},{"version":"bb37588926aba35c9283fe8d46ebf4e79ffe976343105f5c6d45f282793352b2","impliedFormat":1},{"version":"f89488602bec98a142072fae7ea5ba99431a569ff580c64b7be39896474799d8","impliedFormat":1},{"version":"bbbc47961f39a57df103cf4ca3bb8f8732b4b6678a18225a0aa76d59c466956c","impliedFormat":1},{"version":"2e6114a7dd6feeef85b2c80120fdbfb59a5529c0dcc5bfa8447b6996c97a69f5","impliedFormat":1},{"version":"2ffb043dc5163458e473b7010859f86e01dc4edffcae0a93d885d028b426a546","impliedFormat":1},{"version":"c8f004e6036aa1c764ad4ec543cf89a5c1893a9535c80ef3f2b653e370de45e6","impliedFormat":1},{"version":"dd80b1e600d00f5c6a6ba23f455b84a7db121219e68f89f10552c54ba46e4dc9","impliedFormat":1},{"version":"b064c36f35de7387d71c599bfcf28875849a1dbc733e82bd26cae3d1cd060521","impliedFormat":1},{"version":"05c7280d72f3ed26f346cbe7cbbbb002fb7f15739197cbbee6ab3fd1a6cb9347","impliedFormat":1},{"version":"8de9fe97fa9e00ec00666fa77ab6e91b35d25af8ca75dabcb01e14ad3299b150","impliedFormat":1},{"version":"04b7b2e0832dfd3c31e81df3975e8d8fda28e7ff999b0aa2932608a8f6661d5c","impliedFormat":1},{"version":"ca2d34c6ed5cbd3070b8b6f32f42ae54adcc6499c1e4b99f0a5798b3f27cc653","impliedFormat":1},{"version":"9ec68995e66dd6b9dac834bf5ae85fde802714ea2e82151a5d1d53ef01b463ef","impliedFormat":1},{"version":"5c4d626b4902f2ef8a1cc146d761d276cef988016dc674e3b98fbad70e64bc9f","impliedFormat":1},{"version":"fdfaa0aad899524962e2955287b5b991ffe3be50f64e02eb60c933ca44644a94","impliedFormat":1},{"version":"53c972a0f9bc3a4ec70fff7314123ea8cfcf75b3703046f767d2dc1eea87b2fb","impliedFormat":1},{"version":"f974e4a06953682a2c15d5bd5114c0284d5abf8bc0fe4da25cb9159427b70072","impliedFormat":1},{"version":"50256e9c31318487f3752b7ac12ff365c8949953e04568009c8705db802776fb","impliedFormat":1},{"version":"7d73b24e7bf31dfb8a931ca6c4245f6bb0814dfae17e4b60c9e194a631fe5f7b","impliedFormat":1},{"version":"d130c5f73768de51402351d5dc7d1b36eaec980ca697846e53156e4ea9911476","impliedFormat":1},{"version":"413586add0cfe7369b64979d4ec2ed56c3f771c0667fbde1bf1f10063ede0b08","impliedFormat":1},{"version":"06472528e998d152375ad3bd8ebcb69ff4694fd8d2effaf60a9d9f25a37a097a","impliedFormat":1},{"version":"7303b45138d2511035056a5901a1490ebdcbf055cbb1276f8629c5121cbe733e","impliedFormat":1},{"version":"27f874cd5327507eeff699a74567f60c1215b94509f4308633a7b01922471ed2","impliedFormat":1},{"version":"a401617604fa1f6ce437b81689563dfdc377069e4c58465dbd8d16069aede0a5","impliedFormat":1},{"version":"2c6cf04bc525caf6546e859e8ef10bfb9573837ec0bc5ec7b53a7b1b8ca72781","impliedFormat":1},{"version":"8695dec09ad439b0ceef3776ea68a232e381135b516878f0901ed2ea114fd0fe","impliedFormat":1},{"version":"304b44b1e97dd4c94697c3313df89a578dca4930a104454c99863f1784a54357","impliedFormat":1},{"version":"0a437ae178f999b46b6153d79095b60c42c996bc0458c04955f1c996dc68b971","impliedFormat":1},{"version":"74b2a5e5197bd0f2e0077a1ea7c07455bbea67b87b0869d9786d55104006784f","impliedFormat":1},{"version":"4a7baeb6325920044f66c0f8e5e6f1f52e06e6d87588d837bdf44feb6f35c664","impliedFormat":1},{"version":"87cc05fe13108f02e12da7e3efd8e360fef78d96a0c9e11408ea1b1b9fb3e03d","impliedFormat":1},{"version":"1abbf67c218d23c2ce76887caac2df6c7dab3d97ba2b65348432b876f510002a","impliedFormat":1},{"version":"1a82deef4c1d39f6882f28d275cad4c01f907b9b39be9cbc472fcf2cf051e05b","impliedFormat":1},{"version":"4b20fcf10a5413680e39f5666464859fc56b1003e7dfe2405ced82371ebd49b6","impliedFormat":1},{"version":"c06ef3b2569b1c1ad99fcd7fe5fba8d466e2619da5375dfa940a94e0feea899b","impliedFormat":1},{"version":"f7d628893c9fa52ba3ab01bcb5e79191636c4331ee5667ecc6373cbccff8ae12","impliedFormat":1},{"version":"1d879125d1ec570bf04bc1f362fdbe0cb538315c7ac4bcfcdf0c1e9670846aa6","impliedFormat":1},{"version":"8bd496cf710d4873d15e4891a5dbf945673e3321ca74cf75187e347fd5ed295e","impliedFormat":1},{"version":"a6dba407fc287f1e25454e75028c91bbc00675f2d1c4e8b3edcc36c08611a486","impliedFormat":1},{"version":"d663134457d8d669ae0df34eabd57028bddc04fc444c4bc04bc5215afc91e1f4","impliedFormat":1},{"version":"e91f7b1344577a02f051b9b471f33044fef8334a76dc9e1de003d17595a5219b","impliedFormat":1},{"version":"c0723195c85e19656d6b5b9fdb81d3f3403c1ae4679e722c6ea058c516b38d12","impliedFormat":1},{"version":"186eea74805194f04e41038fc5eca653788b9dedbab7c2d7d17e10139622dd92","impliedFormat":1},{"version":"71d9eb4c4e99456b78ae182fb20a5dfc20eb1667f091dbb9335b3c017dd1c783","impliedFormat":1},{"version":"cfa846a7b7847a1d973605fbb8c91f47f3a0f0643c18ac05c47077ebc72e71c7","impliedFormat":1},{"version":"1594da19968752a22b2ac48c2d0e60575700e745c577a8a4a676b841238ad5bb","impliedFormat":1},{"version":"e0cee12109e0a10a4c3d6769fcc7644b7c1ea7f52365bea51728f5af29f8a137","impliedFormat":1},{"version":"7d4254b4c6c67a29d5e7f65e67d72540480ac2cfb041ca484847f5ae70480b62","impliedFormat":1},{"version":"3536968defef8a75514f547ead5e2e9c1e984820290ec9b00c5fdfb6ef786535","impliedFormat":1},{"version":"d83773870080c30a230e322ce13a9c6f3398e8dacea4ea8a83e26370f3bac23e","impliedFormat":1},{"version":"dcfeaf98d66314fec29a9076c4290e45d0b196a65827becc19138e9c7b855f37","impliedFormat":1},{"version":"6849fe9210fe4946d5f085bfed36758f33dc6ae15a751338d178dd4daa017c46","impliedFormat":1},{"version":"888cda0fa66d7f74e985a3f7b1af1f64b8ff03eb3d5e80d051c3cbdeb7f32ab7","impliedFormat":1},{"version":"60681e13f3545be5e9477acb752b741eae6eaf4cc01658a25ec05bff8b82a2ef","impliedFormat":1},{"version":"ffae4e1e06aa848a1e4bcef162cd1c48e5909b26223515981310af9c036bdfc7","impliedFormat":1},{"version":"a57b1802794433adec9ff3fed12aa79d671faed86c49b09e02e1ac41b4f1d33a","impliedFormat":1},{"version":"34e16eb7c31768a11a08aebcfb3d70d7b8f0b016197e98d8419e566ceae6d6c8","impliedFormat":1},{"version":"f94ec1f7e4b709d26960306c9082a7a1b728a6e13089346aa48ba57c74cbf47e","impliedFormat":1},{"version":"9a11cb4033405e96c247cd5aa29790212aaffdd127869e8a5219103f0b389fd5","impliedFormat":1},{"version":"01479d9d5a5dda16d529b91811375187f61a06e74be294a35ecce77e0b9e8d6c","impliedFormat":1},{"version":"aff5213585cb72e94054dfe17250ff315f3569b3919d1ef1ad235f37c4ee894e","impliedFormat":1},{"version":"fb2ea35e1be6388d722d7725e2b49c697d34d9c890c3b96758faaeb86d35cef8","impliedFormat":1},{"version":"ce0df82a9ae6f914ba08409d4d883983cc08e6d59eb2df02d8e4d68309e7848b","impliedFormat":1},{"version":"1a4dc28334a926d90ba6a2d811ba0ff6c22775fcc13679521f034c124269fd40","impliedFormat":1},{"version":"f05315ff85714f0b87cc0b54bcd3dde2716e5a6b99aedcc19cad02bf2403e08c","impliedFormat":1},{"version":"5fad3b31fc17a5bc58095118a8b160f5260964787c52e7eb51e3d4fcf5d4a6f0","impliedFormat":1},{"version":"72105519d0390262cf0abe84cf41c926ade0ff475d35eb21307b2f94de985778","impliedFormat":1},{"version":"456006a6975b26c0a1785feddae165f6d307e2d601ffde27e21fc4a790e448a4","impliedFormat":1},{"version":"c857e0aae3f5f444abd791ec81206020fbcc1223e187316677e026d1c1d6fe08","impliedFormat":1},{"version":"ccf6dd45b708fb74ba9ed0f2478d4eb9195c9dfef0ff83a6092fa3cf2ff53b4f","impliedFormat":1},{"version":"1fe0d18b111e1145a7e7601855bccd4ca20f24e3b9a5aba6bb1fa9d1a7059170","impliedFormat":1},{"version":"5632c3c26d420c063eebe64c45b1248b9492a67bf44f1d0c57e9dc8f6cf449bb","impliedFormat":1},{"version":"0df5aa619ab12993a39ea6dae062ee46eadbb4d738916460e636ada52bced75b","impliedFormat":1},{"version":"8fca3039857709484e5893c05c1f9126ab7451fa6c29e19bb8c2411a2e937345","impliedFormat":1},{"version":"35069c2c417bd7443ae7c7cafd1de02f665bf015479fec998985ffbbf500628c","impliedFormat":1},{"version":"10ab7be91f87ebe8916b62cf28af2e45b5601fc7b0e311adf838f912c6b31dd8","impliedFormat":1},{"version":"bc636fbc08e0979ceb7eb0731a33000283d77a33b62e1f71ee65be50394e40ba","impliedFormat":1},{"version":"7e0b7f91c5ab6e33f511efc640d36e6f933510b11be24f98836a20a2dc914c2d","impliedFormat":1},{"version":"045b752f44bf9bbdcaffd882424ab0e15cb8d11fa94e1448942e338c8ef19fba","impliedFormat":1},{"version":"2894c56cad581928bb37607810af011764a2f511f575d28c9f4af0f2ef02d1ab","impliedFormat":1},{"version":"0a72186f94215d020cb386f7dca81d7495ab6c17066eb07d0f44a5bf33c1b21a","impliedFormat":1},{"version":"75bbd3be047d539988a0ff0b56384ef7a6a25f3b676ad96bee547d44c31622a7","impliedFormat":1},{"version":"42960001a776b089ade681ab5cfddc936e0afb0615133ec1841f3dee89d3e1bf","impliedFormat":1},{"version":"0aedb02516baf3e66b2c1db9fef50666d6ed257edac0f866ea32f1aa05aa474f","impliedFormat":1},{"version":"da47712b394d944328245482603bc6f416d3949b67c9392279caab595076b510","affectsGlobalScope":true,"impliedFormat":1},{"version":"37d0071d8f0a06dc55c2c5e0ec3391affd4fd107c53410bf358196ec0bf3923f","impliedFormat":1},{"version":"b213dad76ca37fd552274c9499056e1c0d9c1bd38a55bb7f68b22ba6b84c3ad7","impliedFormat":1},{"version":"56ccb49443bfb72e5952f7012f0de1a8679f9f75fc93a5c1ac0bafb28725fc5f","impliedFormat":1},{"version":"20fa37b636fdcc1746ea0738f733d0aed17890d1cd7cb1b2f37010222c23f13e","impliedFormat":1},{"version":"d90b9f1520366d713a73bd30c5a9eb0040d0fb6076aff370796bc776fd705943","impliedFormat":1},{"version":"bc03c3c352f689e38c0ddd50c39b1e65d59273991bfc8858a9e3c0ebb79c023b","impliedFormat":1},{"version":"19df3488557c2fc9b4d8f0bac0fd20fb59aa19dec67c81f93813951a81a867f8","affectsGlobalScope":true,"impliedFormat":1},{"version":"b25350193e103ae90423c5418ddb0ad1168dc9c393c9295ef34980b990030617","affectsGlobalScope":true,"impliedFormat":1},{"version":"bef86adb77316505c6b471da1d9b8c9e428867c2566270e8894d4d773a1c4dc2","impliedFormat":1},{"version":"5a49adaef698b7ad7e6127949fa1b0bbd3d46b7cbd11c54e392a4dcdd51f5190","impliedFormat":1},{"version":"96171c03c2e7f314d66d38acd581f9667439845865b7f85da8df598ff9617476","impliedFormat":1},{"version":"27be6622e2922a1b412eb057faa854831b95db9db5035c3f6d4b677b902ab3b7","impliedFormat":1},{"version":"5c634644d45a1b6bc7b05e71e05e52ec04f3d73d9ac85d5927f647a5f965181a","impliedFormat":1},{"version":"2489bf04d77dc025ba67f49f1a56eb24b9db477d5ff88123d887e163ed1776aa","impliedFormat":1},{"version":"63a7595a5015e65262557f883463f934904959da563b4f788306f699411e9bac","impliedFormat":1},{"version":"4ba137d6553965703b6b55fd2000b4e07ba365f8caeb0359162ad7247f9707a6","impliedFormat":1},{"version":"0b77b819b5417775fccb20c678293cf614c054a5b1a65421a5b933a9124ba998","impliedFormat":1},{"version":"e1f6076688a95bd82deaac740fccbe3cdea0d8a22057cccc9c5bce4398bdd33b","impliedFormat":1},{"version":"9252d498a77517aab5d8d4b5eb9d71e4b225bbc7123df9713e08181de63180f6","impliedFormat":1},{"version":"b1f1d57fde8247599731b24a733395c880a6561ec0c882efaaf20d7df968c5af","impliedFormat":1},{"version":"d7c1bbcddb06dcc8c9184013ace33c0dc71af715ab5987ccb42b903d2ec91193","impliedFormat":1},{"version":"35e6379c3f7cb27b111ad4c1aa69538fd8e788ab737b8ff7596a1b40e96f4f90","impliedFormat":1},{"version":"1fffe726740f9787f15b532e1dc870af3cd964dbe29e191e76121aa3dd8693f2","impliedFormat":1},{"version":"5a3ea721d03a361ccbdd7390ccd75f6e84cbca3a3f01f4b331ecc9af31890c49","impliedFormat":1},{"version":"e7dfaee4af38d45b1cab8a1ee0b3bc1f85ddcf64545ed391d675d78ae6526274","affectsGlobalScope":true,"impliedFormat":1},{"version":"98e2b197bf7fe7800f89c87825e2556d66474869845e97ad9c2b36f347c43539","impliedFormat":1},{"version":"af48e58339188d5737b608d41411a9c054685413d8ae88b8c1d0d9bfabdf6e7e","impliedFormat":1},{"version":"616775f16134fa9d01fc677ad3f76e68c051a056c22ab552c64cc281a9686790","impliedFormat":1},{"version":"65c24a8baa2cca1de069a0ba9fba82a173690f52d7e2d0f1f7542d59d5eb4db0","impliedFormat":1},{"version":"f9fe6af238339a0e5f7563acee3178f51db37f32a2e7c09f85273098cee7ec49","impliedFormat":1},{"version":"1de8c302fd35220d8f29dea378a4ae45199dc8ff83ca9923aca1400f2b28848a","impliedFormat":1},{"version":"77e71242e71ebf8528c5802993697878f0533db8f2299b4d36aa015bae08a79c","impliedFormat":1},{"version":"98a787be42bd92f8c2a37d7df5f13e5992da0d967fab794adbb7ee18370f9849","impliedFormat":1},{"version":"332248ee37cca52903572e66c11bef755ccc6e235835e63d3c3e60ddda3e9b93","impliedFormat":1},{"version":"94e8cc88ae2ef3d920bb3bdc369f48436db123aa2dc07f683309ad8c9968a1e1","impliedFormat":1},{"version":"4545c1a1ceca170d5d83452dd7c4994644c35cf676a671412601689d9a62da35","impliedFormat":1},{"version":"320f4091e33548b554d2214ce5fc31c96631b513dffa806e2e3a60766c8c49d9","impliedFormat":1},{"version":"a2d648d333cf67b9aeac5d81a1a379d563a8ffa91ddd61c6179f68de724260ff","impliedFormat":1},{"version":"d90d5f524de38889d1e1dbc2aeef00060d779f8688c02766ddb9ca195e4a713d","impliedFormat":1},{"version":"07ed3ddab975995eea41b22f3010506fb9f5fb301d04820b07d7a1aee5477d7c","impliedFormat":1},{"version":"969d8b0965849f4bae7cab0ba90bd1e1220e95999c2c6f01117fa7500901c017","impliedFormat":1},{"version":"6ec840ee5e2bc103f557fe38b1d585ee250540468713d7634ee066de372bf332","impliedFormat":1},{"version":"b0309e1eda99a9e76f87c18992d9c3689b0938266242835dd4611f2b69efe456","impliedFormat":1},{"version":"47699512e6d8bebf7be488182427189f999affe3addc1c87c882d36b7f2d0b0e","impliedFormat":1},{"version":"6ceb10ca57943be87ff9debe978f4ab73593c0c85ee802c051a93fc96aaf7a20","impliedFormat":1},{"version":"1de3ffe0cc28a9fe2ac761ece075826836b5a02f340b412510a59ba1d41a505a","impliedFormat":1},{"version":"e46d6cc08d243d8d0d83986f609d830991f00450fb234f5b2f861648c42dc0d8","impliedFormat":1},{"version":"1c0a98de1323051010ce5b958ad47bc1c007f7921973123c999300e2b7b0ecc0","impliedFormat":1},{"version":"ff863d17c6c659440f7c5c536e4db7762d8c2565547b2608f36b798a743606ca","impliedFormat":1},{"version":"5412ad0043cd60d1f1406fc12cb4fb987e9a734decbdd4db6f6acf71791e36fe","impliedFormat":1},{"version":"ad036a85efcd9e5b4f7dd5c1a7362c8478f9a3b6c3554654ca24a29aa850a9c5","impliedFormat":1},{"version":"fedebeae32c5cdd1a85b4e0504a01996e4a8adf3dfa72876920d3dd6e42978e7","impliedFormat":1},{"version":"e297c0a524edee7677939122f90027bfbe5f2698939d9a85728e5044b39c7124","impliedFormat":1},{"version":"cdf21eee8007e339b1b9945abf4a7b44930b1d695cc528459e68a3adc39a622e","impliedFormat":1},{"version":"bc9ee0192f056b3d5527bcd78dc3f9e527a9ba2bdc0a2c296fbc9027147df4b2","impliedFormat":1},{"version":"b62381cae176db34f003cc6172ee8f3e0122014889d66391aa73698105cf4934","impliedFormat":1},{"version":"1d9c0a9a6df4e8f29dc84c25c5aa0bb1da5456ebede7a03e03df08bb8b27bae6","impliedFormat":1},{"version":"84380af21da938a567c65ef95aefb5354f676368ee1a1cbb4cae81604a4c7d17","impliedFormat":1},{"version":"1af3e1f2a5d1332e136f8b0b95c0e6c0a02aaabd5092b36b64f3042a03debf28","impliedFormat":1},{"version":"30d8da250766efa99490fc02801047c2c6d72dd0da1bba6581c7e80d1d8842a4","impliedFormat":1},{"version":"03566202f5553bd2d9de22dfab0c61aa163cabb64f0223c08431fb3fc8f70280","impliedFormat":1},{"version":"41eb514d9ce0a6e87957f08a4b7af70d93f87637f37dee706e2d92a6601c25a9","impliedFormat":1},{"version":"e7765aa8bcb74a38b3230d212b4547686eb9796621ffb4367a104451c3f9614f","impliedFormat":1},{"version":"1de80059b8078ea5749941c9f863aa970b4735bdbb003be4925c853a8b6b4450","impliedFormat":1},{"version":"1d079c37fa53e3c21ed3fa214a27507bda9991f2a41458705b19ed8c2b61173d","impliedFormat":1},{"version":"5bf5c7a44e779790d1eb54c234b668b15e34affa95e78eada73e5757f61ed76a","impliedFormat":1},{"version":"5835a6e0d7cd2738e56b671af0e561e7c1b4fb77751383672f4b009f4e161d70","impliedFormat":1},{"version":"4b7f74b772140395e7af67c4841be1ab867c11b3b82a51b1aeb692822b76c872","impliedFormat":1},{"version":"7bd01f0f28cd3aeb2046274d85208e245965f6f2948edf4f7b2057bcf9f22ccc","impliedFormat":99},{"version":"d2f2cf2b8cc92bea913cda4a076e0f790b23a21e84f989d12f0116a7fe3906e0","impliedFormat":99},{"version":"6de125ea94866c736c6d58d68eb15272cf7d1020a5b459fea1c660027eca9a90","affectsGlobalScope":true,"impliedFormat":1},{"version":"f5b20bc288ee49989c95b20847fc93b96bf61cc0845598897a6a53a967dd7d07","affectsGlobalScope":true,"impliedFormat":1},{"version":"064ac1c2ac4b2867c2ceaa74bbdce0cb6a4c16e7c31a6497097159c18f74aa7c","impliedFormat":1},{"version":"3dc14e1ab45e497e5d5e4295271d54ff689aeae00b4277979fdd10fa563540ae","impliedFormat":1},{"version":"d3b315763d91265d6b0e7e7fa93cfdb8a80ce7cdd2d9f55ba0f37a22db00bdb8","impliedFormat":1},{"version":"b789bf89eb19c777ed1e956dbad0925ca795701552d22e68fd130a032008b9f9","impliedFormat":1},{"version":"87e2285f451bd76dc827bd822abeba40ec03baa7adc4ca4f894f84e9b8219fb9","affectsGlobalScope":true},"7ad303e40d4fddf44f156129e397511953a71481c5cfd86b1862649aaaf240cc","13831e0eacf11fd886906b8b9a21dc27cd48d368460528f7e889ed6c2c561a03","b34644a748b8f76c8834de829fdd953a97004bfb1cc08c4a13506020045b3c5e",{"version":"222ca75200369213041c9aa71c8d305c9aff8d63627da5b14c2dfa158d1051df","signature":"823219d4793c8d7f0c7e3435c85eed47ba5923cce6a35b43bcbd722a52feb77b"},{"version":"f734b58ea162765ff4d4a36f671ee06da898921e985a2064510f4925ec1ed062","affectsGlobalScope":true,"impliedFormat":1},{"version":"9b643d11b5bca11af760795e56096beae0ed29e9027fec409481f2ee1cb54bbc","impliedFormat":1},{"version":"55c0569d0b70dbc0bb9a811469a1e2a7b8e2bab2d70c013f2e40dfb2d2803d05","impliedFormat":1},{"version":"37f96daaddc2dd96712b2e86f3901f477ac01a5c2539b1bc07fd609d62039ee1","impliedFormat":1},{"version":"9c5c84c449a3d74e417343410ba9f1bd8bfeb32abd16945a1b3d0592ded31bc8","impliedFormat":1},{"version":"a7f09d2aaf994dbfd872eda4f2411d619217b04dbe0916202304e7a3d4b0f5f8","impliedFormat":1},{"version":"a66ebe9a1302d167b34d302dd6719a83697897f3104d255fe02ff65c47c5814e","impliedFormat":99},{"version":"faf770b3935c2ba6558b2bb65af5d5de58945d81f496dc1a5938c41a1abb358b","impliedFormat":99},"04d516ea781ae5712f84453b5d93a28dbd1aea2f592f09a218e4573d6a45dde3","a43c022e94a6b3186bef5503b526cbffaa6a7f5bd54c5e0efc5c8c7b7450f636","168f5f465976626d7bdc0545b75747dc8a4bd0c2e90be982984c4bdebdcd7cf6","f671aa9488f28c0d4efc3fb16db9e9e92c7712674beb5165e9eaadada2dee1c5","047a205de787565f14994d6fad569a362a206e394442467846a7a780d7746473","bd759af437e926d7fadc4c44e854859ee5a6031584d908e0e0c011f3e5494b24","dc6975f365cebab2a744402eaf8f74318ebf557b266eb318b45806ca7f7e2866",{"version":"c013ac1b810e831533fcb367242aaf86198a5307a21088825385841aaa90f83b","signature":"96154145493bea154784d1bdb8141e6fc053a835979da3fc46b0cb9ff01752b2"},"52c4c01ba7f55919ebe7be86d08da8436ceb9acb127bbe2945720e2509083b2b","250b0d7e089b19e6efcda749df4794a02b95103ca6f886a2920e1bfebe263d74",{"version":"b831d284fa29da76025551cea3746b30d025ee6c1a9dabd6fe92ff156016d0c0","signature":"3c5d9be6798520f8dfb5b7fd201acd41444feddd734ee12110b7fa705354ba64"},{"version":"5ac0b6a9397fb1062d289a30a0413d1bcdf07a1dc7cf5e42536f147490dd7f5b","signature":"d90fedf8cebefdb033b5b0e1989d56892378763e11097cc522b29ff5e0824ff8"},"02b96bfc76e45754990a86de0c4ca96922e75ecddd85fa457853d5c45f3edf6c",{"version":"fe93c474ab38ac02e30e3af073412b4f92b740152cf3a751fdaee8cbea982341","impliedFormat":1},{"version":"3255b97f3f24af29c79cc1aa88004efb13b6285ebdde0a567bf32e19bb65250d","impliedFormat":1},{"version":"1e00b8bf9e3766c958218cd6144ffe08418286f89ff44ba5a2cc830c03dd22c7","impliedFormat":1},{"version":"23874b6d249b9780eb941f5abb1b4c578219dcaaaad8783be2e731f922bdf291","impliedFormat":1},"ac4132ba1471ce5cda676e9ac606ca58eacadb3a8a4d1649eff44e89cd126579","640a2a37463cc24aebdb853c5fe2c634906f65c329ebb35587864f081fe2cde0","05e5cd95fc99f298937998e711000aefb84b9a964193ef6b7afbd31b58f5bab0",{"version":"37c7961117708394f64361ade31a41f96cef7f2a6606300821c72438dd4abda3","impliedFormat":1},{"version":"f5a0ca672513d5a3e303b36801e4573bb17ae002da225c28c1723eeee0f97145","affectsGlobalScope":true,"impliedFormat":1},{"version":"3d9189f26f01d4e36d3fb380810ef5999992235282e3c293da77d1d8aed09d9f","impliedFormat":1},{"version":"d9bf522aa42728ab077c4675515f5c2d1b739cb37a07d2903f3a0227219fd58f","impliedFormat":1},{"version":"6faa48cae74d411d179da717a8d61fd69d3f1fc279f7a093722dfc1f8661dd19","signature":"94ebdee4b8642e7a875b57cad30b42a2679489e75a790def0a48b01799257502"},"cd47990eb1b2ce5505f41ac71377eba2286bfe872a732477b9c440a1850f7c2c",{"version":"c652e3653150b8ee84ffc9034860d9183e6b4c34be28e3ba41b34b1417941982","impliedFormat":99},{"version":"e1f2b02372cd5acf5bebee18d578e0bd41151097a8afa0a1c536355c361628b8","impliedFormat":1},"ac2ad19c3ef8fcf6fd81eebd5dc367e72e9716867339a5f32ec7a84d44bbc77f","81537139c943d8256e7f5328b899146868c6eb90a8868db8df74dd74e0ed15ef","c688540c4b76649777f8413f6a8e5512d4c35585d24b510d07d7253ce111fa03",{"version":"16d3cc58c07e69113534a3b8b4b6d60228df872439954b51db36bad206a78d72","signature":"d1970d78871edd843a289ca4e25c0e2311e631bef5ae21545a47bd139261bea0"},{"version":"754e7eb3c5d3d8be176f150ffb6a4e8c4980168a4f5495057b6b5759a3187f93","signature":"ff6dfda5378fc7b1ffb6f75724fa0b04c32109d9459a9df45de1ae5186b44a1c"},{"version":"f9d9485f3794f9488ca10430ab7e9210b54a46a729c2fa68ae794e55383d6c4f","signature":"3f2cef8e84b1552df60bc9b5ceb253f9daedd2f9cb2255075ae28b1cccd3812e"},{"version":"1c80e42d55a28b4d9f304a639db2fc8406be3cb6c8ecbd841dd522084dfa6ba4","signature":"c1c0fdbb129948e18a8b11c893490ee3ce0055631ad8de1eee247343d8359ce6"},"bf83ae8b72f9ab9ccbc506710f0d16d28fd2dcdb815013e9a9c1bb6a8853917b","c18b3e2ffae38e7b7e141b720270dfb1431ad53f6d3a84f12ae4650293e32d2c","ae4be18fea4424c5e0b866dc6f1bed0b5bf488404a5688afaf369bce5f301286",{"version":"4a406e20a117726a325eac8204e18065d09c94c5b71315ecc54a79d8ece84ad4","signature":"cb35f32ada4c9518afd80bd03570d27e50a966ddf376683c9fe282db1b577ed3"},"a8409a1cbc4c116f6b317bf7398aeb3845b5100ef93d9d0d2ab55c72c65b4fea","6a50a89b0ed2d1ba69eded69c69d90b8cbaa0bcff2959edb02254823cdf57842","a676eb12eeaae4dbb73cb6d4837555357f685627cfbe9b0c2f5d25bb6f83772f",{"version":"6ce55335012d76737df504baabc950805760acf3be988142d1985aa4893f919e","impliedFormat":1},{"version":"88efe27bebddb62da9655a9f093e0c27719647e96747f16650489dc9671075d6","impliedFormat":1},{"version":"e348f128032c4807ad9359a1fff29fcbc5f551c81be807bfa86db5a45649b7ba","impliedFormat":1},{"version":"8ee6b07974528da39b7835556e12dd3198c0a13e4a9de321217cd2044f3de22e","impliedFormat":1},{"version":"deefd8c43b40f9797c3921d78d3f9243959621a17b817be7f5d95c149f23a9dd","impliedFormat":1},{"version":"5f12132800d430adbe59b49c2c0354d85a71ada7d756e34250a655baa8ad4ae5","impliedFormat":1},{"version":"1996d1cd7d585a8359a35878f67abdd73cc35b1f675c9c6b147b202fdd8dfc3f","impliedFormat":1},{"version":"b16e757e4c35434065120a2b3bf13a518fc9e621dc9c2ed668f91635a9dc4e75","impliedFormat":1},{"version":"d22cd2e880dc30d21cf20b26b6341e0478f3505ea645d1504c7e9c14cdff1198","impliedFormat":1},{"version":"d02ced7accb512e6198b796b8d284e7979abde0f089b0a77969747a5f27bfb23","impliedFormat":1},{"version":"4374cefdde5c6e9bad52b0436e887b8325b8f407c12035194ad02c28f1553a3a","impliedFormat":1},{"version":"5f1ba0898eb0a54a644cb9c95c2240beaa961d87fd080cbb90807a6cc03daeb3","impliedFormat":1},{"version":"8e92ee8710ba85b158c5d91b0bbc9d0d033f5e062b6e70178063f01b20f63a14","impliedFormat":1},{"version":"ee933420aacba1f60aa70fb8ba47c5e69001b005073b71973114587089a13c7f","impliedFormat":1},{"version":"0a0714999d0a5bdfacd15c7b34cffbcc6f263f6cb0ccb42076cdc541c6987797","impliedFormat":1},{"version":"56584bfc655f9df64afc0f22f7d1122c29e5b74b342c203b891e19de9fa37de8","impliedFormat":1},{"version":"40ec58f0fadd0b3981b3d383e1c12fa0680115ae9f018387fc2cfc0bbcf23204","impliedFormat":1},{"version":"849b9e7283b7309a4556c9b90bb8e2dfc27751f157798065bbc513dcddb09a8c","impliedFormat":1},{"version":"76bba0c97594248c1be19af32d5799f7eff51cec2926d8e4dd59267d7636a0b4","impliedFormat":1},{"version":"10e109212c7be8a9f66e988e5d6c2a8900c9d14bf6beadf5fa70d32ada3425cf","impliedFormat":1},{"version":"2b821aeb31e690092f8eae671dd961a9d0fd598ff4883ce0a600c90e9e8fa716","impliedFormat":1},{"version":"26602933b613e4df3868a6c82e14fffa2393a08531cb333ed27b151923462981","impliedFormat":1},{"version":"f57a588d8f6b3ce5c8b494f2dc759a8885eaee18e80a4952df47de45403fedbe","impliedFormat":1},{"version":"34735727b3fe7a0ed0651a0f88d06449163d1989a2b2de7f047473adc7c1c383","impliedFormat":1},{"version":"a5b13abc88ab3186e713c445e59e2f6eee20c6167943517bc2f56985d89b8c55","impliedFormat":1},{"version":"c8a206a6ba4e32710ebb4a389187772423de0f4f6180b95a7ef1a5a1934c1be6","impliedFormat":1},{"version":"7ae65fe95b18205e241e6695cb2c61c0828d660aca7d08f68781b439a800e6b8","impliedFormat":1},{"version":"c2c8c166199d3a7bd093152437d1f6399d05e458a9ca9364456feecba920cda4","impliedFormat":1},{"version":"369b7270eeeb37982203b2cb18c7302947b89bf5818c1d3d2e95a0418f02b74e","impliedFormat":1},{"version":"94f95d223e2783b0aef4d15d7f6990a6a550fe17d099c501395f690337f7105e","impliedFormat":1},{"version":"039bd8d1e0d151570b66e75ee152877fb0e2f42eca43718632ac195e6884be34","impliedFormat":1},{"version":"d565d66b38d54de037c9d46dede1f12630010d9b45fd9c6b432c7a40b2e30502","impliedFormat":1},{"version":"d7386a1ebe9a3eae227a5561c898c10cacb61a49f941c5a18cdf593f979c693c","impliedFormat":1},{"version":"d3cfde44f8089768ebb08098c96d01ca260b88bccf238d55eee93f1c620ff5a5","impliedFormat":1},{"version":"293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec","impliedFormat":1},{"version":"36eb5babc665b890786550d4a8cb20ef7105673a6d5551fbdd7012877bb26942","impliedFormat":1},{"version":"fec412ded391a7239ef58f455278154b62939370309c1fed322293d98c8796a6","impliedFormat":1},{"version":"e3498cf5e428e6c6b9e97bd88736f26d6cf147dedbfa5a8ad3ed8e05e059af8a","impliedFormat":1},{"version":"dba3f34531fd9b1b6e072928b6f885aa4d28dd6789cbd0e93563d43f4b62da53","impliedFormat":1},{"version":"f672c876c1a04a223cf2023b3d91e8a52bb1544c576b81bf64a8fec82be9969c","impliedFormat":1},{"version":"e4b03ddcf8563b1c0aee782a185286ed85a255ce8a30df8453aade2188bbc904","impliedFormat":1},{"version":"2329d90062487e1eaca87b5e06abcbbeeecf80a82f65f949fd332cfcf824b87b","impliedFormat":1},{"version":"25b3f581e12ede11e5739f57a86e8668fbc0124f6649506def306cad2c59d262","impliedFormat":1},{"version":"93c3e73824ad57f98fd23b39335dbdae2db0bd98199b0dc0b9ccc60bf3c5134a","impliedFormat":1},{"version":"a9ebb67d6bbead6044b43714b50dcb77b8f7541ffe803046fdec1714c1eba206","impliedFormat":1},{"version":"833e92c058d033cde3f29a6c7603f517001d1ddd8020bc94d2067a3bc69b2a8e","impliedFormat":1},{"version":"c1a2e05eb6d7ca8d7e4a7f4c93ccf0c2857e842a64c98eaee4d85841ee9855e6","impliedFormat":1},{"version":"835fb2909ce458740fb4a49fc61709896c6864f5ce3db7f0a88f06c720d74d02","impliedFormat":1},{"version":"6e5857f38aa297a859cab4ec891408659218a5a2610cd317b6dcbef9979459cc","impliedFormat":1},{"version":"ead8e39c2e11891f286b06ae2aa71f208b1802661fcdb2425cffa4f494a68854","impliedFormat":1},{"version":"82919acbb38870fcf5786ec1292f0f5afe490f9b3060123e48675831bd947192","impliedFormat":1},{"version":"e222701788ec77bd57c28facbbd142eadf5c749a74d586bc2f317db7e33544b1","impliedFormat":1},{"version":"09154713fae0ed7befacdad783e5bd1970c06fc41a5f866f7f933b96312ce764","impliedFormat":1},{"version":"8d67b13da77316a8a2fabc21d340866ddf8a4b99e76a6c951cc45189142df652","impliedFormat":1},{"version":"a91c8d28d10fee7fe717ddf3743f287b68770c813c98f796b6e38d5d164bd459","impliedFormat":1},{"version":"68add36d9632bc096d7245d24d6b0b8ad5f125183016102a3dad4c9c2438ccb0","impliedFormat":1},{"version":"3a819c2928ee06bbcc84e2797fd3558ae2ebb7e0ed8d87f71732fb2e2acc87b4","impliedFormat":1},{"version":"f6f827cd43e92685f194002d6b52a9408309cda1cec46fb7ca8489a95cbd2fd4","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"a270a1a893d1aee5a3c1c8c276cd2778aa970a2741ee2ccf29cc3210d7da80f5","impliedFormat":1},{"version":"add0ce7b77ba5b308492fa68f77f24d1ed1d9148534bdf05ac17c30763fc1a79","impliedFormat":1},{"version":"8926594ee895917e90701d8cbb5fdf77fc238b266ac540f929c7253f8ad6233d","impliedFormat":1},{"version":"2f67911e4bf4e0717dc2ded248ce2d5e4398d945ee13889a6852c1233ea41508","impliedFormat":1},{"version":"d8430c275b0f59417ea8e173cfb888a4477b430ec35b595bf734f3ec7a7d729f","impliedFormat":1},{"version":"69364df1c776372d7df1fb46a6cb3a6bf7f55e700f533a104e3f9d70a32bec18","impliedFormat":1},{"version":"8e6427dd1a4321b0857499739c641b98657ea6dc7cc9a02c9b2c25a845c3c8e6","impliedFormat":1},{"version":"58da08d1fe876c79c47dcf88be37c5c3fab55d97b34c8c09a666599a2191208d","impliedFormat":1},{"version":"6042774c61ece4ba77b3bf375f15942eb054675b7957882a00c22c0e4fe5865c","impliedFormat":1},{"version":"5a3bd57ed7a9d9afef74c75f77fce79ba3c786401af9810cdf45907c4e93f30e","impliedFormat":1},{"version":"ed8763205f02fb65e84eff7432155258df7f93b7d938f01785cb447d043d53f3","impliedFormat":1},{"version":"30db853bb2e60170ba11e39ab48bacecb32d06d4def89eedf17e58ebab762a65","impliedFormat":1},{"version":"e27451b24234dfed45f6cf22112a04955183a99c42a2691fb4936d63cfe42761","impliedFormat":1},{"version":"2316301dd223d31962d917999acf8e543e0119c5d24ec984c9f22cb23247160c","impliedFormat":1},{"version":"58d65a2803c3b6629b0e18c8bf1bc883a686fcf0333230dd0151ab6e85b74307","impliedFormat":1},{"version":"e818471014c77c103330aee11f00a7a00b37b35500b53ea6f337aefacd6174c9","impliedFormat":1},{"version":"d4a5b1d2ff02c37643e18db302488cd64c342b00e2786e65caac4e12bda9219b","impliedFormat":1},{"version":"29f823cbe0166e10e7176a94afe609a24b9e5af3858628c541ff8ce1727023cd","impliedFormat":1},"ef199d5fdc234ac6e74d97830709a176aca59ef15416d353e98052d487c6f4a1","f317cab60803426a36ddf639c3ca8656a77680874a6974b1208568910b00223f","789689ee3d7c5fe1d7912311ff418063bc915d822627aaf925f27d65958506db","114b426af1d29db97181f9034777d6e4ad95eb1b8a6be884bdad7906535b89e8","7246f2eacd085588c633c43bc2e497fcb9916ff60797edf27b38f57e1323181a","ca88e94ee6376344f7f7274c5f70ddf3c6b00bcf87fa7307e76d33fd49922d81",{"version":"c719f9aab2c7f8a74a971ec53a8980ff7c59d5bbf76bf6fc7ecd4de97ea0afda","signature":"392f2e06ee257cac742ecd07f3983b3f6af1a5244b510c8cf0afe42868762561"},{"version":"443543952676fc7fc1df73033f4ff4d3cdf756771d52aa0e8ba8e6ba9b3bb2dc","signature":"df1eaffded25d254dd98cc565273c1caf348f75cd7bd2155786ae175952a66b5"},{"version":"c6dfadb84cef23b20c9a55e74af7b870be64912d365bcd18b44d0836ad4ed635","signature":"31fc6caa7c71b180347b884b9bf133b8e252765bf9cbe47f90eca52e353284d7"},"e58e722b9d7e6fd0b2539a11d9caeecffdd975466368640f6036b082b5ea2dc5","39b9cec8cf81019515d1948370860eade709dceb6272039729e69b5d555e2b28",{"version":"b815943a90ae25de210d64989e597f5f8072a028b95f48537bff7d7b3feb8244","signature":"8648e45571a83c67e32c1a8094b4dad16ff165269fd21845b4749d9e9a463519"},"caaedbb8fe193083fe7ce3d465a8ea15d8d32f7b1fa61ca11facac66c6becf85","65836c4ce93c65b1646c3a27895433fd14e2b1c0750c5c258a09789d71e7188b",{"version":"0a685b119d9be3ab40771fd01ab6c7011ba4142a534a7381956d589d4a0e2382","signature":"b7f38df2ae00a792b5793cbdfce2d18660e04795981569bd71c2f1f88aac4d1e"},"7d5f5894b116f9e7444bdfad0c7210302b2c2c7b06ffab2020d6dcab0e6cd34f","d1986184a09a52db8228cb2bb2a61a8c05c9354e5b93cec8e2628d8579c892d7",{"version":"87e2285f451bd76dc827bd822abeba40ec03baa7adc4ca4f894f84e9b8219fb9","affectsGlobalScope":true},"84c00a301e6243f47f5d1fde505ae08579b268646ecfd8143308b5a1ebaebbe0","d1986184a09a52db8228cb2bb2a61a8c05c9354e5b93cec8e2628d8579c892d7","dbd7d44bd7420c016c714ed64479fd80a43d91cd2e8ecfa64a2047b8fe9dda52",{"version":"151ff381ef9ff8da2da9b9663ebf657eac35c4c9a19183420c05728f31a6761d","impliedFormat":1},{"version":"f3d8c757e148ad968f0d98697987db363070abada5f503da3c06aefd9d4248c1","impliedFormat":1},{"version":"96d14f21b7652903852eef49379d04dbda28c16ed36468f8c9fa08f7c14c9538","impliedFormat":1},{"version":"7fa8d75d229eeaee235a801758d9c694e94405013fe77d5d1dd8e3201fc414f1","impliedFormat":1}],"root":[[530,534],[543,555],[560,562],567,568,[571,584],[710,730]],"options":{"allowJs":true,"esModuleInterop":true,"jsx":4,"module":99,"skipLibCheck":true,"strict":true,"target":4},"referencedMap":[[729,1],[530,2],[730,3],[726,4],[727,2],[728,5],[531,6],[532,7],[699,8],[698,9],[374,2],[541,10],[540,11],[731,2],[732,2],[733,2],[140,12],[141,12],[142,13],[97,14],[143,15],[144,16],[145,17],[92,2],[95,18],[93,2],[94,2],[146,19],[147,20],[148,21],[149,22],[150,23],[151,24],[152,24],[153,25],[154,26],[155,27],[156,28],[98,2],[96,2],[157,29],[158,30],[159,31],[191,32],[160,33],[161,34],[162,35],[163,36],[164,37],[165,38],[166,39],[167,40],[168,41],[169,42],[170,42],[171,43],[172,2],[173,44],[175,45],[174,46],[176,47],[177,48],[178,49],[179,50],[180,51],[181,52],[182,53],[183,54],[184,55],[185,56],[186,57],[187,58],[188,59],[99,2],[100,2],[101,2],[139,60],[189,61],[190,62],[195,63],[459,64],[196,65],[194,66],[461,67],[460,68],[192,69],[457,2],[193,70],[83,2],[85,71],[456,64],[226,64],[734,2],[542,2],[84,2],[565,72],[566,73],[569,74],[537,2],[559,64],[564,75],[563,2],[482,76],[487,77],[494,78],[477,79],[230,2],[238,80],[378,81],[381,82],[353,2],[366,83],[373,84],[255,2],[355,2],[236,2],[352,85],[398,86],[237,2],[228,87],[380,88],[382,89],[383,90],[454,91],[347,92],[300,93],[360,94],[361,95],[359,96],[358,2],[354,97],[379,98],[239,99],[424,2],[425,100],[266,101],[240,102],[267,101],[303,101],[206,101],[376,103],[375,2],[365,104],[472,2],[215,2],[493,105],[432,106],[433,107],[429,108],[511,2],[330,2],[434,109],[430,110],[516,111],[515,112],[510,2],[281,2],[333,113],[332,2],[509,114],[431,64],[286,115],[293,116],[295,117],[285,2],[290,118],[292,119],[294,120],[289,121],[287,2],[291,122],[512,2],[508,2],[514,123],[513,2],[284,124],[503,125],[506,126],[274,127],[273,128],[272,129],[519,64],[271,130],[260,2],[521,2],[557,131],[556,2],[522,64],[523,132],[198,2],[362,133],[363,134],[364,135],[202,2],[367,2],[222,136],[197,2],[446,64],[204,137],[445,138],[444,139],[435,2],[436,2],[443,2],[438,2],[441,140],[437,2],[439,141],[442,142],[440,141],[235,2],[232,2],[233,101],[387,2],[392,143],[393,144],[391,145],[389,146],[390,147],[385,2],[452,109],[227,109],[481,148],[488,149],[492,150],[321,151],[320,2],[315,2],[468,152],[476,153],[348,154],[349,155],[427,156],[337,2],[450,157],[325,64],[342,158],[453,159],[338,2],[341,160],[339,2],[451,161],[448,162],[447,2],[449,2],[345,2],[423,163],[210,164],[323,165],[327,166],[343,167],[346,168],[335,169],[328,170],[475,171],[401,172],[319,173],[207,174],[474,175],[203,176],[394,177],[386,2],[395,178],[412,179],[384,2],[411,180],[91,2],[406,181],[231,2],[426,182],[402,2],[216,2],[218,2],[357,2],[410,183],[234,2],[258,184],[344,185],[264,186],[324,2],[409,2],[388,2],[414,187],[415,188],[356,2],[417,189],[419,190],[418,191],[368,2],[408,174],[421,192],[318,193],[407,194],[413,195],[243,2],[247,2],[246,2],[245,2],[250,2],[244,2],[253,2],[252,2],[249,2],[248,2],[251,2],[254,196],[242,2],[310,197],[309,2],[314,198],[311,199],[313,200],[316,198],[312,199],[223,201],[302,202],[471,203],[469,2],[498,204],[500,205],[464,206],[499,207],[211,208],[208,208],[241,2],[225,209],[224,210],[220,211],[221,212],[229,213],[257,213],[268,213],[304,214],[269,214],[213,215],[212,2],[308,216],[307,217],[306,218],[305,219],[214,220],[455,221],[256,222],[463,223],[428,224],[458,225],[462,226],[351,227],[350,228],[331,229],[317,230],[299,231],[301,232],[298,233],[420,234],[322,2],[486,2],[219,235],[422,236],[470,237],[329,2],[259,238],[336,239],[334,240],[261,241],[396,242],[465,2],[262,243],[397,243],[484,2],[483,2],[485,2],[467,2],[466,2],[399,244],[326,2],[296,245],[217,246],[275,2],[201,247],[263,2],[490,64],[200,2],[502,248],[283,64],[496,109],[282,249],[479,250],[280,248],[205,2],[504,251],[278,64],[279,64],[270,2],[199,2],[277,252],[276,253],[265,254],[340,41],[400,41],[416,2],[404,255],[403,2],[288,124],[209,2],[297,64],[473,136],[480,256],[86,64],[89,257],[90,258],[87,64],[88,2],[377,259],[372,260],[371,2],[370,261],[369,2],[478,262],[489,263],[491,264],[495,265],[558,266],[497,267],[501,268],[529,269],[505,269],[528,270],[507,271],[517,272],[518,273],[520,274],[524,275],[527,136],[526,2],[525,276],[585,2],[601,277],[602,277],[603,277],[617,278],[604,279],[605,279],[606,280],[598,281],[596,282],[587,2],[591,283],[595,284],[593,285],[600,286],[588,287],[589,288],[590,289],[592,290],[594,291],[597,292],[599,293],[607,279],[608,279],[609,279],[610,277],[611,279],[612,279],[586,279],[613,2],[615,294],[614,279],[616,277],[570,295],[536,296],[539,297],[535,2],[538,2],[405,298],[81,2],[82,2],[13,2],[14,2],[16,2],[15,2],[2,2],[17,2],[18,2],[19,2],[20,2],[21,2],[22,2],[23,2],[24,2],[3,2],[25,2],[26,2],[4,2],[27,2],[31,2],[28,2],[29,2],[30,2],[32,2],[33,2],[34,2],[5,2],[35,2],[36,2],[37,2],[38,2],[6,2],[42,2],[39,2],[40,2],[41,2],[43,2],[7,2],[44,2],[49,2],[50,2],[45,2],[46,2],[47,2],[48,2],[8,2],[54,2],[51,2],[52,2],[53,2],[55,2],[9,2],[56,2],[57,2],[58,2],[60,2],[59,2],[61,2],[62,2],[10,2],[63,2],[64,2],[65,2],[11,2],[66,2],[67,2],[68,2],[69,2],[70,2],[1,2],[71,2],[72,2],[12,2],[76,2],[74,2],[79,2],[78,2],[73,2],[77,2],[75,2],[80,2],[117,299],[127,300],[116,299],[137,301],[108,302],[107,303],[136,276],[130,304],[135,305],[110,306],[124,307],[109,308],[133,309],[105,310],[104,276],[134,311],[106,312],[111,313],[112,2],[115,313],[102,2],[138,314],[128,315],[119,316],[120,317],[122,318],[118,319],[121,320],[131,276],[113,321],[114,322],[123,323],[103,324],[126,315],[125,313],[129,2],[132,325],[709,326],[622,327],[629,328],[624,2],[625,2],[623,329],[626,330],[618,2],[619,2],[630,331],[621,332],[627,2],[628,333],[620,334],[703,335],[707,336],[704,336],[700,335],[708,337],[705,338],[706,336],[701,339],[702,340],[694,341],[638,342],[640,343],[693,2],[639,344],[697,345],[696,346],[695,347],[631,2],[641,342],[642,2],[633,348],[637,349],[632,2],[634,350],[635,351],[636,2],[643,352],[644,352],[645,352],[646,352],[647,352],[648,352],[649,352],[650,352],[651,352],[652,352],[653,352],[654,352],[655,352],[657,352],[656,352],[658,352],[659,352],[660,352],[661,352],[692,353],[662,352],[663,352],[664,352],[665,352],[666,352],[667,352],[668,352],[669,352],[670,352],[671,352],[672,352],[673,352],[674,352],[676,352],[675,352],[677,352],[678,352],[679,352],[680,352],[681,352],[682,352],[683,352],[684,352],[685,352],[686,352],[687,352],[688,352],[691,352],[689,352],[690,352],[580,354],[579,355],[577,356],[581,357],[712,358],[713,359],[714,360],[583,361],[715,362],[716,363],[584,364],[718,365],[719,366],[720,367],[721,368],[722,369],[571,370],[723,362],[575,371],[724,372],[582,373],[710,374],[717,375],[562,11],[578,376],[576,376],[567,377],[561,378],[573,379],[560,380],[574,381],[568,382],[572,383],[711,374],[725,384],[533,11],[534,11],[553,385],[552,382],[544,386],[550,386],[549,386],[547,386],[546,386],[545,386],[548,386],[551,387],[543,388],[554,11],[555,11]],"affectedFilesPendingEmit":[730,728,532,580,579,577,581,712,713,714,583,715,716,584,718,719,720,721,722,571,723,575,724,582,710,717,562,578,576,567,561,573,560,574,568,572,711,725,533,534,553,552,544,550,549,547,546,545,548,551,543,554,555],"version":"5.9.3"}
+{"fileNames":["./node_modules/typescript/lib/lib.es5.d.ts","./node_modules/typescript/lib/lib.es2015.d.ts","./node_modules/typescript/lib/lib.es2016.d.ts","./node_modules/typescript/lib/lib.es2017.d.ts","./node_modules/typescript/lib/lib.es2018.d.ts","./node_modules/typescript/lib/lib.es2019.d.ts","./node_modules/typescript/lib/lib.es2020.d.ts","./node_modules/typescript/lib/lib.es2021.d.ts","./node_modules/typescript/lib/lib.es2022.d.ts","./node_modules/typescript/lib/lib.es2023.d.ts","./node_modules/typescript/lib/lib.es2024.d.ts","./node_modules/typescript/lib/lib.esnext.d.ts","./node_modules/typescript/lib/lib.dom.d.ts","./node_modules/typescript/lib/lib.dom.iterable.d.ts","./node_modules/typescript/lib/lib.es2015.core.d.ts","./node_modules/typescript/lib/lib.es2015.collection.d.ts","./node_modules/typescript/lib/lib.es2015.generator.d.ts","./node_modules/typescript/lib/lib.es2015.iterable.d.ts","./node_modules/typescript/lib/lib.es2015.promise.d.ts","./node_modules/typescript/lib/lib.es2015.proxy.d.ts","./node_modules/typescript/lib/lib.es2015.reflect.d.ts","./node_modules/typescript/lib/lib.es2015.symbol.d.ts","./node_modules/typescript/lib/lib.es2015.symbol.wellknown.d.ts","./node_modules/typescript/lib/lib.es2016.array.include.d.ts","./node_modules/typescript/lib/lib.es2016.intl.d.ts","./node_modules/typescript/lib/lib.es2017.arraybuffer.d.ts","./node_modules/typescript/lib/lib.es2017.date.d.ts","./node_modules/typescript/lib/lib.es2017.object.d.ts","./node_modules/typescript/lib/lib.es2017.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2017.string.d.ts","./node_modules/typescript/lib/lib.es2017.intl.d.ts","./node_modules/typescript/lib/lib.es2017.typedarrays.d.ts","./node_modules/typescript/lib/lib.es2018.asyncgenerator.d.ts","./node_modules/typescript/lib/lib.es2018.asynciterable.d.ts","./node_modules/typescript/lib/lib.es2018.intl.d.ts","./node_modules/typescript/lib/lib.es2018.promise.d.ts","./node_modules/typescript/lib/lib.es2018.regexp.d.ts","./node_modules/typescript/lib/lib.es2019.array.d.ts","./node_modules/typescript/lib/lib.es2019.object.d.ts","./node_modules/typescript/lib/lib.es2019.string.d.ts","./node_modules/typescript/lib/lib.es2019.symbol.d.ts","./node_modules/typescript/lib/lib.es2019.intl.d.ts","./node_modules/typescript/lib/lib.es2020.bigint.d.ts","./node_modules/typescript/lib/lib.es2020.date.d.ts","./node_modules/typescript/lib/lib.es2020.promise.d.ts","./node_modules/typescript/lib/lib.es2020.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2020.string.d.ts","./node_modules/typescript/lib/lib.es2020.symbol.wellknown.d.ts","./node_modules/typescript/lib/lib.es2020.intl.d.ts","./node_modules/typescript/lib/lib.es2020.number.d.ts","./node_modules/typescript/lib/lib.es2021.promise.d.ts","./node_modules/typescript/lib/lib.es2021.string.d.ts","./node_modules/typescript/lib/lib.es2021.weakref.d.ts","./node_modules/typescript/lib/lib.es2021.intl.d.ts","./node_modules/typescript/lib/lib.es2022.array.d.ts","./node_modules/typescript/lib/lib.es2022.error.d.ts","./node_modules/typescript/lib/lib.es2022.intl.d.ts","./node_modules/typescript/lib/lib.es2022.object.d.ts","./node_modules/typescript/lib/lib.es2022.string.d.ts","./node_modules/typescript/lib/lib.es2022.regexp.d.ts","./node_modules/typescript/lib/lib.es2023.array.d.ts","./node_modules/typescript/lib/lib.es2023.collection.d.ts","./node_modules/typescript/lib/lib.es2023.intl.d.ts","./node_modules/typescript/lib/lib.es2024.arraybuffer.d.ts","./node_modules/typescript/lib/lib.es2024.collection.d.ts","./node_modules/typescript/lib/lib.es2024.object.d.ts","./node_modules/typescript/lib/lib.es2024.promise.d.ts","./node_modules/typescript/lib/lib.es2024.regexp.d.ts","./node_modules/typescript/lib/lib.es2024.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2024.string.d.ts","./node_modules/typescript/lib/lib.esnext.array.d.ts","./node_modules/typescript/lib/lib.esnext.collection.d.ts","./node_modules/typescript/lib/lib.esnext.intl.d.ts","./node_modules/typescript/lib/lib.esnext.disposable.d.ts","./node_modules/typescript/lib/lib.esnext.promise.d.ts","./node_modules/typescript/lib/lib.esnext.decorators.d.ts","./node_modules/typescript/lib/lib.esnext.iterator.d.ts","./node_modules/typescript/lib/lib.esnext.float16.d.ts","./node_modules/typescript/lib/lib.esnext.error.d.ts","./node_modules/typescript/lib/lib.esnext.sharedmemory.d.ts","./node_modules/typescript/lib/lib.decorators.d.ts","./node_modules/typescript/lib/lib.decorators.legacy.d.ts","./node_modules/@types/react/global.d.ts","./node_modules/csstype/index.d.ts","./node_modules/@types/react/index.d.ts","./node_modules/next/dist/styled-jsx/types/css.d.ts","./node_modules/next/dist/styled-jsx/types/macro.d.ts","./node_modules/next/dist/styled-jsx/types/style.d.ts","./node_modules/next/dist/styled-jsx/types/global.d.ts","./node_modules/next/dist/styled-jsx/types/index.d.ts","./node_modules/next/dist/server/get-page-files.d.ts","./node_modules/@types/node/compatibility/disposable.d.ts","./node_modules/@types/node/compatibility/indexable.d.ts","./node_modules/@types/node/compatibility/iterators.d.ts","./node_modules/@types/node/compatibility/index.d.ts","./node_modules/@types/node/globals.typedarray.d.ts","./node_modules/@types/node/buffer.buffer.d.ts","./node_modules/@types/node/globals.d.ts","./node_modules/@types/node/web-globals/abortcontroller.d.ts","./node_modules/@types/node/web-globals/domexception.d.ts","./node_modules/@types/node/web-globals/events.d.ts","./node_modules/undici-types/header.d.ts","./node_modules/undici-types/readable.d.ts","./node_modules/undici-types/file.d.ts","./node_modules/undici-types/fetch.d.ts","./node_modules/undici-types/formdata.d.ts","./node_modules/undici-types/connector.d.ts","./node_modules/undici-types/client.d.ts","./node_modules/undici-types/errors.d.ts","./node_modules/undici-types/dispatcher.d.ts","./node_modules/undici-types/global-dispatcher.d.ts","./node_modules/undici-types/global-origin.d.ts","./node_modules/undici-types/pool-stats.d.ts","./node_modules/undici-types/pool.d.ts","./node_modules/undici-types/handlers.d.ts","./node_modules/undici-types/balanced-pool.d.ts","./node_modules/undici-types/agent.d.ts","./node_modules/undici-types/mock-interceptor.d.ts","./node_modules/undici-types/mock-agent.d.ts","./node_modules/undici-types/mock-client.d.ts","./node_modules/undici-types/mock-pool.d.ts","./node_modules/undici-types/mock-errors.d.ts","./node_modules/undici-types/proxy-agent.d.ts","./node_modules/undici-types/env-http-proxy-agent.d.ts","./node_modules/undici-types/retry-handler.d.ts","./node_modules/undici-types/retry-agent.d.ts","./node_modules/undici-types/api.d.ts","./node_modules/undici-types/interceptors.d.ts","./node_modules/undici-types/util.d.ts","./node_modules/undici-types/cookies.d.ts","./node_modules/undici-types/patch.d.ts","./node_modules/undici-types/websocket.d.ts","./node_modules/undici-types/eventsource.d.ts","./node_modules/undici-types/filereader.d.ts","./node_modules/undici-types/diagnostics-channel.d.ts","./node_modules/undici-types/content-type.d.ts","./node_modules/undici-types/cache.d.ts","./node_modules/undici-types/index.d.ts","./node_modules/@types/node/web-globals/fetch.d.ts","./node_modules/@types/node/assert.d.ts","./node_modules/@types/node/assert/strict.d.ts","./node_modules/@types/node/async_hooks.d.ts","./node_modules/@types/node/buffer.d.ts","./node_modules/@types/node/child_process.d.ts","./node_modules/@types/node/cluster.d.ts","./node_modules/@types/node/console.d.ts","./node_modules/@types/node/constants.d.ts","./node_modules/@types/node/crypto.d.ts","./node_modules/@types/node/dgram.d.ts","./node_modules/@types/node/diagnostics_channel.d.ts","./node_modules/@types/node/dns.d.ts","./node_modules/@types/node/dns/promises.d.ts","./node_modules/@types/node/domain.d.ts","./node_modules/@types/node/events.d.ts","./node_modules/@types/node/fs.d.ts","./node_modules/@types/node/fs/promises.d.ts","./node_modules/@types/node/http.d.ts","./node_modules/@types/node/http2.d.ts","./node_modules/@types/node/https.d.ts","./node_modules/@types/node/inspector.generated.d.ts","./node_modules/@types/node/module.d.ts","./node_modules/@types/node/net.d.ts","./node_modules/@types/node/os.d.ts","./node_modules/@types/node/path.d.ts","./node_modules/@types/node/perf_hooks.d.ts","./node_modules/@types/node/process.d.ts","./node_modules/@types/node/punycode.d.ts","./node_modules/@types/node/querystring.d.ts","./node_modules/@types/node/readline.d.ts","./node_modules/@types/node/readline/promises.d.ts","./node_modules/@types/node/repl.d.ts","./node_modules/@types/node/sea.d.ts","./node_modules/@types/node/stream.d.ts","./node_modules/@types/node/stream/promises.d.ts","./node_modules/@types/node/stream/consumers.d.ts","./node_modules/@types/node/stream/web.d.ts","./node_modules/@types/node/string_decoder.d.ts","./node_modules/@types/node/test.d.ts","./node_modules/@types/node/timers.d.ts","./node_modules/@types/node/timers/promises.d.ts","./node_modules/@types/node/tls.d.ts","./node_modules/@types/node/trace_events.d.ts","./node_modules/@types/node/tty.d.ts","./node_modules/@types/node/url.d.ts","./node_modules/@types/node/util.d.ts","./node_modules/@types/node/v8.d.ts","./node_modules/@types/node/vm.d.ts","./node_modules/@types/node/wasi.d.ts","./node_modules/@types/node/worker_threads.d.ts","./node_modules/@types/node/zlib.d.ts","./node_modules/@types/node/index.d.ts","./node_modules/@types/react/canary.d.ts","./node_modules/@types/react/experimental.d.ts","./node_modules/@types/react-dom/index.d.ts","./node_modules/@types/react-dom/canary.d.ts","./node_modules/@types/react-dom/experimental.d.ts","./node_modules/next/dist/lib/fallback.d.ts","./node_modules/next/dist/compiled/webpack/webpack.d.ts","./node_modules/next/dist/shared/lib/modern-browserslist-target.d.ts","./node_modules/next/dist/shared/lib/entry-constants.d.ts","./node_modules/next/dist/shared/lib/constants.d.ts","./node_modules/next/dist/lib/bundler.d.ts","./node_modules/next/dist/server/config.d.ts","./node_modules/next/dist/lib/load-custom-routes.d.ts","./node_modules/next/dist/shared/lib/image-config.d.ts","./node_modules/next/dist/build/webpack/plugins/subresource-integrity-plugin.d.ts","./node_modules/next/dist/server/body-streams.d.ts","./node_modules/next/dist/server/request/search-params.d.ts","./node_modules/next/dist/shared/lib/segment-cache/vary-params-decoding.d.ts","./node_modules/next/dist/server/app-render/vary-params.d.ts","./node_modules/next/dist/server/request/params.d.ts","./node_modules/next/dist/server/route-kind.d.ts","./node_modules/next/dist/server/route-definitions/route-definition.d.ts","./node_modules/next/dist/server/route-matches/route-match.d.ts","./node_modules/next/dist/client/components/app-router-headers.d.ts","./node_modules/next/dist/server/lib/cache-control.d.ts","./node_modules/next/dist/shared/lib/app-router-types.d.ts","./node_modules/next/dist/server/lib/cache-handlers/types.d.ts","./node_modules/next/dist/server/use-cache/use-cache-wrapper.d.ts","./node_modules/next/dist/server/resume-data-cache/cache-store.d.ts","./node_modules/next/dist/server/resume-data-cache/resume-data-cache.d.ts","./node_modules/next/dist/lib/constants.d.ts","./node_modules/next/dist/server/render-result.d.ts","./node_modules/next/dist/server/response-cache/types.d.ts","./node_modules/next/dist/server/response-cache/index.d.ts","./node_modules/@types/react/jsx-runtime.d.ts","./node_modules/next/dist/next-devtools/userspace/pages/pages-dev-overlay-setup.d.ts","./node_modules/next/dist/build/static-paths/types.d.ts","./node_modules/next/dist/server/route-definitions/app-page-route-definition.d.ts","./node_modules/next/dist/build/adapter/setup-node-env.external.d.ts","./node_modules/next/dist/server/instrumentation/types.d.ts","./node_modules/next/dist/lib/setup-exception-listeners.d.ts","./node_modules/next/dist/lib/worker.d.ts","./node_modules/next/dist/server/lib/experimental/ppr.d.ts","./node_modules/next/dist/lib/page-types.d.ts","./node_modules/next/dist/build/segment-config/app/app-segment-config.d.ts","./node_modules/next/dist/build/segment-config/pages/pages-segment-config.d.ts","./node_modules/next/dist/build/analysis/get-page-static-info.d.ts","./node_modules/next/dist/build/webpack/loaders/get-module-build-info.d.ts","./node_modules/next/dist/build/webpack/plugins/middleware-plugin.d.ts","./node_modules/next/dist/server/require-hook.d.ts","./node_modules/next/dist/server/node-polyfill-crypto.d.ts","./node_modules/next/dist/server/node-environment-baseline.d.ts","./node_modules/next/dist/server/node-environment-extensions/error-inspect.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-file.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-exit.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-dim.external.d.ts","./node_modules/next/dist/server/node-environment-extensions/unhandled-rejection.external.d.ts","./node_modules/next/dist/server/node-environment-extensions/random.d.ts","./node_modules/next/dist/server/node-environment-extensions/date.d.ts","./node_modules/next/dist/server/node-environment-extensions/web-crypto.d.ts","./node_modules/next/dist/server/node-environment-extensions/node-crypto.d.ts","./node_modules/next/dist/server/node-environment-extensions/fast-set-immediate.external.d.ts","./node_modules/next/dist/server/node-environment.d.ts","./node_modules/next/dist/build/page-extensions-type.d.ts","./node_modules/next/dist/server/route-modules/app-page/module.compiled.d.ts","./node_modules/next/dist/server/route-definitions/app-route-route-definition.d.ts","./node_modules/next/dist/server/lib/i18n-provider.d.ts","./node_modules/next/dist/server/web/next-url.d.ts","./node_modules/next/dist/compiled/@edge-runtime/cookies/index.d.ts","./node_modules/next/dist/server/web/spec-extension/cookies.d.ts","./node_modules/next/dist/server/web/spec-extension/request.d.ts","./node_modules/next/dist/shared/lib/deep-readonly.d.ts","./node_modules/next/dist/server/lib/incremental-cache/index.d.ts","./node_modules/next/dist/shared/lib/router/utils/middleware-route-matcher.d.ts","./node_modules/next/dist/build/webpack/plugins/flight-manifest-plugin.d.ts","./node_modules/next/dist/build/webpack/plugins/next-font-manifest-plugin.d.ts","./node_modules/next/dist/server/route-definitions/locale-route-definition.d.ts","./node_modules/next/dist/server/route-definitions/pages-route-definition.d.ts","./node_modules/next/dist/shared/lib/mitt.d.ts","./node_modules/next/dist/client/with-router.d.ts","./node_modules/next/dist/client/router.d.ts","./node_modules/next/dist/client/route-loader.d.ts","./node_modules/next/dist/client/page-loader.d.ts","./node_modules/next/dist/shared/lib/bloom-filter.d.ts","./node_modules/next/dist/shared/lib/router/router.d.ts","./node_modules/next/dist/shared/lib/router-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/loadable-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/loadable.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/image-config-context.shared-runtime.d.ts","./node_modules/next/dist/client/components/readonly-url-search-params.d.ts","./node_modules/next/dist/shared/lib/hooks-client-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/head-manager-context.shared-runtime.d.ts","./node_modules/next/dist/client/flight-data-helpers.d.ts","./node_modules/next/dist/client/components/segment-cache/cache-key.d.ts","./node_modules/next/dist/client/components/router-reducer/fetch-server-response.d.ts","./node_modules/next/dist/client/components/segment-cache/types.d.ts","./node_modules/next/dist/shared/lib/segment-cache/segment-value-encoding.d.ts","./node_modules/next/dist/client/components/segment-cache/scheduler.d.ts","./node_modules/next/dist/client/components/segment-cache/cache-map.d.ts","./node_modules/next/dist/client/components/segment-cache/vary-path.d.ts","./node_modules/next/dist/client/components/segment-cache/cache.d.ts","./node_modules/next/dist/client/components/router-reducer/ppr-navigations.d.ts","./node_modules/next/dist/client/components/segment-cache/navigation.d.ts","./node_modules/next/dist/client/components/router-reducer/router-reducer-types.d.ts","./node_modules/next/dist/shared/lib/app-router-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/server-inserted-html.shared-runtime.d.ts","./node_modules/next/dist/server/route-modules/pages/vendored/contexts/entrypoints.d.ts","./node_modules/next/dist/server/route-modules/pages/module.compiled.d.ts","./node_modules/next/dist/build/templates/pages.d.ts","./node_modules/next/dist/server/route-modules/pages/module.d.ts","./node_modules/next/dist/server/render.d.ts","./node_modules/next/dist/build/webpack/plugins/pages-manifest-plugin.d.ts","./node_modules/next/dist/server/route-definitions/pages-api-route-definition.d.ts","./node_modules/next/dist/server/route-matches/pages-api-route-match.d.ts","./node_modules/next/dist/server/route-matchers/route-matcher.d.ts","./node_modules/next/dist/server/route-matcher-providers/route-matcher-provider.d.ts","./node_modules/next/dist/server/route-matcher-managers/route-matcher-manager.d.ts","./node_modules/next/dist/server/normalizers/normalizer.d.ts","./node_modules/next/dist/server/normalizers/locale-route-normalizer.d.ts","./node_modules/next/dist/server/normalizers/request/pathname-normalizer.d.ts","./node_modules/next/dist/server/normalizers/request/suffix.d.ts","./node_modules/next/dist/server/normalizers/request/rsc.d.ts","./node_modules/next/dist/server/normalizers/request/next-data.d.ts","./node_modules/next/dist/server/after/builtin-request-context.d.ts","./node_modules/next/dist/server/normalizers/request/segment-prefix-rsc.d.ts","./node_modules/next/dist/server/route-modules/pages/builtin/_error.d.ts","./node_modules/next/dist/server/load-default-error-components.d.ts","./node_modules/next/dist/server/base-server.d.ts","./node_modules/next/dist/server/after/after.d.ts","./node_modules/next/dist/server/after/after-context.d.ts","./node_modules/next/dist/server/use-cache/cache-life.d.ts","./node_modules/next/dist/server/app-render/work-async-storage-instance.d.ts","./node_modules/next/dist/server/lib/lazy-result.d.ts","./node_modules/next/dist/server/app-render/create-error-handler.d.ts","./node_modules/next/dist/shared/lib/action-revalidation-kind.d.ts","./node_modules/next/dist/server/app-render/work-async-storage.external.d.ts","./node_modules/next/dist/server/async-storage/work-store.d.ts","./node_modules/next/dist/server/web/http.d.ts","./node_modules/next/dist/client/components/hooks-server-context.d.ts","./node_modules/next/dist/server/route-modules/app-route/shared-modules.d.ts","./node_modules/next/dist/client/components/redirect-status-code.d.ts","./node_modules/next/dist/client/components/redirect-error.d.ts","./node_modules/next/dist/server/web/spec-extension/adapters/request-cookies.d.ts","./node_modules/next/dist/server/async-storage/draft-mode-provider.d.ts","./node_modules/next/dist/server/web/spec-extension/adapters/headers.d.ts","./node_modules/next/dist/server/app-render/cache-signal.d.ts","./node_modules/next/dist/server/app-render/instant-validation/boundary-tracking.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-validation-error.d.ts","./node_modules/next/dist/shared/lib/router/utils/parse-relative-url.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-samples.d.ts","./node_modules/next/dist/server/app-render/dynamic-rendering.d.ts","./node_modules/next/dist/server/app-render/work-unit-async-storage-instance.d.ts","./node_modules/next/dist/server/lib/implicit-tags.d.ts","./node_modules/next/dist/server/app-render/staged-rendering.d.ts","./node_modules/next/dist/server/app-render/work-unit-async-storage.external.d.ts","./node_modules/next/dist/build/templates/app-route.d.ts","./node_modules/next/dist/server/app-render/action-async-storage-instance.d.ts","./node_modules/next/dist/server/app-render/action-async-storage.external.d.ts","./node_modules/next/dist/server/route-modules/app-route/module.d.ts","./node_modules/next/dist/server/route-modules/app-route/module.compiled.d.ts","./node_modules/next/dist/build/segment-config/app/app-segments.d.ts","./node_modules/next/dist/build/get-supported-browsers.d.ts","./node_modules/next/dist/build/utils.d.ts","./node_modules/next/dist/build/rendering-mode.d.ts","./node_modules/next/dist/server/lib/router-utils/build-prefetch-segment-data-route.d.ts","./node_modules/next/dist/server/lib/cpu-profile.d.ts","./node_modules/next/dist/build/turborepo-access-trace/types.d.ts","./node_modules/next/dist/build/turborepo-access-trace/result.d.ts","./node_modules/next/dist/build/turborepo-access-trace/helpers.d.ts","./node_modules/next/dist/build/turborepo-access-trace/index.d.ts","./node_modules/next/dist/export/routes/types.d.ts","./node_modules/next/dist/export/types.d.ts","./node_modules/next/dist/export/worker.d.ts","./node_modules/next/dist/build/worker.d.ts","./node_modules/next/dist/build/index.d.ts","./node_modules/next/dist/lib/coalesced-function.d.ts","./node_modules/next/dist/server/lib/router-utils/types.d.ts","./node_modules/next/dist/trace/types.d.ts","./node_modules/next/dist/trace/trace.d.ts","./node_modules/next/dist/trace/shared.d.ts","./node_modules/next/dist/trace/index.d.ts","./node_modules/next/dist/build/load-jsconfig.d.ts","./node_modules/@next/env/dist/index.d.ts","./node_modules/next/dist/build/webpack/plugins/telemetry-plugin/use-cache-tracker-utils.d.ts","./node_modules/next/dist/build/webpack/plugins/telemetry-plugin/telemetry-plugin.d.ts","./node_modules/next/dist/telemetry/storage.d.ts","./node_modules/next/dist/build/build-context.d.ts","./node_modules/next/dist/build/webpack-config.d.ts","./node_modules/next/dist/build/swc/generated-native.d.ts","./node_modules/next/dist/build/define-env.d.ts","./node_modules/next/dist/build/swc/index.d.ts","./node_modules/next/dist/build/swc/types.d.ts","./node_modules/next/dist/server/dev/parse-version-info.d.ts","./node_modules/next/dist/next-devtools/shared/types.d.ts","./node_modules/next/dist/server/dev/dev-indicator-server-state.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/cache-indicator.d.ts","./node_modules/next/dist/server/lib/parse-stack.d.ts","./node_modules/next/dist/next-devtools/server/shared.d.ts","./node_modules/next/dist/next-devtools/shared/stack-frame.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/utils/get-error-by-type.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/container/runtime-error/render-error.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/shared.d.ts","./node_modules/next/dist/server/dev/debug-channel.d.ts","./node_modules/next/dist/server/dev/hot-reloader-types.d.ts","./node_modules/next/dist/server/web/spec-extension/fetch-event.d.ts","./node_modules/next/dist/server/web/spec-extension/response.d.ts","./node_modules/next/dist/build/segment-config/middleware/middleware-config.d.ts","./node_modules/next/dist/server/web/types.d.ts","./node_modules/next/dist/shared/lib/router/utils/parse-url.d.ts","./node_modules/next/dist/server/base-http/node.d.ts","./node_modules/next/dist/server/lib/async-callback-set.d.ts","./node_modules/next/dist/shared/lib/router/utils/route-regex.d.ts","./node_modules/next/dist/shared/lib/router/utils/route-matcher.d.ts","./node_modules/sharp/lib/index.d.ts","./node_modules/next/dist/server/image-optimizer.d.ts","./node_modules/next/dist/server/next-server.d.ts","./node_modules/next/dist/server/lib/types.d.ts","./node_modules/next/dist/server/lib/lru-cache.d.ts","./node_modules/next/dist/server/lib/dev-bundler-service.d.ts","./node_modules/next/dist/server/dev/static-paths-worker.d.ts","./node_modules/next/dist/server/dev/next-dev-server.d.ts","./node_modules/next/dist/server/next.d.ts","./node_modules/next/dist/server/lib/render-server.d.ts","./node_modules/next/dist/server/lib/router-server.d.ts","./node_modules/next/dist/shared/lib/router/utils/path-match.d.ts","./node_modules/next/dist/server/lib/router-utils/filesystem.d.ts","./node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.d.ts","./node_modules/next/dist/server/lib/router-utils/router-server-context.d.ts","./node_modules/next/dist/server/route-modules/route-module.d.ts","./node_modules/next/dist/server/load-components.d.ts","./node_modules/next/dist/server/web/adapter.d.ts","./node_modules/next/dist/server/app-render/types.d.ts","./node_modules/next/dist/build/webpack/loaders/metadata/types.d.ts","./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.d.ts","./node_modules/next/dist/server/lib/app-dir-module.d.ts","./node_modules/next/dist/server/app-render/app-render.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/contexts/entrypoints.d.ts","./node_modules/next/dist/client/components/error-boundary.d.ts","./node_modules/next/dist/client/components/layout-router.d.ts","./node_modules/next/dist/client/components/render-from-template-context.d.ts","./node_modules/next/dist/client/components/client-page.d.ts","./node_modules/next/dist/client/components/client-segment.d.ts","./node_modules/next/dist/client/components/http-access-fallback/error-boundary.d.ts","./node_modules/next/dist/lib/metadata/types/alternative-urls-types.d.ts","./node_modules/next/dist/lib/metadata/types/extra-types.d.ts","./node_modules/next/dist/lib/metadata/types/metadata-types.d.ts","./node_modules/next/dist/lib/metadata/types/manifest-types.d.ts","./node_modules/next/dist/lib/metadata/types/opengraph-types.d.ts","./node_modules/next/dist/lib/metadata/types/twitter-types.d.ts","./node_modules/next/dist/lib/metadata/types/metadata-interface.d.ts","./node_modules/next/dist/lib/metadata/types/resolvers.d.ts","./node_modules/next/dist/lib/metadata/types/icons.d.ts","./node_modules/next/dist/lib/metadata/resolve-metadata.d.ts","./node_modules/next/dist/lib/metadata/metadata.d.ts","./node_modules/next/dist/lib/framework/boundary-components.d.ts","./node_modules/next/dist/server/app-render/rsc/preloads.d.ts","./node_modules/next/dist/server/app-render/rsc/postpone.d.ts","./node_modules/next/dist/server/app-render/rsc/taint.d.ts","./node_modules/next/dist/server/app-render/collect-segment-data.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-validation.d.ts","./node_modules/next/dist/next-devtools/userspace/app/segment-explorer-node.d.ts","./node_modules/next/dist/server/app-render/entry-base.d.ts","./node_modules/next/dist/build/templates/app-page.d.ts","./node_modules/next/dist/server/route-modules/app-page/helpers/prerender-manifest-matcher.d.ts","./node_modules/@types/react/jsx-dev-runtime.d.ts","./node_modules/@types/react/compiler-runtime.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/rsc/entrypoints.d.ts","./node_modules/@types/react-dom/client.d.ts","./node_modules/@types/react-dom/static.d.ts","./node_modules/@types/react-dom/server.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/ssr/entrypoints.d.ts","./node_modules/next/dist/server/route-modules/app-page/module.d.ts","./node_modules/next/dist/server/request/fallback-params.d.ts","./node_modules/next/dist/server/web/spec-extension/image-response.d.ts","./node_modules/next/dist/server/web/spec-extension/user-agent.d.ts","./node_modules/next/dist/server/web/spec-extension/url-pattern.d.ts","./node_modules/next/dist/server/after/index.d.ts","./node_modules/next/dist/server/request/connection.d.ts","./node_modules/next/dist/server/web/exports/index.d.ts","./node_modules/next/dist/server/request-meta.d.ts","./node_modules/next/dist/cli/next-test.d.ts","./node_modules/next/dist/shared/lib/size-limit.d.ts","./node_modules/next/dist/server/config-shared.d.ts","./node_modules/next/dist/server/base-http/index.d.ts","./node_modules/next/dist/server/api-utils/index.d.ts","./node_modules/next/dist/build/adapter/build-complete.d.ts","./node_modules/next/dist/types.d.ts","./node_modules/next/dist/shared/lib/html-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/utils.d.ts","./node_modules/next/dist/pages/_app.d.ts","./node_modules/next/app.d.ts","./node_modules/next/dist/server/web/spec-extension/unstable-cache.d.ts","./node_modules/next/dist/server/web/spec-extension/revalidate.d.ts","./node_modules/next/dist/server/web/spec-extension/unstable-no-store.d.ts","./node_modules/next/dist/server/use-cache/cache-tag.d.ts","./node_modules/next/cache.d.ts","./node_modules/next/dist/pages/_document.d.ts","./node_modules/next/document.d.ts","./node_modules/next/dist/shared/lib/dynamic.d.ts","./node_modules/next/dynamic.d.ts","./node_modules/next/dist/pages/_error.d.ts","./node_modules/next/dist/client/components/catch-error.d.ts","./node_modules/next/dist/api/error.d.ts","./node_modules/next/error.d.ts","./node_modules/next/dist/shared/lib/head.d.ts","./node_modules/next/head.d.ts","./node_modules/next/dist/server/request/cookies.d.ts","./node_modules/next/dist/server/request/headers.d.ts","./node_modules/next/dist/server/request/draft-mode.d.ts","./node_modules/next/headers.d.ts","./node_modules/next/dist/shared/lib/get-img-props.d.ts","./node_modules/next/dist/client/image-component.d.ts","./node_modules/next/dist/shared/lib/image-external.d.ts","./node_modules/next/image.d.ts","./node_modules/next/dist/client/link.d.ts","./node_modules/next/link.d.ts","./node_modules/next/dist/client/components/unrecognized-action-error.d.ts","./node_modules/next/dist/client/components/redirect.d.ts","./node_modules/next/dist/client/components/not-found.d.ts","./node_modules/next/dist/client/components/forbidden.d.ts","./node_modules/next/dist/client/components/unauthorized.d.ts","./node_modules/next/dist/client/components/unstable-rethrow.server.d.ts","./node_modules/next/dist/client/components/unstable-rethrow.d.ts","./node_modules/next/dist/client/components/navigation.react-server.d.ts","./node_modules/next/dist/client/components/navigation.d.ts","./node_modules/next/navigation.d.ts","./node_modules/next/router.d.ts","./node_modules/next/dist/client/script.d.ts","./node_modules/next/script.d.ts","./node_modules/next/dist/compiled/@edge-runtime/primitives/url.d.ts","./node_modules/next/dist/compiled/@vercel/og/satori/index.d.ts","./node_modules/next/dist/compiled/@vercel/og/types.d.ts","./node_modules/next/server.d.ts","./node_modules/next/types/global.d.ts","./node_modules/next/types/compiled.d.ts","./node_modules/next/types.d.ts","./node_modules/next/index.d.ts","./node_modules/next/image-types/global.d.ts","./.next/types/routes.d.ts","./next-env.d.ts","./next.config.ts","./src/data/categories.ts","./src/data/excelproducts.ts","./src/data/products.ts","./node_modules/redux/dist/redux.d.ts","./node_modules/react-redux/dist/react-redux.d.ts","./node_modules/immer/dist/immer.d.ts","./node_modules/reselect/dist/reselect.d.ts","./node_modules/redux-thunk/dist/redux-thunk.d.ts","./node_modules/@reduxjs/toolkit/dist/uncheckedindexed.ts","./node_modules/@reduxjs/toolkit/dist/index.d.mts","./node_modules/axios/index.d.ts","./src/utils/api.ts","./src/redux/slices/authslice.ts","./src/redux/slices/productslice.ts","./src/redux/slices/orderslice.ts","./src/redux/slices/inquiryslice.ts","./src/redux/slices/userslice.ts","./src/redux/slices/collectionslice.ts","./src/redux/slices/occasionslice.ts","./src/redux/slices/homepagesettingsslice.ts","./src/redux/slices/cartslice.ts","./src/redux/store.ts","./src/redux/hooks.ts","./src/hooks/usecart.ts","./src/utils/compressimage.ts","./src/utils/formatweight.ts","./src/utils/getimageurl.ts","./src/utils/shipping.ts","./node_modules/next/dist/compiled/@next/font/dist/types.d.ts","./node_modules/next/dist/compiled/@next/font/dist/google/index.d.ts","./node_modules/next/font/google/index.d.ts","./node_modules/lucide-react/dist/lucide-react.d.ts","./src/components/navbar.tsx","./src/components/footer.tsx","./src/components/announcementbar.tsx","./node_modules/motion-utils/dist/index.d.ts","./node_modules/motion-dom/dist/index.d.ts","./node_modules/framer-motion/dist/types.d-docc-kzb.d.ts","./node_modules/framer-motion/dist/types/index.d.ts","./src/components/cartdrawer.tsx","./src/components/reduxprovider.tsx","./node_modules/goober/goober.d.ts","./node_modules/react-hot-toast/dist/index.d.ts","./src/app/layout.tsx","./node_modules/embla-carousel/esm/components/alignment.d.ts","./node_modules/embla-carousel/esm/components/noderects.d.ts","./node_modules/embla-carousel/esm/components/axis.d.ts","./node_modules/embla-carousel/esm/components/slidestoscroll.d.ts","./node_modules/embla-carousel/esm/components/limit.d.ts","./node_modules/embla-carousel/esm/components/scrollcontain.d.ts","./node_modules/embla-carousel/esm/components/dragtracker.d.ts","./node_modules/embla-carousel/esm/components/utils.d.ts","./node_modules/embla-carousel/esm/components/animations.d.ts","./node_modules/embla-carousel/esm/components/counter.d.ts","./node_modules/embla-carousel/esm/components/eventhandler.d.ts","./node_modules/embla-carousel/esm/components/eventstore.d.ts","./node_modules/embla-carousel/esm/components/percentofview.d.ts","./node_modules/embla-carousel/esm/components/resizehandler.d.ts","./node_modules/embla-carousel/esm/components/vector1d.d.ts","./node_modules/embla-carousel/esm/components/scrollbody.d.ts","./node_modules/embla-carousel/esm/components/scrollbounds.d.ts","./node_modules/embla-carousel/esm/components/scrolllooper.d.ts","./node_modules/embla-carousel/esm/components/scrollprogress.d.ts","./node_modules/embla-carousel/esm/components/slideregistry.d.ts","./node_modules/embla-carousel/esm/components/scrolltarget.d.ts","./node_modules/embla-carousel/esm/components/scrollto.d.ts","./node_modules/embla-carousel/esm/components/slidefocus.d.ts","./node_modules/embla-carousel/esm/components/translate.d.ts","./node_modules/embla-carousel/esm/components/slidelooper.d.ts","./node_modules/embla-carousel/esm/components/slideshandler.d.ts","./node_modules/embla-carousel/esm/components/slidesinview.d.ts","./node_modules/embla-carousel/esm/components/engine.d.ts","./node_modules/embla-carousel/esm/components/optionshandler.d.ts","./node_modules/embla-carousel/esm/components/plugins.d.ts","./node_modules/embla-carousel/esm/components/emblacarousel.d.ts","./node_modules/embla-carousel/esm/components/draghandler.d.ts","./node_modules/embla-carousel/esm/components/options.d.ts","./node_modules/embla-carousel/esm/index.d.ts","./node_modules/embla-carousel-react/esm/components/useemblacarousel.d.ts","./node_modules/embla-carousel-react/esm/index.d.ts","./node_modules/embla-carousel-autoplay/esm/components/options.d.ts","./node_modules/embla-carousel-autoplay/esm/components/autoplay.d.ts","./node_modules/embla-carousel-autoplay/esm/index.d.ts","./src/app/page.tsx","./src/components/breadcrumbhero.tsx","./src/app/account/page.tsx","./src/components/breadcrumb.tsx","./src/app/account/orders/page.tsx","./src/app/account/orders/[id]/page.tsx","./src/app/account/profile/page.tsx","./src/components/admin/adminsidebar.tsx","./src/app/admin/layout.tsx","./src/app/admin/page.tsx","./node_modules/react-hook-form/dist/constants.d.ts","./node_modules/react-hook-form/dist/utils/createsubject.d.ts","./node_modules/react-hook-form/dist/types/events.d.ts","./node_modules/react-hook-form/dist/types/path/common.d.ts","./node_modules/react-hook-form/dist/types/path/eager.d.ts","./node_modules/react-hook-form/dist/types/path/index.d.ts","./node_modules/react-hook-form/dist/types/fieldarray.d.ts","./node_modules/react-hook-form/dist/types/resolvers.d.ts","./node_modules/react-hook-form/dist/types/form.d.ts","./node_modules/react-hook-form/dist/types/utils.d.ts","./node_modules/react-hook-form/dist/types/fields.d.ts","./node_modules/react-hook-form/dist/types/errors.d.ts","./node_modules/react-hook-form/dist/types/validator.d.ts","./node_modules/react-hook-form/dist/types/controller.d.ts","./node_modules/react-hook-form/dist/types/watch.d.ts","./node_modules/react-hook-form/dist/types/index.d.ts","./node_modules/react-hook-form/dist/controller.d.ts","./node_modules/react-hook-form/dist/form.d.ts","./node_modules/react-hook-form/dist/formstatesubscribe.d.ts","./node_modules/react-hook-form/dist/logic/appenderrors.d.ts","./node_modules/react-hook-form/dist/logic/createformcontrol.d.ts","./node_modules/react-hook-form/dist/logic/index.d.ts","./node_modules/react-hook-form/dist/usecontroller.d.ts","./node_modules/react-hook-form/dist/usefieldarray.d.ts","./node_modules/react-hook-form/dist/useform.d.ts","./node_modules/react-hook-form/dist/useformcontext.d.ts","./node_modules/react-hook-form/dist/useformstate.d.ts","./node_modules/react-hook-form/dist/usewatch.d.ts","./node_modules/react-hook-form/dist/utils/get.d.ts","./node_modules/react-hook-form/dist/utils/set.d.ts","./node_modules/react-hook-form/dist/utils/index.d.ts","./node_modules/react-hook-form/dist/watch.d.ts","./node_modules/react-hook-form/dist/index.d.ts","./node_modules/zod/v3/helpers/typealiases.d.cts","./node_modules/zod/v3/helpers/util.d.cts","./node_modules/zod/v3/zoderror.d.cts","./node_modules/zod/v3/locales/en.d.cts","./node_modules/zod/v3/errors.d.cts","./node_modules/zod/v3/helpers/parseutil.d.cts","./node_modules/zod/v3/helpers/enumutil.d.cts","./node_modules/zod/v3/helpers/errorutil.d.cts","./node_modules/zod/v3/helpers/partialutil.d.cts","./node_modules/zod/v3/standard-schema.d.cts","./node_modules/zod/v3/types.d.cts","./node_modules/zod/v3/external.d.cts","./node_modules/zod/v3/index.d.cts","./node_modules/zod/v4/core/json-schema.d.cts","./node_modules/zod/v4/core/standard-schema.d.cts","./node_modules/zod/v4/core/registries.d.cts","./node_modules/zod/v4/core/to-json-schema.d.cts","./node_modules/zod/v4/core/util.d.cts","./node_modules/zod/v4/core/versions.d.cts","./node_modules/zod/v4/core/schemas.d.cts","./node_modules/zod/v4/core/checks.d.cts","./node_modules/zod/v4/core/errors.d.cts","./node_modules/zod/v4/core/core.d.cts","./node_modules/zod/v4/core/parse.d.cts","./node_modules/zod/v4/core/regexes.d.cts","./node_modules/zod/v4/locales/ar.d.cts","./node_modules/zod/v4/locales/az.d.cts","./node_modules/zod/v4/locales/be.d.cts","./node_modules/zod/v4/locales/bg.d.cts","./node_modules/zod/v4/locales/ca.d.cts","./node_modules/zod/v4/locales/cs.d.cts","./node_modules/zod/v4/locales/da.d.cts","./node_modules/zod/v4/locales/de.d.cts","./node_modules/zod/v4/locales/en.d.cts","./node_modules/zod/v4/locales/eo.d.cts","./node_modules/zod/v4/locales/es.d.cts","./node_modules/zod/v4/locales/fa.d.cts","./node_modules/zod/v4/locales/fi.d.cts","./node_modules/zod/v4/locales/fr.d.cts","./node_modules/zod/v4/locales/fr-ca.d.cts","./node_modules/zod/v4/locales/he.d.cts","./node_modules/zod/v4/locales/hu.d.cts","./node_modules/zod/v4/locales/hy.d.cts","./node_modules/zod/v4/locales/id.d.cts","./node_modules/zod/v4/locales/is.d.cts","./node_modules/zod/v4/locales/it.d.cts","./node_modules/zod/v4/locales/ja.d.cts","./node_modules/zod/v4/locales/ka.d.cts","./node_modules/zod/v4/locales/kh.d.cts","./node_modules/zod/v4/locales/km.d.cts","./node_modules/zod/v4/locales/ko.d.cts","./node_modules/zod/v4/locales/lt.d.cts","./node_modules/zod/v4/locales/mk.d.cts","./node_modules/zod/v4/locales/ms.d.cts","./node_modules/zod/v4/locales/nl.d.cts","./node_modules/zod/v4/locales/no.d.cts","./node_modules/zod/v4/locales/ota.d.cts","./node_modules/zod/v4/locales/ps.d.cts","./node_modules/zod/v4/locales/pl.d.cts","./node_modules/zod/v4/locales/pt.d.cts","./node_modules/zod/v4/locales/ru.d.cts","./node_modules/zod/v4/locales/sl.d.cts","./node_modules/zod/v4/locales/sv.d.cts","./node_modules/zod/v4/locales/ta.d.cts","./node_modules/zod/v4/locales/th.d.cts","./node_modules/zod/v4/locales/tr.d.cts","./node_modules/zod/v4/locales/ua.d.cts","./node_modules/zod/v4/locales/uk.d.cts","./node_modules/zod/v4/locales/ur.d.cts","./node_modules/zod/v4/locales/uz.d.cts","./node_modules/zod/v4/locales/vi.d.cts","./node_modules/zod/v4/locales/zh-cn.d.cts","./node_modules/zod/v4/locales/zh-tw.d.cts","./node_modules/zod/v4/locales/yo.d.cts","./node_modules/zod/v4/locales/index.d.cts","./node_modules/zod/v4/core/doc.d.cts","./node_modules/zod/v4/core/api.d.cts","./node_modules/zod/v4/core/json-schema-processors.d.cts","./node_modules/zod/v4/core/json-schema-generator.d.cts","./node_modules/zod/v4/core/index.d.cts","./node_modules/@hookform/resolvers/zod/dist/zod.d.ts","./node_modules/@hookform/resolvers/zod/dist/index.d.ts","./node_modules/zod/v4/classic/errors.d.cts","./node_modules/zod/v4/classic/parse.d.cts","./node_modules/zod/v4/classic/schemas.d.cts","./node_modules/zod/v4/classic/checks.d.cts","./node_modules/zod/v4/classic/compat.d.cts","./node_modules/zod/v4/classic/from-json-schema.d.cts","./node_modules/zod/v4/classic/iso.d.cts","./node_modules/zod/v4/classic/coerce.d.cts","./node_modules/zod/v4/classic/external.d.cts","./node_modules/zod/index.d.cts","./src/components/ui/modal.tsx","./src/app/admin/collections/page.tsx","./src/components/admin/emptystate.tsx","./src/app/admin/customers/page.tsx","./src/app/admin/inquiries/page.tsx","./src/app/admin/login/page.tsx","./src/app/admin/occasions/page.tsx","./src/app/admin/orders/page.tsx","./src/app/admin/orders/create-custom/page.tsx","./src/components/admin/productmodal.tsx","./src/app/admin/products/page.tsx","./src/app/admin/settings/page.tsx","./src/app/admin/users/page.tsx","./src/components/productcard.tsx","./src/app/category/[slug]/page.tsx","./src/app/checkout/page.tsx","./src/app/contact/page.tsx","./src/app/login/page.tsx","./src/app/occasion/[slug]/page.tsx","./src/app/pay/[id]/page.tsx","./src/app/product/[slug]/page.tsx","./src/components/hero.tsx","./src/components/sectionheader.tsx","./src/context/cartcontext.tsx","./.next/types/cache-life.d.ts","./.next/types/validator.ts","./.next/dev/types/cache-life.d.ts","./.next/dev/types/routes.d.ts","./.next/dev/types/validator.ts","./node_modules/@types/estree/index.d.ts","./node_modules/@types/json-schema/index.d.ts","./node_modules/@types/json5/index.d.ts","./node_modules/@types/use-sync-external-store/index.d.ts"],"fileIdsList":[[97,143,483,484,485,486,775],[97,143,775,777],[97,143,226,527,576,616,618,620,621,622,624,625,752,754,755,756,757,758,759,761,762,763,765,766,767,768,769,770,771,775,777,778],[97,143,483,484,485,486,777],[97,143,226,527,530,576,616,618,620,621,622,624,625,752,754,755,756,757,758,759,761,762,763,765,766,767,768,769,770,771,775,777],[97,143,528,529,530,775,777],[97,143,226,528,775,777],[97,143,739,775,777],[97,143,658,671,738,775,777],[97,143,536,538,539,540,541,775,777],[97,143,226,775,777],[97,140,143,775,777],[97,142,143,775,777],[143,775,777],[97,143,148,176,775,777],[97,143,144,149,154,162,173,184,775,777],[97,143,144,145,154,162,775,777],[92,93,94,97,143,775,777],[97,143,146,185,775,777],[97,143,147,148,155,163,775,777],[97,143,148,173,181,775,777],[97,143,149,151,154,162,775,777],[97,142,143,150,775,777],[97,143,151,152,775,777],[97,143,153,154,775,777],[97,142,143,154,775,777],[97,143,154,155,156,173,184,775,777],[97,143,154,155,156,169,173,176,775,777],[97,143,151,154,157,162,173,184,775,777],[97,143,154,155,157,158,162,173,181,184,775,777],[97,143,157,159,173,181,184,775,777],[95,96,97,98,99,100,101,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,775,777],[97,143,154,160,775,777],[97,143,161,184,189,775,777],[97,143,151,154,162,173,775,777],[97,143,163,775,777],[97,143,164,775,777],[97,142,143,165,775,777],[97,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,775,777],[97,143,167,775,777],[97,143,168,775,777],[97,143,154,169,170,775,777],[97,143,169,171,185,187,775,777],[97,143,154,173,174,176,775,777],[97,143,175,176,775,777],[97,143,173,174,775,777],[97,143,176,775,777],[97,143,177,775,777],[97,140,143,173,178,775,777],[97,143,154,179,180,775,777],[97,143,179,180,775,777],[97,143,148,162,173,181,775,777],[97,143,182,775,777],[97,143,162,183,775,777],[97,143,157,168,184,775,777],[97,143,148,185,775,777],[97,143,173,186,775,777],[97,143,161,187,775,777],[97,143,188,775,777],[97,138,143,775,777],[97,138,143,154,156,165,173,176,184,187,189,775,777],[97,143,173,190,775,777],[85,89,97,143,192,193,194,196,478,523,775,777],[85,97,143,775,777],[85,89,97,143,192,193,194,195,459,478,523,775,777],[85,89,97,143,192,193,195,196,478,523,775,777],[85,97,143,196,459,460,775,777],[85,97,143,196,459,775,777],[85,89,97,143,193,194,195,196,478,523,775,777],[85,89,97,143,192,194,195,196,478,523,775,777],[83,84,97,143,775,777],[97,143,610,613,614,775,777],[97,143,610,614,775,777],[97,143,614,775,777],[97,143,611,775,777],[97,143,584,604,775,777],[97,143,578,775,777],[97,143,579,583,584,585,586,587,589,591,592,597,598,607,775,777],[97,143,579,584,775,777],[97,143,587,604,606,609,775,777],[97,143,578,579,580,581,584,585,586,587,588,589,590,591,592,593,594,595,596,597,598,599,600,601,602,603,608,609,775,777],[97,143,607,775,777],[97,143,577,579,580,582,590,599,602,603,608,775,777],[97,143,584,609,775,777],[97,143,605,607,609,775,777],[97,143,578,579,584,587,607,775,777],[97,143,591,775,777],[97,143,581,589,591,592,775,777],[97,143,581,775,777],[97,143,581,591,775,777],[97,143,585,586,587,591,592,597,775,777],[97,143,587,588,592,596,598,607,775,777],[97,143,579,591,600,775,777],[97,143,580,581,582,775,777],[97,143,587,607,775,777],[97,143,587,775,777],[97,143,578,579,775,777],[97,143,579,775,777],[97,143,583,775,777],[97,143,587,592,604,605,606,607,609,775,777],[85,97,143,569,775,777],[85,97,143,226,568,569,570,775,777],[84,97,143,775,777],[97,143,568,775,777],[97,143,481,775,777],[97,143,483,484,485,486,775,777],[97,143,429,492,493,775,777],[97,143,201,202,204,216,240,355,366,474,775,777],[97,143,204,235,236,237,239,474,775,777],[97,143,204,372,374,376,377,379,474,476,775,777],[97,143,204,238,275,474,775,777],[97,143,202,204,215,216,222,228,233,354,355,356,365,474,476,775,777],[97,143,474,775,777],[97,143,211,217,236,256,351,775,777],[97,143,204,775,777],[97,143,197,211,217,775,777],[97,143,383,775,777],[97,143,380,381,383,775,777],[97,143,380,382,474,775,777],[97,143,157,256,453,471,775,777],[97,143,157,327,330,346,351,471,775,777],[97,143,157,299,471,775,777],[97,143,359,775,777],[97,143,358,359,360,775,777],[97,143,358,775,777],[91,97,143,157,197,204,216,222,228,234,236,240,241,254,255,322,352,353,366,474,478,775,777],[97,143,201,204,238,275,372,373,378,474,526,775,777],[97,143,238,526,775,777],[97,143,201,255,424,474,526,775,777],[97,143,526,775,777],[97,143,204,238,239,526,775,777],[97,143,375,526,775,777],[97,143,241,354,357,364,775,777],[85,97,143,429,775,777],[97,143,168,211,226,775,777],[97,143,211,226,775,777],[85,97,143,296,775,777],[85,97,143,226,775,777],[85,97,143,217,226,429,775,777],[97,143,211,282,296,297,508,515,775,777],[97,143,281,509,510,511,512,514,775,777],[97,143,332,775,777],[97,143,332,333,775,777],[97,143,215,217,284,285,775,777],[97,143,217,291,292,775,777],[97,143,217,286,294,775,777],[97,143,291,775,777],[97,143,209,217,284,285,286,287,288,289,290,291,294,775,777],[97,143,217,284,291,292,293,295,775,777],[97,143,217,285,287,288,775,777],[97,143,285,287,290,292,775,777],[97,143,513,775,777],[97,143,217,775,777],[85,97,143,205,502,775,777],[85,97,143,184,775,777],[85,97,143,238,273,775,777],[85,97,143,238,366,775,777],[97,143,271,276,775,777],[85,97,143,272,480,775,777],[97,143,561,775,777],[85,89,97,143,157,192,193,194,195,196,478,522,775,777],[97,143,157,217,775,777],[97,143,157,216,221,302,319,361,362,366,421,423,474,475,775,777],[97,143,254,363,775,777],[97,143,478,775,777],[97,143,203,775,777],[85,97,143,208,211,426,442,444,775,777],[97,143,168,211,426,441,442,443,525,775,777],[97,143,435,436,437,438,439,440,775,777],[97,143,437,775,777],[97,143,441,775,777],[97,143,226,390,391,393,775,777],[85,97,143,217,384,385,386,387,392,775,777],[97,143,390,392,775,777],[97,143,388,775,777],[97,143,389,775,777],[85,97,143,226,272,480,775,777],[85,97,143,226,479,480,775,777],[85,97,143,226,480,775,777],[97,143,319,320,775,777],[97,143,320,775,777],[97,143,157,475,480,775,777],[97,143,349,775,777],[97,142,143,348,775,777],[97,143,211,217,223,225,327,340,344,346,423,426,463,464,471,475,775,777],[97,143,217,266,288,775,777],[97,143,327,338,341,346,775,777],[85,97,143,208,211,327,330,346,349,383,430,431,432,433,434,445,446,447,448,449,450,451,452,526,775,777],[97,143,208,211,236,327,334,335,336,339,340,775,777],[97,143,173,217,236,338,345,426,427,471,775,777],[97,143,342,775,777],[97,143,157,168,205,217,221,231,263,264,267,319,322,387,421,422,463,474,475,476,478,526,775,777],[97,143,208,209,211,775,777],[97,143,327,775,777],[97,142,143,236,263,264,321,322,323,324,325,326,475,775,777],[97,143,346,775,777],[97,142,143,210,211,221,225,261,327,334,335,336,337,338,341,342,343,344,345,464,775,777],[97,143,157,261,262,334,475,476,775,777],[97,143,236,264,319,322,327,423,475,775,777],[97,143,157,474,476,775,777],[97,143,157,173,471,475,476,775,777],[97,143,157,168,197,211,216,223,225,228,231,238,258,263,264,265,266,267,302,303,305,308,310,313,314,315,316,318,366,421,423,471,474,475,476,775,777],[97,143,157,173,775,777],[97,143,204,205,206,234,471,472,473,478,480,526,775,777],[97,143,201,202,474,775,777],[97,143,395,775,777],[97,143,157,173,184,213,379,383,384,385,386,387,393,394,526,775,777],[97,143,168,184,197,211,213,225,228,264,303,308,318,319,372,399,400,401,407,410,411,421,423,471,474,775,777],[97,143,228,234,241,254,264,322,474,775,777],[97,143,157,184,205,216,225,264,405,471,474,775,777],[97,143,425,775,777],[97,143,157,395,408,409,418,775,777],[97,143,471,474,775,777],[97,143,324,464,775,777],[97,143,225,263,366,480,775,777],[97,143,157,168,203,308,368,372,401,407,410,413,471,775,777],[97,143,157,241,254,372,414,775,777],[97,143,204,265,366,416,474,476,775,777],[97,143,157,184,387,474,775,777],[97,143,157,238,265,366,367,368,377,395,415,417,474,775,777],[91,97,143,157,263,420,478,480,775,777],[97,143,317,421,775,777],[97,143,157,168,211,214,216,217,223,225,231,240,241,254,264,267,303,305,315,318,319,366,399,400,401,402,404,406,421,423,471,480,775,777],[97,143,157,173,241,407,412,418,471,775,777],[97,143,244,245,246,247,248,249,250,251,252,253,775,777],[97,143,258,309,775,777],[97,143,311,775,777],[97,143,309,775,777],[97,143,311,312,775,777],[97,143,157,215,216,217,221,222,475,775,777],[97,143,157,168,203,205,223,227,263,266,267,301,421,471,476,478,480,775,777],[97,143,157,168,184,207,214,215,225,227,264,419,464,470,475,775,777],[97,143,334,775,777],[97,143,335,775,777],[97,143,217,228,463,775,777],[97,143,336,775,777],[97,143,210,775,777],[97,143,212,224,775,777],[97,143,157,212,216,223,775,777],[97,143,219,224,775,777],[97,143,220,775,777],[97,143,212,213,775,777],[97,143,212,268,775,777],[97,143,212,775,777],[97,143,214,258,307,775,777],[97,143,306,775,777],[97,143,211,213,214,775,777],[97,143,214,304,775,777],[97,143,211,213,775,777],[97,143,263,366,775,777],[97,143,463,775,777],[97,143,157,184,223,225,229,263,366,420,423,426,427,428,454,455,458,462,464,471,475,775,777],[97,143,277,280,282,283,296,297,775,777],[85,97,143,194,196,226,456,457,775,777],[85,97,143,194,196,226,456,457,461,775,777],[97,143,350,775,777],[97,143,236,257,262,263,327,328,329,330,331,333,346,347,349,352,420,423,474,476,775,777],[97,143,296,775,777],[97,143,157,301,471,775,777],[97,143,301,775,777],[97,143,157,223,269,298,300,302,420,471,478,480,775,777],[97,143,277,278,279,280,282,283,296,297,479,775,777],[91,97,143,157,168,184,212,213,225,231,263,264,267,366,418,419,421,471,474,475,478,775,777],[97,143,208,211,218,775,777],[97,143,262,264,396,399,775,777],[97,143,262,397,465,466,467,468,469,775,777],[97,143,157,258,474,775,777],[97,143,157,775,777],[97,143,261,346,775,777],[97,143,260,775,777],[97,143,262,315,775,777],[97,143,259,261,474,775,777],[97,143,157,207,262,396,397,398,471,474,475,775,777],[85,97,143,211,217,295,775,777],[85,97,143,209,775,777],[97,143,199,200,775,777],[85,97,143,205,775,777],[85,97,143,211,281,775,777],[85,91,97,143,263,267,478,480,775,777],[97,143,205,502,503,775,777],[85,97,143,276,775,777],[85,97,143,168,184,203,270,272,274,275,480,775,777],[97,143,211,238,475,775,777],[97,143,211,403,775,777],[85,97,143,155,157,168,201,203,276,374,478,479,775,777],[85,97,143,192,193,194,195,196,478,523,775,777],[85,86,87,88,89,97,143,775,777],[97,143,148,775,777],[97,143,369,370,371,775,777],[97,143,369,775,777],[85,89,97,143,157,159,168,191,192,193,194,195,196,197,203,231,236,413,441,476,477,480,523,775,777],[97,143,488,775,777],[97,143,490,775,777],[97,143,494,775,777],[97,143,562,775,777],[97,143,496,775,777],[97,143,498,499,500,775,777],[97,143,504,775,777],[90,97,143,482,487,489,491,495,497,501,505,507,517,518,520,524,525,526,527,775,777],[97,143,506,775,777],[97,143,516,775,777],[97,143,272,775,777],[97,143,519,775,777],[97,142,143,262,396,397,399,465,466,468,469,521,523,775,777],[97,143,191,775,777],[85,97,143,641,775,777],[97,143,641,642,643,644,647,648,649,650,651,652,653,656,657,775,777],[97,143,641,775,777],[97,143,645,646,775,777],[85,97,143,638,641,775,777],[97,143,635,636,638,775,777],[97,143,631,634,636,638,775,777],[97,143,635,638,775,777],[85,97,143,626,627,628,631,632,633,635,636,637,638,775,777],[97,143,628,631,632,633,634,635,636,637,638,639,640,775,777],[97,143,635,775,777],[97,143,629,635,636,775,777],[97,143,629,630,775,777],[97,143,634,636,637,775,777],[97,143,634,775,777],[97,143,626,631,634,636,637,775,777],[85,97,143,631,634,635,636,775,777],[97,143,654,655,775,777],[85,97,143,574,775,777],[85,97,143,536,775,777],[97,143,536,775,777],[97,143,173,191,775,777],[97,110,114,143,184,775,777],[97,110,143,173,184,775,777],[97,105,143,775,777],[97,107,110,143,181,184,775,777],[97,143,162,181,775,777],[97,105,143,191,775,777],[97,107,110,143,162,184,775,777],[97,102,103,106,109,143,154,173,184,775,777],[97,110,117,143,775,777],[97,102,108,143,775,777],[97,110,131,132,143,775,777],[97,106,110,143,176,184,191,775,777],[97,131,143,191,775,777],[97,104,105,143,191,775,777],[97,110,143,775,777],[97,104,105,106,107,108,109,110,111,112,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,132,133,134,135,136,137,143,775,777],[97,110,125,143,775,777],[97,110,117,118,143,775,777],[97,108,110,118,119,143,775,777],[97,109,143,775,777],[97,102,105,110,143,775,777],[97,110,114,118,119,143,775,777],[97,114,143,775,777],[97,108,110,113,143,184,775,777],[97,102,107,110,117,143,775,777],[97,143,173,775,777],[97,105,110,131,143,189,191,775,777],[97,143,749,775,777],[97,143,661,662,775,777],[97,143,659,660,661,663,664,669,775,777],[97,143,660,661,775,777],[97,143,669,775,777],[97,143,670,775,777],[97,143,661,775,777],[97,143,659,660,661,664,665,666,667,668,775,777],[97,143,659,660,671,775,777],[97,143,738,775,777],[97,143,738,743,775,777],[97,143,733,736,738,741,742,743,744,745,746,747,748,775,777],[97,143,672,674,743,775,777],[97,143,738,741,775,777],[97,143,673,738,742,775,777],[97,143,674,676,678,679,680,681,775,777],[97,143,676,678,680,681,775,777],[97,143,676,678,680,775,777],[97,143,673,676,678,679,681,775,777],[97,143,672,674,675,676,677,678,679,680,681,682,683,733,734,735,736,737,775,777],[97,143,672,674,675,678,775,777],[97,143,674,675,678,775,777],[97,143,678,681,775,777],[97,143,672,673,675,676,677,679,680,681,775,777],[97,143,672,673,674,678,738,775,777],[97,143,678,679,680,681,775,777],[97,143,680,775,777],[97,143,684,685,686,687,688,689,690,691,692,693,694,695,696,697,698,699,700,701,702,703,704,705,706,707,708,709,710,711,712,713,714,715,716,717,718,719,720,721,722,723,724,725,726,727,728,729,730,731,732,775,777],[85,97,143,226,507,517,544,555,559,564,571,619,775,777],[85,97,143,226,507,517,547,555,559,564,571,619,775,777],[85,97,143,226,507,517,545,553,555,564,571,617,775,777],[85,97,143,226,517,544,545,555,564,571,619,775,777],[85,97,143,226,550,554,555,559,564,571,575,658,740,750,751,775,777],[85,97,143,226,549,554,555,564,571,575,753,775,777],[85,97,143,226,548,554,555,559,564,571,575,753,775,777],[85,97,143,226,505,507,517,555,564,571,623,775,777],[85,97,143,226,507,517,545,555,564,571,658,740,750,775,777],[85,97,143,226,551,554,555,559,564,571,575,658,740,750,751,775,777],[85,97,143,226,507,517,544,547,554,555,564,571,575,775,777],[85,97,143,226,507,517,547,554,555,558,559,564,571,575,751,775,777],[85,97,143,226,507,546,547,555,564,775,777],[85,97,143,226,546,554,555,559,564,571,575,751,753,760,775,777],[85,97,143,226,550,551,552,555,564,575,775,777],[85,97,143,226,507,549,554,555,564,575,753,775,777],[85,97,143,226,507,517,534,535,546,550,554,555,559,564,571,764,775,777],[85,97,143,226,507,517,520,544,547,553,555,556,558,559,560,564,571,617,775,777],[85,97,143,226,507,548,555,564,571,775,777],[85,97,143,226,517,525,563,565,566,567,572,573,575,775,777],[85,97,143,226,505,507,517,545,555,564,571,658,740,750,775,777],[85,97,143,226,507,535,546,551,554,555,559,564,571,764,775,777],[85,97,143,226,505,507,546,550,551,552,554,555,556,559,564,571,575,612,615,775,777],[85,97,143,226,507,517,543,558,559,564,571,775,777],[85,97,143,226,507,534,535,546,555,556,557,559,564,571,764,775,777],[85,97,143,226,505,507,517,545,555,564,571,775,777],[85,97,143,226,564,571,775,777],[85,97,143,226,550,551,554,555,559,564,571,575,658,740,750,775,777],[85,97,143,226,507,564,571,775,777],[85,97,143,226,507,553,556,558,559,560,564,571,775,777],[97,143,226,505,507,554,555,564,775,777],[85,97,143,226,571,775,777],[85,97,143,226,505,507,517,550,551,554,555,556,564,775,777],[97,143,226,507,533,535,556,559,564,775,777],[97,143,226,537,554,775,777],[97,143,226,507,775,777],[85,97,143,226,535,775,777],[97,143,226,553,555,775,777],[97,143,226,542,544,775,777],[97,143,226,542,545,546,547,548,549,550,551,552,553,775,777],[97,143,226,543,775,777]],"fileInfos":[{"version":"c430d44666289dae81f30fa7b2edebf186ecc91a2d4c71266ea6ae76388792e1","affectsGlobalScope":true,"impliedFormat":1},{"version":"45b7ab580deca34ae9729e97c13cfd999df04416a79116c3bfb483804f85ded4","impliedFormat":1},{"version":"3facaf05f0c5fc569c5649dd359892c98a85557e3e0c847964caeb67076f4d75","impliedFormat":1},{"version":"e44bb8bbac7f10ecc786703fe0a6a4b952189f908707980ba8f3c8975a760962","impliedFormat":1},{"version":"5e1c4c362065a6b95ff952c0eab010f04dcd2c3494e813b493ecfd4fcb9fc0d8","impliedFormat":1},{"version":"68d73b4a11549f9c0b7d352d10e91e5dca8faa3322bfb77b661839c42b1ddec7","impliedFormat":1},{"version":"5efce4fc3c29ea84e8928f97adec086e3dc876365e0982cc8479a07954a3efd4","impliedFormat":1},{"version":"feecb1be483ed332fad555aff858affd90a48ab19ba7272ee084704eb7167569","impliedFormat":1},{"version":"ee7bad0c15b58988daa84371e0b89d313b762ab83cb5b31b8a2d1162e8eb41c2","impliedFormat":1},{"version":"27bdc30a0e32783366a5abeda841bc22757c1797de8681bbe81fbc735eeb1c10","impliedFormat":1},{"version":"8fd575e12870e9944c7e1d62e1f5a73fcf23dd8d3a321f2a2c74c20d022283fe","impliedFormat":1},{"version":"2ab096661c711e4a81cc464fa1e6feb929a54f5340b46b0a07ac6bbf857471f0","impliedFormat":1},{"version":"080941d9f9ff9307f7e27a83bcd888b7c8270716c39af943532438932ec1d0b9","affectsGlobalScope":true,"impliedFormat":1},{"version":"2e80ee7a49e8ac312cc11b77f1475804bee36b3b2bc896bead8b6e1266befb43","affectsGlobalScope":true,"impliedFormat":1},{"version":"c57796738e7f83dbc4b8e65132f11a377649c00dd3eee333f672b8f0a6bea671","affectsGlobalScope":true,"impliedFormat":1},{"version":"dc2df20b1bcdc8c2d34af4926e2c3ab15ffe1160a63e58b7e09833f616efff44","affectsGlobalScope":true,"impliedFormat":1},{"version":"515d0b7b9bea2e31ea4ec968e9edd2c39d3eebf4a2d5cbd04e88639819ae3b71","affectsGlobalScope":true,"impliedFormat":1},{"version":"0559b1f683ac7505ae451f9a96ce4c3c92bdc71411651ca6ddb0e88baaaad6a3","affectsGlobalScope":true,"impliedFormat":1},{"version":"0dc1e7ceda9b8b9b455c3a2d67b0412feab00bd2f66656cd8850e8831b08b537","affectsGlobalScope":true,"impliedFormat":1},{"version":"ce691fb9e5c64efb9547083e4a34091bcbe5bdb41027e310ebba8f7d96a98671","affectsGlobalScope":true,"impliedFormat":1},{"version":"8d697a2a929a5fcb38b7a65594020fcef05ec1630804a33748829c5ff53640d0","affectsGlobalScope":true,"impliedFormat":1},{"version":"4ff2a353abf8a80ee399af572debb8faab2d33ad38c4b4474cff7f26e7653b8d","affectsGlobalScope":true,"impliedFormat":1},{"version":"fb0f136d372979348d59b3f5020b4cdb81b5504192b1cacff5d1fbba29378aa1","affectsGlobalScope":true,"impliedFormat":1},{"version":"d15bea3d62cbbdb9797079416b8ac375ae99162a7fba5de2c6c505446486ac0a","affectsGlobalScope":true,"impliedFormat":1},{"version":"68d18b664c9d32a7336a70235958b8997ebc1c3b8505f4f1ae2b7e7753b87618","affectsGlobalScope":true,"impliedFormat":1},{"version":"eb3d66c8327153d8fa7dd03f9c58d351107fe824c79e9b56b462935176cdf12a","affectsGlobalScope":true,"impliedFormat":1},{"version":"38f0219c9e23c915ef9790ab1d680440d95419ad264816fa15009a8851e79119","affectsGlobalScope":true,"impliedFormat":1},{"version":"69ab18c3b76cd9b1be3d188eaf8bba06112ebbe2f47f6c322b5105a6fbc45a2e","affectsGlobalScope":true,"impliedFormat":1},{"version":"a680117f487a4d2f30ea46f1b4b7f58bef1480456e18ba53ee85c2746eeca012","affectsGlobalScope":true,"impliedFormat":1},{"version":"2f11ff796926e0832f9ae148008138ad583bd181899ab7dd768a2666700b1893","affectsGlobalScope":true,"impliedFormat":1},{"version":"4de680d5bb41c17f7f68e0419412ca23c98d5749dcaaea1896172f06435891fc","affectsGlobalScope":true,"impliedFormat":1},{"version":"954296b30da6d508a104a3a0b5d96b76495c709785c1d11610908e63481ee667","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac9538681b19688c8eae65811b329d3744af679e0bdfa5d842d0e32524c73e1c","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a969edff4bd52585473d24995c5ef223f6652d6ef46193309b3921d65dd4376","affectsGlobalScope":true,"impliedFormat":1},{"version":"9e9fbd7030c440b33d021da145d3232984c8bb7916f277e8ffd3dc2e3eae2bdb","affectsGlobalScope":true,"impliedFormat":1},{"version":"811ec78f7fefcabbda4bfa93b3eb67d9ae166ef95f9bff989d964061cbf81a0c","affectsGlobalScope":true,"impliedFormat":1},{"version":"717937616a17072082152a2ef351cb51f98802fb4b2fdabd32399843875974ca","affectsGlobalScope":true,"impliedFormat":1},{"version":"d7e7d9b7b50e5f22c915b525acc5a49a7a6584cf8f62d0569e557c5cfc4b2ac2","affectsGlobalScope":true,"impliedFormat":1},{"version":"71c37f4c9543f31dfced6c7840e068c5a5aacb7b89111a4364b1d5276b852557","affectsGlobalScope":true,"impliedFormat":1},{"version":"576711e016cf4f1804676043e6a0a5414252560eb57de9faceee34d79798c850","affectsGlobalScope":true,"impliedFormat":1},{"version":"89c1b1281ba7b8a96efc676b11b264de7a8374c5ea1e6617f11880a13fc56dc6","affectsGlobalScope":true,"impliedFormat":1},{"version":"74f7fa2d027d5b33eb0471c8e82a6c87216223181ec31247c357a3e8e2fddc5b","affectsGlobalScope":true,"impliedFormat":1},{"version":"d6d7ae4d1f1f3772e2a3cde568ed08991a8ae34a080ff1151af28b7f798e22ca","affectsGlobalScope":true,"impliedFormat":1},{"version":"063600664504610fe3e99b717a1223f8b1900087fab0b4cad1496a114744f8df","affectsGlobalScope":true,"impliedFormat":1},{"version":"934019d7e3c81950f9a8426d093458b65d5aff2c7c1511233c0fd5b941e608ab","affectsGlobalScope":true,"impliedFormat":1},{"version":"52ada8e0b6e0482b728070b7639ee42e83a9b1c22d205992756fe020fd9f4a47","affectsGlobalScope":true,"impliedFormat":1},{"version":"3bdefe1bfd4d6dee0e26f928f93ccc128f1b64d5d501ff4a8cf3c6371200e5e6","affectsGlobalScope":true,"impliedFormat":1},{"version":"59fb2c069260b4ba00b5643b907ef5d5341b167e7d1dbf58dfd895658bda2867","affectsGlobalScope":true,"impliedFormat":1},{"version":"639e512c0dfc3fad96a84caad71b8834d66329a1f28dc95e3946c9b58176c73a","affectsGlobalScope":true,"impliedFormat":1},{"version":"368af93f74c9c932edd84c58883e736c9e3d53cec1fe24c0b0ff451f529ceab1","affectsGlobalScope":true,"impliedFormat":1},{"version":"af3dd424cf267428f30ccfc376f47a2c0114546b55c44d8c0f1d57d841e28d74","affectsGlobalScope":true,"impliedFormat":1},{"version":"995c005ab91a498455ea8dfb63aa9f83fa2ea793c3d8aa344be4a1678d06d399","affectsGlobalScope":true,"impliedFormat":1},{"version":"959d36cddf5e7d572a65045b876f2956c973a586da58e5d26cde519184fd9b8a","affectsGlobalScope":true,"impliedFormat":1},{"version":"965f36eae237dd74e6cca203a43e9ca801ce38824ead814728a2807b1910117d","affectsGlobalScope":true,"impliedFormat":1},{"version":"3925a6c820dcb1a06506c90b1577db1fdbf7705d65b62b99dce4be75c637e26b","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a3d63ef2b853447ec4f749d3f368ce642264246e02911fcb1590d8c161b8005","affectsGlobalScope":true,"impliedFormat":1},{"version":"8cdf8847677ac7d20486e54dd3fcf09eda95812ac8ace44b4418da1bbbab6eb8","affectsGlobalScope":true,"impliedFormat":1},{"version":"8444af78980e3b20b49324f4a16ba35024fef3ee069a0eb67616ea6ca821c47a","affectsGlobalScope":true,"impliedFormat":1},{"version":"3287d9d085fbd618c3971944b65b4be57859f5415f495b33a6adc994edd2f004","affectsGlobalScope":true,"impliedFormat":1},{"version":"b4b67b1a91182421f5df999988c690f14d813b9850b40acd06ed44691f6727ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"df83c2a6c73228b625b0beb6669c7ee2a09c914637e2d35170723ad49c0f5cd4","affectsGlobalScope":true,"impliedFormat":1},{"version":"436aaf437562f276ec2ddbee2f2cdedac7664c1e4c1d2c36839ddd582eeb3d0a","affectsGlobalScope":true,"impliedFormat":1},{"version":"8e3c06ea092138bf9fa5e874a1fdbc9d54805d074bee1de31b99a11e2fec239d","affectsGlobalScope":true,"impliedFormat":1},{"version":"87dc0f382502f5bbce5129bdc0aea21e19a3abbc19259e0b43ae038a9fc4e326","affectsGlobalScope":true,"impliedFormat":1},{"version":"b1cb28af0c891c8c96b2d6b7be76bd394fddcfdb4709a20ba05a7c1605eea0f9","affectsGlobalScope":true,"impliedFormat":1},{"version":"2fef54945a13095fdb9b84f705f2b5994597640c46afeb2ce78352fab4cb3279","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac77cb3e8c6d3565793eb90a8373ee8033146315a3dbead3bde8db5eaf5e5ec6","affectsGlobalScope":true,"impliedFormat":1},{"version":"56e4ed5aab5f5920980066a9409bfaf53e6d21d3f8d020c17e4de584d29600ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"4ece9f17b3866cc077099c73f4983bddbcb1dc7ddb943227f1ec070f529dedd1","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a6282c8827e4b9a95f4bf4f5c205673ada31b982f50572d27103df8ceb8013c","affectsGlobalScope":true,"impliedFormat":1},{"version":"1c9319a09485199c1f7b0498f2988d6d2249793ef67edda49d1e584746be9032","affectsGlobalScope":true,"impliedFormat":1},{"version":"e3a2a0cee0f03ffdde24d89660eba2685bfbdeae955a6c67e8c4c9fd28928eeb","affectsGlobalScope":true,"impliedFormat":1},{"version":"811c71eee4aa0ac5f7adf713323a5c41b0cf6c4e17367a34fbce379e12bbf0a4","affectsGlobalScope":true,"impliedFormat":1},{"version":"51ad4c928303041605b4d7ae32e0c1ee387d43a24cd6f1ebf4a2699e1076d4fa","affectsGlobalScope":true,"impliedFormat":1},{"version":"60037901da1a425516449b9a20073aa03386cce92f7a1fd902d7602be3a7c2e9","affectsGlobalScope":true,"impliedFormat":1},{"version":"d4b1d2c51d058fc21ec2629fff7a76249dec2e36e12960ea056e3ef89174080f","affectsGlobalScope":true,"impliedFormat":1},{"version":"22adec94ef7047a6c9d1af3cb96be87a335908bf9ef386ae9fd50eeb37f44c47","affectsGlobalScope":true,"impliedFormat":1},{"version":"196cb558a13d4533a5163286f30b0509ce0210e4b316c56c38d4c0fd2fb38405","affectsGlobalScope":true,"impliedFormat":1},{"version":"73f78680d4c08509933daf80947902f6ff41b6230f94dd002ae372620adb0f60","affectsGlobalScope":true,"impliedFormat":1},{"version":"c5239f5c01bcfa9cd32f37c496cf19c61d69d37e48be9de612b541aac915805b","affectsGlobalScope":true,"impliedFormat":1},{"version":"8e7f8264d0fb4c5339605a15daadb037bf238c10b654bb3eee14208f860a32ea","affectsGlobalScope":true,"impliedFormat":1},{"version":"782dec38049b92d4e85c1585fbea5474a219c6984a35b004963b00beb1aab538","affectsGlobalScope":true,"impliedFormat":1},{"version":"7e29f41b158de217f94cb9676bf9cbd0cd9b5a46e1985141ed36e075c52bf6ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac51dd7d31333793807a6abaa5ae168512b6131bd41d9c5b98477fc3b7800f9f","impliedFormat":1},{"version":"dc0a7f107690ee5cd8afc8dbf05c4df78085471ce16bdd9881642ec738bc81fe","impliedFormat":1},{"version":"acd8fd5090ac73902278889c38336ff3f48af6ba03aa665eb34a75e7ba1dccc4","impliedFormat":1},{"version":"d6258883868fb2680d2ca96bc8b1352cab69874581493e6d52680c5ffecdb6cc","impliedFormat":1},{"version":"1b61d259de5350f8b1e5db06290d31eaebebc6baafd5f79d314b5af9256d7153","impliedFormat":1},{"version":"f258e3960f324a956fc76a3d3d9e964fff2244ff5859dcc6ce5951e5413ca826","impliedFormat":1},{"version":"643f7232d07bf75e15bd8f658f664d6183a0efaca5eb84b48201c7671a266979","impliedFormat":1},{"version":"21da358700a3893281ce0c517a7a30cbd46be020d9f0c3f2834d0a8ad1f5fc75","impliedFormat":1},{"version":"70521b6ab0dcba37539e5303104f29b721bfb2940b2776da4cc818c07e1fefc1","affectsGlobalScope":true,"impliedFormat":1},{"version":"ab41ef1f2cdafb8df48be20cd969d875602483859dc194e9c97c8a576892c052","affectsGlobalScope":true,"impliedFormat":1},{"version":"d153a11543fd884b596587ccd97aebbeed950b26933ee000f94009f1ab142848","affectsGlobalScope":true,"impliedFormat":1},{"version":"21d819c173c0cf7cc3ce57c3276e77fd9a8a01d35a06ad87158781515c9a438a","impliedFormat":1},{"version":"98cffbf06d6bab333473c70a893770dbe990783904002c4f1a960447b4b53dca","affectsGlobalScope":true,"impliedFormat":1},{"version":"ba481bca06f37d3f2c137ce343c7d5937029b2468f8e26111f3c9d9963d6568d","affectsGlobalScope":true,"impliedFormat":1},{"version":"6d9ef24f9a22a88e3e9b3b3d8c40ab1ddb0853f1bfbd5c843c37800138437b61","affectsGlobalScope":true,"impliedFormat":1},{"version":"1db0b7dca579049ca4193d034d835f6bfe73096c73663e5ef9a0b5779939f3d0","affectsGlobalScope":true,"impliedFormat":1},{"version":"9798340ffb0d067d69b1ae5b32faa17ab31b82466a3fc00d8f2f2df0c8554aaa","affectsGlobalScope":true,"impliedFormat":1},{"version":"f26b11d8d8e4b8028f1c7d618b22274c892e4b0ef5b3678a8ccbad85419aef43","affectsGlobalScope":true,"impliedFormat":1},{"version":"5929864ce17fba74232584d90cb721a89b7ad277220627cc97054ba15a98ea8f","impliedFormat":1},{"version":"763fe0f42b3d79b440a9b6e51e9ba3f3f91352469c1e4b3b67bfa4ff6352f3f4","impliedFormat":1},{"version":"25c8056edf4314820382a5fdb4bb7816999acdcb929c8f75e3f39473b87e85bc","impliedFormat":1},{"version":"c464d66b20788266e5353b48dc4aa6bc0dc4a707276df1e7152ab0c9ae21fad8","impliedFormat":1},{"version":"78d0d27c130d35c60b5e5566c9f1e5be77caf39804636bc1a40133919a949f21","impliedFormat":1},{"version":"c6fd2c5a395f2432786c9cb8deb870b9b0e8ff7e22c029954fabdd692bff6195","impliedFormat":1},{"version":"1d6e127068ea8e104a912e42fc0a110e2aa5a66a356a917a163e8cf9a65e4a75","impliedFormat":1},{"version":"5ded6427296cdf3b9542de4471d2aa8d3983671d4cac0f4bf9c637208d1ced43","impliedFormat":1},{"version":"7f182617db458e98fc18dfb272d40aa2fff3a353c44a89b2c0ccb3937709bfb5","impliedFormat":1},{"version":"cadc8aced301244057c4e7e73fbcae534b0f5b12a37b150d80e5a45aa4bebcbd","impliedFormat":1},{"version":"385aab901643aa54e1c36f5ef3107913b10d1b5bb8cbcd933d4263b80a0d7f20","impliedFormat":1},{"version":"9670d44354bab9d9982eca21945686b5c24a3f893db73c0dae0fd74217a4c219","impliedFormat":1},{"version":"0b8a9268adaf4da35e7fa830c8981cfa22adbbe5b3f6f5ab91f6658899e657a7","impliedFormat":1},{"version":"11396ed8a44c02ab9798b7dca436009f866e8dae3c9c25e8c1fbc396880bf1bb","impliedFormat":1},{"version":"ba7bc87d01492633cb5a0e5da8a4a42a1c86270e7b3d2dea5d156828a84e4882","impliedFormat":1},{"version":"4893a895ea92c85345017a04ed427cbd6a1710453338df26881a6019432febdd","impliedFormat":1},{"version":"c21dc52e277bcfc75fac0436ccb75c204f9e1b3fa5e12729670910639f27343e","impliedFormat":1},{"version":"13f6f39e12b1518c6650bbb220c8985999020fe0f21d818e28f512b7771d00f9","impliedFormat":1},{"version":"9b5369969f6e7175740bf51223112ff209f94ba43ecd3bb09eefff9fd675624a","impliedFormat":1},{"version":"4fe9e626e7164748e8769bbf74b538e09607f07ed17c2f20af8d680ee49fc1da","impliedFormat":1},{"version":"24515859bc0b836719105bb6cc3d68255042a9f02a6022b3187948b204946bd2","impliedFormat":1},{"version":"ea0148f897b45a76544ae179784c95af1bd6721b8610af9ffa467a518a086a43","impliedFormat":1},{"version":"24c6a117721e606c9984335f71711877293a9651e44f59f3d21c1ea0856f9cc9","impliedFormat":1},{"version":"dd3273ead9fbde62a72949c97dbec2247ea08e0c6952e701a483d74ef92d6a17","impliedFormat":1},{"version":"405822be75ad3e4d162e07439bac80c6bcc6dbae1929e179cf467ec0b9ee4e2e","impliedFormat":1},{"version":"0db18c6e78ea846316c012478888f33c11ffadab9efd1cc8bcc12daded7a60b6","impliedFormat":1},{"version":"e61be3f894b41b7baa1fbd6a66893f2579bfad01d208b4ff61daef21493ef0a8","impliedFormat":1},{"version":"bd0532fd6556073727d28da0edfd1736417a3f9f394877b6d5ef6ad88fba1d1a","impliedFormat":1},{"version":"89167d696a849fce5ca508032aabfe901c0868f833a8625d5a9c6e861ef935d2","impliedFormat":1},{"version":"615ba88d0128ed16bf83ef8ccbb6aff05c3ee2db1cc0f89ab50a4939bfc1943f","impliedFormat":1},{"version":"a4d551dbf8746780194d550c88f26cf937caf8d56f102969a110cfaed4b06656","impliedFormat":1},{"version":"8bd86b8e8f6a6aa6c49b71e14c4ffe1211a0e97c80f08d2c8cc98838006e4b88","impliedFormat":1},{"version":"317e63deeb21ac07f3992f5b50cdca8338f10acd4fbb7257ebf56735bf52ab00","impliedFormat":1},{"version":"4732aec92b20fb28c5fe9ad99521fb59974289ed1e45aecb282616202184064f","impliedFormat":1},{"version":"2e85db9e6fd73cfa3d7f28e0ab6b55417ea18931423bd47b409a96e4a169e8e6","impliedFormat":1},{"version":"c46e079fe54c76f95c67fb89081b3e399da2c7d109e7dca8e4b58d83e332e605","impliedFormat":1},{"version":"bf67d53d168abc1298888693338cb82854bdb2e69ef83f8a0092093c2d562107","impliedFormat":1},{"version":"b52476feb4a0cbcb25e5931b930fc73cb6643fb1a5060bf8a3dda0eeae5b4b68","affectsGlobalScope":true,"impliedFormat":1},{"version":"e2677634fe27e87348825bb041651e22d50a613e2fdf6a4a3ade971d71bac37e","impliedFormat":1},{"version":"7394959e5a741b185456e1ef5d64599c36c60a323207450991e7a42e08911419","impliedFormat":1},{"version":"8c0bcd6c6b67b4b503c11e91a1fb91522ed585900eab2ab1f61bba7d7caa9d6f","impliedFormat":1},{"version":"8cd19276b6590b3ebbeeb030ac271871b9ed0afc3074ac88a94ed2449174b776","affectsGlobalScope":true,"impliedFormat":1},{"version":"696eb8d28f5949b87d894b26dc97318ef944c794a9a4e4f62360cd1d1958014b","impliedFormat":1},{"version":"3f8fa3061bd7402970b399300880d55257953ee6d3cd408722cb9ac20126460c","impliedFormat":1},{"version":"35ec8b6760fd7138bbf5809b84551e31028fb2ba7b6dc91d95d098bf212ca8b4","affectsGlobalScope":true,"impliedFormat":1},{"version":"5524481e56c48ff486f42926778c0a3cce1cc85dc46683b92b1271865bcf015a","impliedFormat":1},{"version":"68bd56c92c2bd7d2339457eb84d63e7de3bd56a69b25f3576e1568d21a162398","affectsGlobalScope":true,"impliedFormat":1},{"version":"3e93b123f7c2944969d291b35fed2af79a6e9e27fdd5faa99748a51c07c02d28","impliedFormat":1},{"version":"9d19808c8c291a9010a6c788e8532a2da70f811adb431c97520803e0ec649991","impliedFormat":1},{"version":"87aad3dd9752067dc875cfaa466fc44246451c0c560b820796bdd528e29bef40","impliedFormat":1},{"version":"4aacb0dd020eeaef65426153686cc639a78ec2885dc72ad220be1d25f1a439df","impliedFormat":1},{"version":"f0bd7e6d931657b59605c44112eaf8b980ba7f957a5051ed21cb93d978cf2f45","impliedFormat":1},{"version":"8db0ae9cb14d9955b14c214f34dae1b9ef2baee2fe4ce794a4cd3ac2531e3255","affectsGlobalScope":true,"impliedFormat":1},{"version":"15fc6f7512c86810273af28f224251a5a879e4261b4d4c7e532abfbfc3983134","impliedFormat":1},{"version":"58adba1a8ab2d10b54dc1dced4e41f4e7c9772cbbac40939c0dc8ce2cdb1d442","impliedFormat":1},{"version":"641942a78f9063caa5d6b777c99304b7d1dc7328076038c6d94d8a0b81fc95c1","impliedFormat":1},{"version":"714435130b9015fae551788df2a88038471a5a11eb471f27c4ede86552842bc9","impliedFormat":1},{"version":"855cd5f7eb396f5f1ab1bc0f8580339bff77b68a770f84c6b254e319bbfd1ac7","impliedFormat":1},{"version":"5650cf3dace09e7c25d384e3e6b818b938f68f4e8de96f52d9c5a1b3db068e86","impliedFormat":1},{"version":"1354ca5c38bd3fd3836a68e0f7c9f91f172582ba30ab15bb8c075891b91502b7","affectsGlobalScope":true,"impliedFormat":1},{"version":"27fdb0da0daf3b337c5530c5f266efe046a6ceb606e395b346974e4360c36419","impliedFormat":1},{"version":"2d2fcaab481b31a5882065c7951255703ddbe1c0e507af56ea42d79ac3911201","impliedFormat":1},{"version":"a192fe8ec33f75edbc8d8f3ed79f768dfae11ff5735e7fe52bfa69956e46d78d","impliedFormat":1},{"version":"ca867399f7db82df981d6915bcbb2d81131d7d1ef683bc782b59f71dda59bc85","affectsGlobalScope":true,"impliedFormat":1},{"version":"372413016d17d804e1d139418aca0c68e47a83fb6669490857f4b318de8cccb3","affectsGlobalScope":true,"impliedFormat":1},{"version":"9e043a1bc8fbf2a255bccf9bf27e0f1caf916c3b0518ea34aa72357c0afd42ec","impliedFormat":1},{"version":"b4f70ec656a11d570e1a9edce07d118cd58d9760239e2ece99306ee9dfe61d02","impliedFormat":1},{"version":"3bc2f1e2c95c04048212c569ed38e338873f6a8593930cf5a7ef24ffb38fc3b6","impliedFormat":1},{"version":"6e70e9570e98aae2b825b533aa6292b6abd542e8d9f6e9475e88e1d7ba17c866","impliedFormat":1},{"version":"f9d9d753d430ed050dc1bf2667a1bab711ccbb1c1507183d794cc195a5b085cc","impliedFormat":1},{"version":"9eece5e586312581ccd106d4853e861aaaa1a39f8e3ea672b8c3847eedd12f6e","impliedFormat":1},{"version":"47ab634529c5955b6ad793474ae188fce3e6163e3a3fb5edd7e0e48f14435333","impliedFormat":1},{"version":"37ba7b45141a45ce6e80e66f2a96c8a5ab1bcef0fc2d0f56bb58df96ec67e972","impliedFormat":1},{"version":"45650f47bfb376c8a8ed39d4bcda5902ab899a3150029684ee4c10676d9fbaee","impliedFormat":1},{"version":"fad4e3c207fe23922d0b2d06b01acbfb9714c4f2685cf80fd384c8a100c82fd0","affectsGlobalScope":true,"impliedFormat":1},{"version":"74cf591a0f63db318651e0e04cb55f8791385f86e987a67fd4d2eaab8191f730","impliedFormat":1},{"version":"5eab9b3dc9b34f185417342436ec3f106898da5f4801992d8ff38ab3aff346b5","impliedFormat":1},{"version":"12ed4559eba17cd977aa0db658d25c4047067444b51acfdcbf38470630642b23","affectsGlobalScope":true,"impliedFormat":1},{"version":"f3ffabc95802521e1e4bcba4c88d8615176dc6e09111d920c7a213bdda6e1d65","impliedFormat":1},{"version":"809821b8a065e3234a55b3a9d7846231ed18d66dd749f2494c66288d890daf7f","impliedFormat":1},{"version":"ae56f65caf3be91108707bd8dfbccc2a57a91feb5daabf7165a06a945545ed26","impliedFormat":1},{"version":"a136d5de521da20f31631a0a96bf712370779d1c05b7015d7019a9b2a0446ca9","impliedFormat":1},{"version":"c3b41e74b9a84b88b1dca61ec39eee25c0dbc8e7d519ba11bb070918cfacf656","affectsGlobalScope":true,"impliedFormat":1},{"version":"4737a9dc24d0e68b734e6cfbcea0c15a2cfafeb493485e27905f7856988c6b29","affectsGlobalScope":true,"impliedFormat":1},{"version":"36d8d3e7506b631c9582c251a2c0b8a28855af3f76719b12b534c6edf952748d","impliedFormat":1},{"version":"1ca69210cc42729e7ca97d3a9ad48f2e9cb0042bada4075b588ae5387debd318","impliedFormat":1},{"version":"f5ebe66baaf7c552cfa59d75f2bfba679f329204847db3cec385acda245e574e","impliedFormat":1},{"version":"ed59add13139f84da271cafd32e2171876b0a0af2f798d0c663e8eeb867732cf","affectsGlobalScope":true,"impliedFormat":1},{"version":"b7c5e2ea4a9749097c347454805e933844ed207b6eefec6b7cfd418b5f5f7b28","impliedFormat":1},{"version":"b1810689b76fd473bd12cc9ee219f8e62f54a7d08019a235d07424afbf074d25","impliedFormat":1},{"version":"2beff543f6e9a9701df88daeee3cdd70a34b4a1c11cb4c734472195a5cb2af54","impliedFormat":1},{"version":"2e07abf27aa06353d46f4448c0bbac73431f6065eef7113128a5cd804d0c384d","impliedFormat":1},{"version":"be1cc4d94ea60cbe567bc29ed479d42587bf1e6cba490f123d329976b0fe4ee5","impliedFormat":1},{"version":"42bc0e1a903408137c3df2b06dfd7e402cdab5bbfa5fcfb871b22ebfdb30bd0b","impliedFormat":1},{"version":"9894dafe342b976d251aac58e616ac6df8db91fb9d98934ff9dd103e9e82578f","impliedFormat":1},{"version":"413df52d4ea14472c2fa5bee62f7a40abd1eb49be0b9722ee01ee4e52e63beb2","impliedFormat":1},{"version":"db6d2d9daad8a6d83f281af12ce4355a20b9a3e71b82b9f57cddcca0a8964a96","impliedFormat":1},{"version":"446a50749b24d14deac6f8843e057a6355dd6437d1fac4f9e5ce4a5071f34bff","impliedFormat":1},{"version":"182e9fcbe08ac7c012e0a6e2b5798b4352470be29a64fdc114d23c2bab7d5106","impliedFormat":1},{"version":"2f4e6b4d39426a1b85ecf4bdeb9dddbf4d9b3397d95d8555d46f925c9519ec7d","impliedFormat":1},{"version":"78a2869ad0cbf3f9045dda08c0d4562b7e1b2bfe07b19e0db072f5c3c56e9584","impliedFormat":1},{"version":"89d5d28d4f57e000b836ac273079be1b75710e28ce14750d081fb420d37e2ca5","impliedFormat":1},{"version":"fd4e24ccff3966390600d7f5d6aa1fed5a512e92ada735ea5fbc933d313ad3d3","impliedFormat":1},{"version":"b7cddfe1aa6b86b5fad3c9ccb30d05b3ccb165aebbf112f48d2d8a5f69dd98b1","impliedFormat":1},{"version":"a86f82d646a739041d6702101afa82dcb935c416dd93cbca7fd754fd0282ce1f","impliedFormat":1},{"version":"ad0d1d75d129b1c80f911be438d6b61bfa8703930a8ff2be2f0e1f8a91841c64","impliedFormat":1},{"version":"bd2c7ada3dee03653d3f601011d30072194bc3970cd93208f9588fbdc0c69347","impliedFormat":1},{"version":"e480da45d32313e7174b265674da504f075f59ef326852f0c5a5d863b438ae85","impliedFormat":1},{"version":"ad54850f61fcf5d014e11be80d2f46fea9265cfa7e77456da876f7833ef81769","impliedFormat":1},{"version":"6f7c9e8bd2b5b6a080b07080065f94900bd3c7e5ebbd3047bc33fcce2fab1dd8","impliedFormat":1},{"version":"3e7efde639c6a6c3edb9847b3f61e308bf7a69685b92f665048c45132f51c218","impliedFormat":1},{"version":"df45ca1176e6ac211eae7ddf51336dc075c5314bc5c253651bae639defd5eec5","impliedFormat":1},{"version":"8a0e762ceb20c7e72504feef83d709468a70af4abccb304f32d6b9bac1129b2c","impliedFormat":1},{"version":"da5950ee2a90721df6f3fba45f5d05308f7e4c35835392215dd2cd404505e2de","impliedFormat":1},{"version":"ce75b1aebb33d510ff28af960a9221410a3eaf7f18fc5f21f9404075fba77256","impliedFormat":1},{"version":"f42d5fed19610d485c646a0c430e768115567d078c7fc855c57b0c578b3d6cd3","impliedFormat":1},{"version":"ee8df1cb8d0faaca4013a1b442e99130769ce06f438d18d510fed95890067563","impliedFormat":1},{"version":"d5630f2ad9b4541e5ce891648121022f9412ecdca1820baa1f0104f70fd7eff7","impliedFormat":1},{"version":"4d15375ab13497104bc8fe56fdef2b5fd6853f29255737d23a33fa306ff7fd69","impliedFormat":1},{"version":"2cd3fc1d0d6a1e85baffd2d4f50f5efb192b5446eef567e97c94765402f0aad4","impliedFormat":1},{"version":"e4cbf2f1e89ecccaddd2c045e600ae41b732295953fb06247c7dcbc2d281ed30","impliedFormat":1},{"version":"27bbdb7509a5bb564020321fc5485764d0db3230a10d2336ae5ce2c1d401b0e7","impliedFormat":1},{"version":"8c1697d90c394a6fd955b98eae01238eff628e129b987a68aea10f898a48e7da","impliedFormat":1},{"version":"7580e62139cb2b44a0270c8d01abcbfcba2819a02514a527342447fa69b34ef1","impliedFormat":1},{"version":"42c169fb8c2d42f4f668c624a9a11e719d5d07dacbebb63cbcf7ef365b0a75b3","impliedFormat":1},{"version":"f374cb24e93e7798c4d9e83ff872fa52d2cdb36306392b840a6ddf46cb925cb6","impliedFormat":1},{"version":"d10d63718e1646c2279e3b33831f82c60e31f622b2b7020f1196409ca4c09242","impliedFormat":1},{"version":"106c6025f1d99fd468fd8bf6e5bda724e11e5905a4076c5d29790b6c3745e50c","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"148679c6d0f449210a96e7d2e562d589e56fcde87f843a92808b3ff103f1a774","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"02436d7e9ead85e09a2f8e27d5f47d9464bced31738dec138ca735390815c9f0","impliedFormat":1},{"version":"f8d5ff8eafd37499f2b6a98659dd9b45a321de186b8db6b6142faed0fea3de77","impliedFormat":1},{"version":"c86fe861cf1b4c46a0fb7d74dffe596cf679a2e5e8b1456881313170f092e3fa","impliedFormat":1},{"version":"a22dd55aa4d39906252000ab8e8a1b83b195eef7f4274eb51e457c1f11cf6580","impliedFormat":1},{"version":"540cc83ab772a2c6bc509fe1354f314825b5dba3669efdfbe4693ecd3048e34f","impliedFormat":1},{"version":"121b0696021ab885c570bbeb331be8ad82c6efe2f3b93a6e63874901bebc13e3","impliedFormat":1},{"version":"612d9da66bb046a9c1e2e8d026245ded881fc4b9f98cbfae714415d57ee0ae0b","impliedFormat":1},{"version":"32c2ad9494dad5d11b0564a619fee18f388db6c1e9e2cd3c360b3122549691eb","impliedFormat":1},{"version":"6c301d40aec56a74ec7bd7324e31a728dadf9bfba3e96def02938d3d973534ec","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"aa14cee20aa0db79f8df101fc027d929aec10feb5b8a8da3b9af3895d05b7ba2","impliedFormat":1},{"version":"493c700ac3bd317177b2eb913805c87fe60d4e8af4fb39c41f04ba81fae7e170","impliedFormat":1},{"version":"aeb554d876c6b8c818da2e118d8b11e1e559adbe6bf606cc9a611c1b6c09f670","impliedFormat":1},{"version":"acf5a2ac47b59ca07afa9abbd2b31d001bf7448b041927befae2ea5b1951d9f9","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"d71291eff1e19d8762a908ba947e891af44749f3a2cbc5bd2ec4b72f72ea795f","impliedFormat":1},{"version":"c0480e03db4b816dff2682b347c95f2177699525c54e7e6f6aa8ded890b76be7","impliedFormat":1},{"version":"25a5f6fd3a2243c859eddc99ab5fba11d970af2fe7a5df9c32b7668f76f97b01","impliedFormat":1},{"version":"8d207e1f9d2c30d6f77dfa693f3827c3fbf0d89240297e10bdfe1041d433df68","impliedFormat":1},{"version":"b620391fe8060cf9bedc176a4d01366e6574d7a71e0ac0ab344a4e76576fcbb8","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"2652448ac55a2010a1f71dd141f828b682298d39728f9871e1cdf8696ef443fd","impliedFormat":1},{"version":"d682336018141807fb602709e2d95a192828fcb8d5ba06dda3833a8ea98f69e3","impliedFormat":1},{"version":"6124e973eab8c52cabf3c07575204efc1784aca6b0a30c79eb85fe240a857efa","impliedFormat":1},{"version":"0d891735a21edc75df51f3eb995e18149e119d1ce22fd40db2b260c5960b914e","impliedFormat":1},{"version":"3b414b99a73171e1c4b7b7714e26b87d6c5cb03d200352da5342ab4088a54c85","impliedFormat":1},{"version":"4fbd3116e00ed3a6410499924b6403cc9367fdca303e34838129b328058ede40","impliedFormat":1},{"version":"9c82171d836c47486074e4ca8e059735bf97b205e70b196535b5efd40cbe1bc5","impliedFormat":1},{"version":"8c70ddc0c22d85e56011d49fddfaae3405eb53d47b59327b9dd589e82df672e7","impliedFormat":1},{"version":"2f9c89cbb29d362290531b48880a4024f258c6033aaeb7e59fbc62db26819650","impliedFormat":1},{"version":"a365c4d3bed3be4e4e20793c999c51f5cd7e6792322f14650949d827fbcd170f","impliedFormat":1},{"version":"c5426dbfc1cf90532f66965a7aa8c1136a78d4d0f96d8180ecbfc11d7722f1a5","impliedFormat":1},{"version":"65a15fc47900787c0bd18b603afb98d33ede930bed1798fc984d5ebb78b26cf9","impliedFormat":1},{"version":"9d202701f6e0744adb6314d03d2eb8fc994798fc83d91b691b75b07626a69801","impliedFormat":1},{"version":"de9d2df7663e64e3a91bf495f315a7577e23ba088f2949d5ce9ec96f44fba37d","impliedFormat":1},{"version":"c7af78a2ea7cb1cd009cfb5bdb48cd0b03dad3b54f6da7aab615c2e9e9d570c5","impliedFormat":1},{"version":"1ee45496b5f8bdee6f7abc233355898e5bf9bd51255db65f5ff7ede617ca0027","impliedFormat":1},{"version":"273782b8454e78f6a8b30d2cfbf6860499c930595095fcc1689637115f0eddda","affectsGlobalScope":true,"impliedFormat":1},{"version":"3fbdd025f9d4d820414417eeb4107ffa0078d454a033b506e22d3a23bc3d9c41","affectsGlobalScope":true,"impliedFormat":1},{"version":"dba114fb6a32b355a9cfc26ca2276834d72fe0e94cd2c3494005547025015369","impliedFormat":1},{"version":"a8f8e6ab2fa07b45251f403548b78eaf2022f3c2254df3dc186cb2671fe4996d","affectsGlobalScope":true,"impliedFormat":1},{"version":"fa6c12a7c0f6b84d512f200690bfc74819e99efae69e4c95c4cd30f6884c526e","impliedFormat":1},{"version":"f1c32f9ce9c497da4dc215c3bc84b722ea02497d35f9134db3bb40a8d918b92b","impliedFormat":1},{"version":"b73c319af2cc3ef8f6421308a250f328836531ea3761823b4cabbd133047aefa","affectsGlobalScope":true,"impliedFormat":1},{"version":"e433b0337b8106909e7953015e8fa3f2d30797cea27141d1c5b135365bb975a6","impliedFormat":1},{"version":"9f9bb6755a8ce32d656ffa4763a8144aa4f274d6b69b59d7c32811031467216e","impliedFormat":1},{"version":"5c32bdfbd2d65e8fffbb9fbda04d7165e9181b08dad61154961852366deb7540","impliedFormat":1},{"version":"ddff7fc6edbdc5163a09e22bf8df7bef75f75369ebd7ecea95ba55c4386e2441","impliedFormat":1},{"version":"0c05e9842ec4f8b7bfebfd3ca61604bb8c914ba8da9b5337c4f25da427a005f2","impliedFormat":1},{"version":"faed7a5153215dbd6ebe76dfdcc0af0cfe760f7362bed43284be544308b114cf","impliedFormat":1},{"version":"7029e566b8df176f703fb59fd437a38670c7a0e02c58b2d66dfb5b2e2b2defdb","impliedFormat":1},{"version":"7f2aa4d4989a82530aaac3f72b3dceca90e9c25bee0b1a327e8a08a1262435ad","impliedFormat":1},{"version":"d96b39301d0ded3f1a27b47759676a33a02f6f5049bfcbde81e533fd10f50dcb","impliedFormat":1},{"version":"e9f147ecca73d9346a4c073432843c159ccbe50bdcb678a78f6da10eae2cecf4","impliedFormat":1},{"version":"de061f7d72bd65c06fc1419f841dfdcb29a8e22fe6fa527d1e6eb20b897d4de0","impliedFormat":1},{"version":"663beafc2446079574570cba86e9b15f986f908ddb1b01274509970126fee945","impliedFormat":1},{"version":"a3102887d5058bf4cb5b37fa6964c09e9527c42053b3b5c642b89878620748de","impliedFormat":1},{"version":"0aaaa1727edd29673d85c9b26d7ca4d54e5407a48586903c51b48b7f7d196f61","impliedFormat":1},{"version":"d35bca0b261bff02635758c48e8ab99c61c420d0dfabbcf467e847171d876b7d","impliedFormat":1},{"version":"3bc12c40d90c342ff88a3d876996c555ed5cbee5fe8c3308a240b321f401ee46","impliedFormat":1},{"version":"ba130768aae855a5477e9e148e5c879548e6e7ccbcc56fd1934c8a18ea5b7569","impliedFormat":1},{"version":"2e4f37ffe8862b14d8e24ae8763daaa8340c0df0b859d9a9733def0eee7562d9","impliedFormat":1},{"version":"d38530db0601215d6d767f280e3a3c54b2a83b709e8d9001acb6f61c67e965fc","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"b499af2054a037a162b3b72cd886f48bbf32a3502c865c6e29fac7d2ab3ce0b5","impliedFormat":1},{"version":"b83cb14474fa60c5f3ec660146b97d122f0735627f80d82dd03e8caa39b4388c","impliedFormat":1},{"version":"d87f90d2df7b638204d81d6c57e1f2a8cc9317c45ca331c691c375649aa9255c","impliedFormat":1},{"version":"7274fbffbd7c9589d8d0ffba68157237afd5cecff1e99881ea3399127e60572f","impliedFormat":1},{"version":"b73cbf0a72c8800cf8f96a9acfe94f3ad32ca71342a8908b8ae484d61113f647","impliedFormat":1},{"version":"bae6dd176832f6423966647382c0d7ba9e63f8c167522f09a982f086cd4e8b23","impliedFormat":1},{"version":"20865ac316b8893c1a0cc383ccfc1801443fbcc2a7255be166cf90d03fac88c9","impliedFormat":1},{"version":"c9958eb32126a3843deedda8c22fb97024aa5d6dd588b90af2d7f2bfac540f23","impliedFormat":1},{"version":"461d0ad8ae5f2ff981778af912ba71b37a8426a33301daa00f21c6ccb27f8156","impliedFormat":1},{"version":"e927c2c13c4eaf0a7f17e6022eee8519eb29ef42c4c13a31e81a611ab8c95577","impliedFormat":1},{"version":"fcafff163ca5e66d3b87126e756e1b6dfa8c526aa9cd2a2b0a9da837d81bbd72","impliedFormat":1},{"version":"70246ad95ad8a22bdfe806cb5d383a26c0c6e58e7207ab9c431f1cb175aca657","impliedFormat":1},{"version":"f00f3aa5d64ff46e600648b55a79dcd1333458f7a10da2ed594d9f0a44b76d0b","impliedFormat":1},{"version":"772d8d5eb158b6c92412c03228bd9902ccb1457d7a705b8129814a5d1a6308fc","impliedFormat":1},{"version":"802e797bcab5663b2c9f63f51bdf67eff7c41bc64c0fd65e6da3e7941359e2f7","impliedFormat":1},{"version":"b01bd582a6e41457bc56e6f0f9de4cb17f33f5f3843a7cf8210ac9c18472fb0f","impliedFormat":1},{"version":"8b4327413e5af38cd8cb97c59f48c3c866015d5d642f28518e3a891c469f240e","impliedFormat":1},{"version":"4cceef18d7f088e797a463e90b7a9dad10c6bc667724b7686e3e740ae00122be","impliedFormat":1},{"version":"7ee86fbb3754388e004de0ef9e6505485ddfb3be7640783d6d015711c03d302d","impliedFormat":1},{"version":"cc1954b539604b1e562319119ac7e888172208b32ca873f9a357a92c826bd046","impliedFormat":1},{"version":"a67b87d0281c97dfc1197ef28dfe397fc2c865ccd41f7e32b53f647184cc7307","impliedFormat":1},{"version":"771ffb773f1ddd562492a6b9aaca648192ac3f056f0e1d997678ff97dbb6bf9b","impliedFormat":1},{"version":"43e96a3d5d1411ab40ba2f61d6a3192e58177bcf3b133a80ad2a16591611726d","impliedFormat":1},{"version":"232f70c0cf2b432f3a6e56a8dc3417103eb162292a9fd376d51a3a9ea5fbbf6f","impliedFormat":1},{"version":"bb8f2dbc03533abca2066ce4655c119bff353dd4514375beb93c08590c03e023","impliedFormat":1},{"version":"706dd95827e7ebaabda91d5db2b755233e0952d98570e9c032b0f066a15c1177","affectsGlobalScope":true,"impliedFormat":1},{"version":"0b103e9abfe82d14c0ad06a55d9f91d6747154ef7cacc73cf27ecad2bfb3afcf","impliedFormat":1},{"version":"990b8fad2327b77e6920cc792af320e8867e68f02ce849b12c0a6ab9a1aebb09","impliedFormat":1},{"version":"5eb8cd1cb0c9143d74a8190b577c522720878c31aef67d866fcd29973f83e955","impliedFormat":1},{"version":"120599fd965257b1f4d0ff794bc696162832d9d8467224f4665f713a3119078b","impliedFormat":1},{"version":"43ba4f2fa8c698f5c304d21a3ef596741e8e85a810b7c1f9b692653791d8d97a","impliedFormat":1},{"version":"5433f33b0a20300cca35d2f229a7fc20b0e8477c44be2affeb21cb464af60c76","impliedFormat":1},{"version":"db036c56f79186da50af66511d37d9fe77fa6793381927292d17f81f787bb195","impliedFormat":1},{"version":"a6805fcafed712aea7759f8bc731014f9d22738c1d6ef9d43b8091d1d48346d5","impliedFormat":1},{"version":"c49469a5349b3cc1965710b5b0f98ed6c028686aa8450bcb3796728873eb923e","impliedFormat":1},{"version":"4a889f2c763edb4d55cb624257272ac10d04a1cad2ed2948b10ed4a7fda2a428","impliedFormat":1},{"version":"7bb79aa2fead87d9d56294ef71e056487e848d7b550c9a367523ee5416c44cfa","impliedFormat":1},{"version":"d88ea80a6447d7391f52352ec97e56b52ebec934a4a4af6e2464cfd8b39c3ba8","impliedFormat":1},{"version":"142617b3cdf902b69c6464c9fbd942b60ab3e733ca18c032b19e0f7e2adbefe8","impliedFormat":1},{"version":"0b603555f1881f87256ffd6344d3e3ed6d466c2e701eabf381f28be8c2125892","impliedFormat":1},{"version":"897e4f7662488e3ecc79e743bdd3b78f13bdb69a97851afa5b440c4211e32ea9","impliedFormat":1},{"version":"e2e1c6d3b2d93add5200bd7bc1a8cccb4e446836b2111ece45db8683a2c765de","impliedFormat":1},{"version":"251b03d5cd243854ce870d9a9a39f491faf69898c5d6b5eee28cc7649c57417b","impliedFormat":1},{"version":"27ff4196654e6373c9af16b6165120e2dd2169f9ad6abb5c935af5abd8c7938c","impliedFormat":1},{"version":"2c4de79f406d137390608e8c0a44fba2ff8e00bacfcae7c9d1781fef10e9440d","impliedFormat":1},{"version":"07ba23a10465791be5d22deaf5ef7de7658774ddff53721e5ea17fedea1bc721","impliedFormat":1},{"version":"dca8c645c5afeb03b1ecedbf16323f33e7d0afaa6256c8e047e6e38087a97f53","impliedFormat":1},{"version":"775f181bd4a533d6f8b5e55ec1d9f1624559720ae8a70e9432258da26b38d27c","impliedFormat":1},{"version":"796273b2edc72e78a04e86d7c58ae94d370ab93a0ddf40b1aa85a37a1c29ecd7","impliedFormat":1},{"version":"5df15a69187d737d6d8d066e189ae4f97e41f4d53712a46b2710ff9f8563ec9f","impliedFormat":1},{"version":"9109a1291dd4b9f1541bea81ee11c247a2ca9e1ea89f87f13aa1811c3c069616","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"622694a8522b46f6310c2a9b5d2530dde1e2854cb5829354e6d1ff8f371cf469","impliedFormat":1},{"version":"cd8ce8d68567f62dd580b3c3c37777ac3f5b81944c7417f5ea83030eab533385","impliedFormat":1},{"version":"e374d1eaa05b7dc38580062942ac8351ce79cbe11f6dbce4946a582a5680582d","impliedFormat":1},{"version":"9e2739b32f741859263fdba0244c194ca8e96da49b430377930b8f721d77c000","impliedFormat":1},{"version":"a9e6c0ff3f8186fccd05752cf75fc94e147c02645087ac6de5cc16403323d870","impliedFormat":1},{"version":"49af4b52f0d4d2304c5f2c6fe5fab3e153e0acc38830d0202821b877c097dd02","impliedFormat":1},{"version":"49c346823ba6d4b12278c12c977fb3a31c06b9ca719015978cb145eb86da1c61","impliedFormat":1},{"version":"bfac6e50eaa7e73bb66b7e052c38fdc8ccfc8dbde2777648642af33cf349f7f1","impliedFormat":1},{"version":"92f7c1a4da7fbfd67a2228d1687d5c2e1faa0ba865a94d3550a3941d7527a45d","impliedFormat":1},{"version":"f53b120213a9289d9a26f5af90c4c686dd71d91487a0aa5451a38366c70dc64b","impliedFormat":1},{"version":"e68b8e5a1df7c1be2bc105141456ecba70215806e1c28bfbc5c12bfce4be6e68","impliedFormat":1},{"version":"511c8f02329808d47d00b859c532ae9115590048b17325a946c74dac48428650","impliedFormat":1},{"version":"57d67b72e06059adc5e9454de26bbfe567d412b962a501d263c75c2db430f40e","impliedFormat":1},{"version":"b5f9e66625783eefcbe3d2da074b2e7ba2066d61ce3fc6ef4f22805ad946cab4","impliedFormat":1},{"version":"e37115962d284b9f7a37c2bdd2add50f88365dde41f5e0ff591ffc48a8ec7575","impliedFormat":1},{"version":"6459054aabb306821a043e02b89d54da508e3a6966601a41e71c166e4ea1474f","impliedFormat":1},{"version":"bb37588926aba35c9283fe8d46ebf4e79ffe976343105f5c6d45f282793352b2","impliedFormat":1},{"version":"f89488602bec98a142072fae7ea5ba99431a569ff580c64b7be39896474799d8","impliedFormat":1},{"version":"bbbc47961f39a57df103cf4ca3bb8f8732b4b6678a18225a0aa76d59c466956c","impliedFormat":1},{"version":"2e6114a7dd6feeef85b2c80120fdbfb59a5529c0dcc5bfa8447b6996c97a69f5","impliedFormat":1},{"version":"2ffb043dc5163458e473b7010859f86e01dc4edffcae0a93d885d028b426a546","impliedFormat":1},{"version":"c8f004e6036aa1c764ad4ec543cf89a5c1893a9535c80ef3f2b653e370de45e6","impliedFormat":1},{"version":"dd80b1e600d00f5c6a6ba23f455b84a7db121219e68f89f10552c54ba46e4dc9","impliedFormat":1},{"version":"b064c36f35de7387d71c599bfcf28875849a1dbc733e82bd26cae3d1cd060521","impliedFormat":1},{"version":"05c7280d72f3ed26f346cbe7cbbbb002fb7f15739197cbbee6ab3fd1a6cb9347","impliedFormat":1},{"version":"8de9fe97fa9e00ec00666fa77ab6e91b35d25af8ca75dabcb01e14ad3299b150","impliedFormat":1},{"version":"04b7b2e0832dfd3c31e81df3975e8d8fda28e7ff999b0aa2932608a8f6661d5c","impliedFormat":1},{"version":"ca2d34c6ed5cbd3070b8b6f32f42ae54adcc6499c1e4b99f0a5798b3f27cc653","impliedFormat":1},{"version":"9ec68995e66dd6b9dac834bf5ae85fde802714ea2e82151a5d1d53ef01b463ef","impliedFormat":1},{"version":"5c4d626b4902f2ef8a1cc146d761d276cef988016dc674e3b98fbad70e64bc9f","impliedFormat":1},{"version":"fdfaa0aad899524962e2955287b5b991ffe3be50f64e02eb60c933ca44644a94","impliedFormat":1},{"version":"53c972a0f9bc3a4ec70fff7314123ea8cfcf75b3703046f767d2dc1eea87b2fb","impliedFormat":1},{"version":"f974e4a06953682a2c15d5bd5114c0284d5abf8bc0fe4da25cb9159427b70072","impliedFormat":1},{"version":"50256e9c31318487f3752b7ac12ff365c8949953e04568009c8705db802776fb","impliedFormat":1},{"version":"7d73b24e7bf31dfb8a931ca6c4245f6bb0814dfae17e4b60c9e194a631fe5f7b","impliedFormat":1},{"version":"d130c5f73768de51402351d5dc7d1b36eaec980ca697846e53156e4ea9911476","impliedFormat":1},{"version":"413586add0cfe7369b64979d4ec2ed56c3f771c0667fbde1bf1f10063ede0b08","impliedFormat":1},{"version":"06472528e998d152375ad3bd8ebcb69ff4694fd8d2effaf60a9d9f25a37a097a","impliedFormat":1},{"version":"7303b45138d2511035056a5901a1490ebdcbf055cbb1276f8629c5121cbe733e","impliedFormat":1},{"version":"27f874cd5327507eeff699a74567f60c1215b94509f4308633a7b01922471ed2","impliedFormat":1},{"version":"a401617604fa1f6ce437b81689563dfdc377069e4c58465dbd8d16069aede0a5","impliedFormat":1},{"version":"2c6cf04bc525caf6546e859e8ef10bfb9573837ec0bc5ec7b53a7b1b8ca72781","impliedFormat":1},{"version":"8695dec09ad439b0ceef3776ea68a232e381135b516878f0901ed2ea114fd0fe","impliedFormat":1},{"version":"304b44b1e97dd4c94697c3313df89a578dca4930a104454c99863f1784a54357","impliedFormat":1},{"version":"0a437ae178f999b46b6153d79095b60c42c996bc0458c04955f1c996dc68b971","impliedFormat":1},{"version":"74b2a5e5197bd0f2e0077a1ea7c07455bbea67b87b0869d9786d55104006784f","impliedFormat":1},{"version":"4a7baeb6325920044f66c0f8e5e6f1f52e06e6d87588d837bdf44feb6f35c664","impliedFormat":1},{"version":"87cc05fe13108f02e12da7e3efd8e360fef78d96a0c9e11408ea1b1b9fb3e03d","impliedFormat":1},{"version":"1abbf67c218d23c2ce76887caac2df6c7dab3d97ba2b65348432b876f510002a","impliedFormat":1},{"version":"1a82deef4c1d39f6882f28d275cad4c01f907b9b39be9cbc472fcf2cf051e05b","impliedFormat":1},{"version":"4b20fcf10a5413680e39f5666464859fc56b1003e7dfe2405ced82371ebd49b6","impliedFormat":1},{"version":"c06ef3b2569b1c1ad99fcd7fe5fba8d466e2619da5375dfa940a94e0feea899b","impliedFormat":1},{"version":"f7d628893c9fa52ba3ab01bcb5e79191636c4331ee5667ecc6373cbccff8ae12","impliedFormat":1},{"version":"1d879125d1ec570bf04bc1f362fdbe0cb538315c7ac4bcfcdf0c1e9670846aa6","impliedFormat":1},{"version":"8bd496cf710d4873d15e4891a5dbf945673e3321ca74cf75187e347fd5ed295e","impliedFormat":1},{"version":"a6dba407fc287f1e25454e75028c91bbc00675f2d1c4e8b3edcc36c08611a486","impliedFormat":1},{"version":"d663134457d8d669ae0df34eabd57028bddc04fc444c4bc04bc5215afc91e1f4","impliedFormat":1},{"version":"e91f7b1344577a02f051b9b471f33044fef8334a76dc9e1de003d17595a5219b","impliedFormat":1},{"version":"c0723195c85e19656d6b5b9fdb81d3f3403c1ae4679e722c6ea058c516b38d12","impliedFormat":1},{"version":"186eea74805194f04e41038fc5eca653788b9dedbab7c2d7d17e10139622dd92","impliedFormat":1},{"version":"71d9eb4c4e99456b78ae182fb20a5dfc20eb1667f091dbb9335b3c017dd1c783","impliedFormat":1},{"version":"cfa846a7b7847a1d973605fbb8c91f47f3a0f0643c18ac05c47077ebc72e71c7","impliedFormat":1},{"version":"1594da19968752a22b2ac48c2d0e60575700e745c577a8a4a676b841238ad5bb","impliedFormat":1},{"version":"e0cee12109e0a10a4c3d6769fcc7644b7c1ea7f52365bea51728f5af29f8a137","impliedFormat":1},{"version":"7d4254b4c6c67a29d5e7f65e67d72540480ac2cfb041ca484847f5ae70480b62","impliedFormat":1},{"version":"3536968defef8a75514f547ead5e2e9c1e984820290ec9b00c5fdfb6ef786535","impliedFormat":1},{"version":"d83773870080c30a230e322ce13a9c6f3398e8dacea4ea8a83e26370f3bac23e","impliedFormat":1},{"version":"dcfeaf98d66314fec29a9076c4290e45d0b196a65827becc19138e9c7b855f37","impliedFormat":1},{"version":"6849fe9210fe4946d5f085bfed36758f33dc6ae15a751338d178dd4daa017c46","impliedFormat":1},{"version":"888cda0fa66d7f74e985a3f7b1af1f64b8ff03eb3d5e80d051c3cbdeb7f32ab7","impliedFormat":1},{"version":"60681e13f3545be5e9477acb752b741eae6eaf4cc01658a25ec05bff8b82a2ef","impliedFormat":1},{"version":"ffae4e1e06aa848a1e4bcef162cd1c48e5909b26223515981310af9c036bdfc7","impliedFormat":1},{"version":"a57b1802794433adec9ff3fed12aa79d671faed86c49b09e02e1ac41b4f1d33a","impliedFormat":1},{"version":"34e16eb7c31768a11a08aebcfb3d70d7b8f0b016197e98d8419e566ceae6d6c8","impliedFormat":1},{"version":"f94ec1f7e4b709d26960306c9082a7a1b728a6e13089346aa48ba57c74cbf47e","impliedFormat":1},{"version":"9a11cb4033405e96c247cd5aa29790212aaffdd127869e8a5219103f0b389fd5","impliedFormat":1},{"version":"01479d9d5a5dda16d529b91811375187f61a06e74be294a35ecce77e0b9e8d6c","impliedFormat":1},{"version":"aff5213585cb72e94054dfe17250ff315f3569b3919d1ef1ad235f37c4ee894e","impliedFormat":1},{"version":"fb2ea35e1be6388d722d7725e2b49c697d34d9c890c3b96758faaeb86d35cef8","impliedFormat":1},{"version":"ce0df82a9ae6f914ba08409d4d883983cc08e6d59eb2df02d8e4d68309e7848b","impliedFormat":1},{"version":"1a4dc28334a926d90ba6a2d811ba0ff6c22775fcc13679521f034c124269fd40","impliedFormat":1},{"version":"f05315ff85714f0b87cc0b54bcd3dde2716e5a6b99aedcc19cad02bf2403e08c","impliedFormat":1},{"version":"5fad3b31fc17a5bc58095118a8b160f5260964787c52e7eb51e3d4fcf5d4a6f0","impliedFormat":1},{"version":"72105519d0390262cf0abe84cf41c926ade0ff475d35eb21307b2f94de985778","impliedFormat":1},{"version":"456006a6975b26c0a1785feddae165f6d307e2d601ffde27e21fc4a790e448a4","impliedFormat":1},{"version":"c857e0aae3f5f444abd791ec81206020fbcc1223e187316677e026d1c1d6fe08","impliedFormat":1},{"version":"ccf6dd45b708fb74ba9ed0f2478d4eb9195c9dfef0ff83a6092fa3cf2ff53b4f","impliedFormat":1},{"version":"1fe0d18b111e1145a7e7601855bccd4ca20f24e3b9a5aba6bb1fa9d1a7059170","impliedFormat":1},{"version":"5632c3c26d420c063eebe64c45b1248b9492a67bf44f1d0c57e9dc8f6cf449bb","impliedFormat":1},{"version":"0df5aa619ab12993a39ea6dae062ee46eadbb4d738916460e636ada52bced75b","impliedFormat":1},{"version":"8fca3039857709484e5893c05c1f9126ab7451fa6c29e19bb8c2411a2e937345","impliedFormat":1},{"version":"35069c2c417bd7443ae7c7cafd1de02f665bf015479fec998985ffbbf500628c","impliedFormat":1},{"version":"10ab7be91f87ebe8916b62cf28af2e45b5601fc7b0e311adf838f912c6b31dd8","impliedFormat":1},{"version":"bc636fbc08e0979ceb7eb0731a33000283d77a33b62e1f71ee65be50394e40ba","impliedFormat":1},{"version":"7e0b7f91c5ab6e33f511efc640d36e6f933510b11be24f98836a20a2dc914c2d","impliedFormat":1},{"version":"045b752f44bf9bbdcaffd882424ab0e15cb8d11fa94e1448942e338c8ef19fba","impliedFormat":1},{"version":"2894c56cad581928bb37607810af011764a2f511f575d28c9f4af0f2ef02d1ab","impliedFormat":1},{"version":"0a72186f94215d020cb386f7dca81d7495ab6c17066eb07d0f44a5bf33c1b21a","impliedFormat":1},{"version":"75bbd3be047d539988a0ff0b56384ef7a6a25f3b676ad96bee547d44c31622a7","impliedFormat":1},{"version":"42960001a776b089ade681ab5cfddc936e0afb0615133ec1841f3dee89d3e1bf","impliedFormat":1},{"version":"0aedb02516baf3e66b2c1db9fef50666d6ed257edac0f866ea32f1aa05aa474f","impliedFormat":1},{"version":"da47712b394d944328245482603bc6f416d3949b67c9392279caab595076b510","affectsGlobalScope":true,"impliedFormat":1},{"version":"37d0071d8f0a06dc55c2c5e0ec3391affd4fd107c53410bf358196ec0bf3923f","impliedFormat":1},{"version":"b213dad76ca37fd552274c9499056e1c0d9c1bd38a55bb7f68b22ba6b84c3ad7","impliedFormat":1},{"version":"56ccb49443bfb72e5952f7012f0de1a8679f9f75fc93a5c1ac0bafb28725fc5f","impliedFormat":1},{"version":"20fa37b636fdcc1746ea0738f733d0aed17890d1cd7cb1b2f37010222c23f13e","impliedFormat":1},{"version":"d90b9f1520366d713a73bd30c5a9eb0040d0fb6076aff370796bc776fd705943","impliedFormat":1},{"version":"bc03c3c352f689e38c0ddd50c39b1e65d59273991bfc8858a9e3c0ebb79c023b","impliedFormat":1},{"version":"19df3488557c2fc9b4d8f0bac0fd20fb59aa19dec67c81f93813951a81a867f8","affectsGlobalScope":true,"impliedFormat":1},{"version":"b25350193e103ae90423c5418ddb0ad1168dc9c393c9295ef34980b990030617","affectsGlobalScope":true,"impliedFormat":1},{"version":"bef86adb77316505c6b471da1d9b8c9e428867c2566270e8894d4d773a1c4dc2","impliedFormat":1},{"version":"5a49adaef698b7ad7e6127949fa1b0bbd3d46b7cbd11c54e392a4dcdd51f5190","impliedFormat":1},{"version":"96171c03c2e7f314d66d38acd581f9667439845865b7f85da8df598ff9617476","impliedFormat":1},{"version":"27be6622e2922a1b412eb057faa854831b95db9db5035c3f6d4b677b902ab3b7","impliedFormat":1},{"version":"5c634644d45a1b6bc7b05e71e05e52ec04f3d73d9ac85d5927f647a5f965181a","impliedFormat":1},{"version":"2489bf04d77dc025ba67f49f1a56eb24b9db477d5ff88123d887e163ed1776aa","impliedFormat":1},{"version":"63a7595a5015e65262557f883463f934904959da563b4f788306f699411e9bac","impliedFormat":1},{"version":"4ba137d6553965703b6b55fd2000b4e07ba365f8caeb0359162ad7247f9707a6","impliedFormat":1},{"version":"0b77b819b5417775fccb20c678293cf614c054a5b1a65421a5b933a9124ba998","impliedFormat":1},{"version":"e1f6076688a95bd82deaac740fccbe3cdea0d8a22057cccc9c5bce4398bdd33b","impliedFormat":1},{"version":"9252d498a77517aab5d8d4b5eb9d71e4b225bbc7123df9713e08181de63180f6","impliedFormat":1},{"version":"b1f1d57fde8247599731b24a733395c880a6561ec0c882efaaf20d7df968c5af","impliedFormat":1},{"version":"d7c1bbcddb06dcc8c9184013ace33c0dc71af715ab5987ccb42b903d2ec91193","impliedFormat":1},{"version":"35e6379c3f7cb27b111ad4c1aa69538fd8e788ab737b8ff7596a1b40e96f4f90","impliedFormat":1},{"version":"1fffe726740f9787f15b532e1dc870af3cd964dbe29e191e76121aa3dd8693f2","impliedFormat":1},{"version":"5a3ea721d03a361ccbdd7390ccd75f6e84cbca3a3f01f4b331ecc9af31890c49","impliedFormat":1},{"version":"e7dfaee4af38d45b1cab8a1ee0b3bc1f85ddcf64545ed391d675d78ae6526274","affectsGlobalScope":true,"impliedFormat":1},{"version":"98e2b197bf7fe7800f89c87825e2556d66474869845e97ad9c2b36f347c43539","impliedFormat":1},{"version":"af48e58339188d5737b608d41411a9c054685413d8ae88b8c1d0d9bfabdf6e7e","impliedFormat":1},{"version":"616775f16134fa9d01fc677ad3f76e68c051a056c22ab552c64cc281a9686790","impliedFormat":1},{"version":"65c24a8baa2cca1de069a0ba9fba82a173690f52d7e2d0f1f7542d59d5eb4db0","impliedFormat":1},{"version":"f9fe6af238339a0e5f7563acee3178f51db37f32a2e7c09f85273098cee7ec49","impliedFormat":1},{"version":"1de8c302fd35220d8f29dea378a4ae45199dc8ff83ca9923aca1400f2b28848a","impliedFormat":1},{"version":"77e71242e71ebf8528c5802993697878f0533db8f2299b4d36aa015bae08a79c","impliedFormat":1},{"version":"98a787be42bd92f8c2a37d7df5f13e5992da0d967fab794adbb7ee18370f9849","impliedFormat":1},{"version":"332248ee37cca52903572e66c11bef755ccc6e235835e63d3c3e60ddda3e9b93","impliedFormat":1},{"version":"94e8cc88ae2ef3d920bb3bdc369f48436db123aa2dc07f683309ad8c9968a1e1","impliedFormat":1},{"version":"4545c1a1ceca170d5d83452dd7c4994644c35cf676a671412601689d9a62da35","impliedFormat":1},{"version":"320f4091e33548b554d2214ce5fc31c96631b513dffa806e2e3a60766c8c49d9","impliedFormat":1},{"version":"a2d648d333cf67b9aeac5d81a1a379d563a8ffa91ddd61c6179f68de724260ff","impliedFormat":1},{"version":"d90d5f524de38889d1e1dbc2aeef00060d779f8688c02766ddb9ca195e4a713d","impliedFormat":1},{"version":"07ed3ddab975995eea41b22f3010506fb9f5fb301d04820b07d7a1aee5477d7c","impliedFormat":1},{"version":"969d8b0965849f4bae7cab0ba90bd1e1220e95999c2c6f01117fa7500901c017","impliedFormat":1},{"version":"6ec840ee5e2bc103f557fe38b1d585ee250540468713d7634ee066de372bf332","impliedFormat":1},{"version":"b0309e1eda99a9e76f87c18992d9c3689b0938266242835dd4611f2b69efe456","impliedFormat":1},{"version":"47699512e6d8bebf7be488182427189f999affe3addc1c87c882d36b7f2d0b0e","impliedFormat":1},{"version":"6ceb10ca57943be87ff9debe978f4ab73593c0c85ee802c051a93fc96aaf7a20","impliedFormat":1},{"version":"1de3ffe0cc28a9fe2ac761ece075826836b5a02f340b412510a59ba1d41a505a","impliedFormat":1},{"version":"e46d6cc08d243d8d0d83986f609d830991f00450fb234f5b2f861648c42dc0d8","impliedFormat":1},{"version":"1c0a98de1323051010ce5b958ad47bc1c007f7921973123c999300e2b7b0ecc0","impliedFormat":1},{"version":"ff863d17c6c659440f7c5c536e4db7762d8c2565547b2608f36b798a743606ca","impliedFormat":1},{"version":"5412ad0043cd60d1f1406fc12cb4fb987e9a734decbdd4db6f6acf71791e36fe","impliedFormat":1},{"version":"ad036a85efcd9e5b4f7dd5c1a7362c8478f9a3b6c3554654ca24a29aa850a9c5","impliedFormat":1},{"version":"fedebeae32c5cdd1a85b4e0504a01996e4a8adf3dfa72876920d3dd6e42978e7","impliedFormat":1},{"version":"e297c0a524edee7677939122f90027bfbe5f2698939d9a85728e5044b39c7124","impliedFormat":1},{"version":"cdf21eee8007e339b1b9945abf4a7b44930b1d695cc528459e68a3adc39a622e","impliedFormat":1},{"version":"bc9ee0192f056b3d5527bcd78dc3f9e527a9ba2bdc0a2c296fbc9027147df4b2","impliedFormat":1},{"version":"b62381cae176db34f003cc6172ee8f3e0122014889d66391aa73698105cf4934","impliedFormat":1},{"version":"1d9c0a9a6df4e8f29dc84c25c5aa0bb1da5456ebede7a03e03df08bb8b27bae6","impliedFormat":1},{"version":"84380af21da938a567c65ef95aefb5354f676368ee1a1cbb4cae81604a4c7d17","impliedFormat":1},{"version":"1af3e1f2a5d1332e136f8b0b95c0e6c0a02aaabd5092b36b64f3042a03debf28","impliedFormat":1},{"version":"30d8da250766efa99490fc02801047c2c6d72dd0da1bba6581c7e80d1d8842a4","impliedFormat":1},{"version":"03566202f5553bd2d9de22dfab0c61aa163cabb64f0223c08431fb3fc8f70280","impliedFormat":1},{"version":"41eb514d9ce0a6e87957f08a4b7af70d93f87637f37dee706e2d92a6601c25a9","impliedFormat":1},{"version":"e7765aa8bcb74a38b3230d212b4547686eb9796621ffb4367a104451c3f9614f","impliedFormat":1},{"version":"1de80059b8078ea5749941c9f863aa970b4735bdbb003be4925c853a8b6b4450","impliedFormat":1},{"version":"1d079c37fa53e3c21ed3fa214a27507bda9991f2a41458705b19ed8c2b61173d","impliedFormat":1},{"version":"5bf5c7a44e779790d1eb54c234b668b15e34affa95e78eada73e5757f61ed76a","impliedFormat":1},{"version":"5835a6e0d7cd2738e56b671af0e561e7c1b4fb77751383672f4b009f4e161d70","impliedFormat":1},{"version":"4b7f74b772140395e7af67c4841be1ab867c11b3b82a51b1aeb692822b76c872","impliedFormat":1},{"version":"7bd01f0f28cd3aeb2046274d85208e245965f6f2948edf4f7b2057bcf9f22ccc","impliedFormat":99},{"version":"d2f2cf2b8cc92bea913cda4a076e0f790b23a21e84f989d12f0116a7fe3906e0","impliedFormat":99},{"version":"6de125ea94866c736c6d58d68eb15272cf7d1020a5b459fea1c660027eca9a90","affectsGlobalScope":true,"impliedFormat":1},{"version":"f5b20bc288ee49989c95b20847fc93b96bf61cc0845598897a6a53a967dd7d07","affectsGlobalScope":true,"impliedFormat":1},{"version":"064ac1c2ac4b2867c2ceaa74bbdce0cb6a4c16e7c31a6497097159c18f74aa7c","impliedFormat":1},{"version":"3dc14e1ab45e497e5d5e4295271d54ff689aeae00b4277979fdd10fa563540ae","impliedFormat":1},{"version":"d3b315763d91265d6b0e7e7fa93cfdb8a80ce7cdd2d9f55ba0f37a22db00bdb8","impliedFormat":1},{"version":"b789bf89eb19c777ed1e956dbad0925ca795701552d22e68fd130a032008b9f9","impliedFormat":1},{"version":"947c36c271436c7c95d8fb93512809a6a9da09529f9f6ab53d096ba2c3138773","affectsGlobalScope":true},"7b550dda9686c16f36a17bf9051d5dbf31e98555b30d114ac49fc49a1e712651",{"version":"c73200a98245d9af19dd183d20d280f4c1316ee1d64d848c017c852fc487a03e","signature":"435a1e418e8338be3f39614b96b81a9aa2700bc8c27bc6b98f064ff9ce17c363"},{"version":"0e2371bedf44ad329fb72bd04f61eae22c25c1aee4b11d9609ac273db1a743d1","signature":"10c0e38fa65ae484b17b72b34674dc4ab72c9c605a99f214a421f064f3883e9d"},{"version":"e83a7d31a22409faadb10b4b5d1498ffdcdd269353dd4c529d9c8ab71c04e106","signature":"4447890475137793b8a0014186f2f7999ca24262bc52e5942382018e748685da"},{"version":"96904a667fd08995f381d939716efc0b463eb06801082c45a212b0f7f1354347","signature":"2b426a2cce37f94344577cb5ac0076b3b264fd4f909cc5715855cb11d517cafd"},{"version":"f734b58ea162765ff4d4a36f671ee06da898921e985a2064510f4925ec1ed062","affectsGlobalScope":true,"impliedFormat":1},{"version":"9b643d11b5bca11af760795e56096beae0ed29e9027fec409481f2ee1cb54bbc","impliedFormat":1},{"version":"55c0569d0b70dbc0bb9a811469a1e2a7b8e2bab2d70c013f2e40dfb2d2803d05","impliedFormat":1},{"version":"37f96daaddc2dd96712b2e86f3901f477ac01a5c2539b1bc07fd609d62039ee1","impliedFormat":1},{"version":"9c5c84c449a3d74e417343410ba9f1bd8bfeb32abd16945a1b3d0592ded31bc8","impliedFormat":1},{"version":"a7f09d2aaf994dbfd872eda4f2411d619217b04dbe0916202304e7a3d4b0f5f8","impliedFormat":1},{"version":"a66ebe9a1302d167b34d302dd6719a83697897f3104d255fe02ff65c47c5814e","impliedFormat":99},{"version":"faf770b3935c2ba6558b2bb65af5d5de58945d81f496dc1a5938c41a1abb358b","impliedFormat":99},{"version":"04d516ea781ae5712f84453b5d93a28dbd1aea2f592f09a218e4573d6a45dde3","signature":"ed07f82a62266283074240a9c4554d7ae7c6fdbc07fe0da7664b3b2f662cc786"},{"version":"a43c022e94a6b3186bef5503b526cbffaa6a7f5bd54c5e0efc5c8c7b7450f636","signature":"9a067f074a7f03da7f461c164b0783efff7b8495a2660d5e516f55903ae5229b"},{"version":"168f5f465976626d7bdc0545b75747dc8a4bd0c2e90be982984c4bdebdcd7cf6","signature":"66dddff2da3e4f4a4314b37d39b0df4f39f0e06acdee9447db72b8cf374a1ab0"},{"version":"828468eff0a6b91508f306b1465fa92ded860ff57eaef72e116af404abf1c852","signature":"fcef3307b3cd7280dbb9cc9b779a71e5155941283755f1d250188805b76951e9"},{"version":"047a205de787565f14994d6fad569a362a206e394442467846a7a780d7746473","signature":"b303f233f8ecfa45ff81f79475f02336f2976157344c8cea13d5157ea391d6ff"},{"version":"bd759af437e926d7fadc4c44e854859ee5a6031584d908e0e0c011f3e5494b24","signature":"bf792b43b5d8e717bbd0c9583aad0acd8571cb720878b9f28f57bf2626b0ee31"},{"version":"8028d380d1183acbabe06c57ca137e161c2cae0ea49d332cddc5c0de0859984d","signature":"be5dc128ab59e4d214328cde0e6cbbe19cd8c88b02c65a2975ed424aff3dccde"},{"version":"db8344d2ff556d61e22a92e5649af6a6f248829b5610d706af3389d3cf8ba4c5","signature":"b0e1075000bd306dc219c38d5f8b9dc93130ad25450334c319d91abfa2f4dd46"},{"version":"0b0f281284711f9d5f570738e8dac648b77e7cde0b324e1285640dbebb6ea789","signature":"2533b08a0a15588b3fb04000a28c9452c6c5e80b0cbf5d2c18a58dd0f323bc27"},{"version":"a80539b0989174510f61316d01b9c178c85c4b7e6fb4c3e3c23f5682ce63dc5c","signature":"e947aa47a3b9e624dabd7f4ac611b3d0a4f4365106896455b3ec7f8e483be1f7"},{"version":"51edfd6c0025695636412e18ba816083219ec9178c7bd9e89bd359c5337e6616","signature":"9cf13c46707729cbef4c305895330d81a81302cb6d1a4842e6e2e75ebe737c75"},{"version":"250b0d7e089b19e6efcda749df4794a02b95103ca6f886a2920e1bfebe263d74","signature":"32ded199e40052ebed3345e587166e528db606108f7302f4411aa6caeacc7c77"},{"version":"288d5a790f91d71fb72d5b933daea758c7600e94127d76d7035a11a7f97b1e2b","signature":"b7ccd4f874513b2696ab3157dd2972231d562469ae86ed14911eef81e80b4be1"},{"version":"5ac0b6a9397fb1062d289a30a0413d1bcdf07a1dc7cf5e42536f147490dd7f5b","signature":"d90fedf8cebefdb033b5b0e1989d56892378763e11097cc522b29ff5e0824ff8"},{"version":"b1d09cea0d424ede3ee65f96452707fa7219e7b43e66c304bdeb26951d9a2264","signature":"0103e03e63ce3d0d2aa73c619c7b5024ff91bfac300947ba3f5733ced8d060b0"},{"version":"8f5cf7cf45e1d18f48d882df69144497d3a06690218a5f2b41e3da00efffa9bd","signature":"9bafcae90b180744e31a7bd87f3f1d7be7c74503808c3bd8d91832dc2f7fc466"},{"version":"9fd0006748fabfbf2f6f7eddca514e5b8eeba7bbc167a8f84685d141c8ae0a12","signature":"4094e9c0de91739b688476a577a5430b0f439df63116315753c57382c80b1992"},{"version":"fe93c474ab38ac02e30e3af073412b4f92b740152cf3a751fdaee8cbea982341","impliedFormat":1},{"version":"3255b97f3f24af29c79cc1aa88004efb13b6285ebdde0a567bf32e19bb65250d","impliedFormat":1},{"version":"1e00b8bf9e3766c958218cd6144ffe08418286f89ff44ba5a2cc830c03dd22c7","impliedFormat":1},{"version":"23874b6d249b9780eb941f5abb1b4c578219dcaaaad8783be2e731f922bdf291","impliedFormat":1},{"version":"0e182ffd8d90aeb959e63e5025f8c8981a76779810e1281ddcd9d63bfac6adad","signature":"edc69c73c60dea4de32ba11589ad31e4ddf075a547d1970de55440bb1b417e6d"},{"version":"6423fb735fcb28626d5874e3b16c76ae4f31f1d5c7504c8b0cedc69de5d6fb05","signature":"7237060c590b200df3597909a9a0d2bacbb1ad68dc62cd4338c9357a08826967"},{"version":"1f578274f4347614098392d0c8a1483ad635f7a04f719bfea426be389a8448b2","signature":"facafe94889bb4d57526b381f949700715dddc31f28cb39ce38ece2e46c556b1"},{"version":"37c7961117708394f64361ade31a41f96cef7f2a6606300821c72438dd4abda3","impliedFormat":1},{"version":"f5a0ca672513d5a3e303b36801e4573bb17ae002da225c28c1723eeee0f97145","affectsGlobalScope":true,"impliedFormat":1},{"version":"3d9189f26f01d4e36d3fb380810ef5999992235282e3c293da77d1d8aed09d9f","impliedFormat":1},{"version":"d9bf522aa42728ab077c4675515f5c2d1b739cb37a07d2903f3a0227219fd58f","impliedFormat":1},{"version":"cd0781a74bb53df55fb32bb2c1d72220d55ef31b8faa7b56336fe1ad013e83bb","signature":"94ebdee4b8642e7a875b57cad30b42a2679489e75a790def0a48b01799257502"},{"version":"cd47990eb1b2ce5505f41ac71377eba2286bfe872a732477b9c440a1850f7c2c","signature":"1b8b30e8edd4cc7c6825d584fe25d74bf6f8e7a8ed2b732d9efb1ff73c0abd9d"},{"version":"c652e3653150b8ee84ffc9034860d9183e6b4c34be28e3ba41b34b1417941982","impliedFormat":99},{"version":"e1f2b02372cd5acf5bebee18d578e0bd41151097a8afa0a1c536355c361628b8","impliedFormat":1},{"version":"b5df9747bcce48ab8c5904fb905ca429f835e0e22f955f22b231b621038d9e39","signature":"346f0f7d15266ccd4a8d82c39e49c328ee838e8a5ecc4300603b612fa6d8fe09"},{"version":"e516240bc1e5e9faef055432b900bc0d3c9ca7edce177fdabbc6c53d728cced8","impliedFormat":99},{"version":"5402765feacf44e052068ccb4535a346716fa1318713e3dae1af46e1e85f29a9","impliedFormat":99},{"version":"e16ec5d4796e7a765810efee80373675cedc4aa4814cf7272025a88addf5f0be","impliedFormat":99},{"version":"1f57157fcd45f9300c6efcfc53e2071fbe43396b0a7ed2701fbd1efb5599f07f","impliedFormat":99},{"version":"9f1886f3efddfac35babcada2d454acd4e23164345d11c979966c594af63468b","impliedFormat":99},{"version":"a3541c308f223863526df064933e408eba640c0208c7345769d7dc330ad90407","impliedFormat":99},{"version":"59af208befeb7b3c9ab0cb6c511e4fec54ede11922f2ffb7b497351deaf8aa2e","impliedFormat":99},{"version":"928b16f344f6cddaba565da8238f4cf2ddf12fe03eb426ab46a7560e9b3078fa","impliedFormat":99},{"version":"120bdf62bccef4ea96562a3d30dd60c9d55481662f5cf31c19725f56c0056b34","impliedFormat":99},{"version":"39e0da933908de42ba76ea1a92e4657305ae195804cfaa8760664e80baac2d6a","impliedFormat":99},{"version":"55ce6ca8df9d774d60cef58dd5d716807d5cc8410b8b065c06d3edac13f2e726","impliedFormat":99},{"version":"788a0faf3f28d43ce3793b4147b7539418a887b4a15a00ffb037214ed8f0b7f6","impliedFormat":99},{"version":"a3e66e7b8ccdab967cd4ada0f178151f1c42746eabb589a06958482fd4ed354e","impliedFormat":99},{"version":"bf45a2964a872c9966d06b971d0823daecbd707f97e927f2368ba54bb1b13a90","impliedFormat":99},{"version":"39973a12c57e06face646fb79462aabe8002e5523eec4e86e399228eb34b32c9","impliedFormat":99},{"version":"f01091e9b5028acfb38208113ae051fad8a0b4b8ec1f7137a2a5cf903c47eefc","impliedFormat":99},{"version":"b3e87824c9e7e3a3be7f76246e45c8d603ce83d116733047200b3aa95875445b","impliedFormat":99},{"version":"7e1f7f9ae14e362d41167dc861be6a8d76eca30dde3a9893c42946dc5a5fc686","impliedFormat":99},{"version":"9308ef3b9433063ac753a55c3f36d6d89fa38a8e6c51e05d9d8329c7f1174f24","impliedFormat":99},{"version":"cd3bb1aa24726a0abd67558fde5759fe968c3c6aa3ec7bad272e718851502894","impliedFormat":99},{"version":"1ae0f22c3b8420b5c2fec118f07b7ebd5ae9716339ab3477f63c603fe7a151c8","impliedFormat":99},{"version":"919ff537fff349930acc8ad8b875fd985a17582fb1beb43e2f558c541fd6ecd9","impliedFormat":99},{"version":"4e67811e45bae6c44bd6f13a160e4188d72fd643665f40c2ac3e8a27552d3fd9","impliedFormat":99},{"version":"3d1450fd1576c1073f6f4db9ebae5104e52e2c4599afb68d7d6c3d283bdbaf4f","impliedFormat":99},{"version":"c072af873c33ff11af126c56a846dfada32461b393983a72b6da7bff373e0002","impliedFormat":99},{"version":"de66e997ea5376d4aeb16d77b86f01c7b7d6d72fbb738241966459d42a4089e0","impliedFormat":99},{"version":"d77ea3b91e4bc44d710b7c9487c2c6158e8e5a3439d25fc578befeb27b03efd7","impliedFormat":99},{"version":"a3d5c695c3d1ebc9b0bd55804afaf2ac7c97328667cbeedf2c0861b933c45d3e","impliedFormat":99},{"version":"270724545d446036f42ddea422ee4d06963db1563ccc5e18b01c76f6e67968ae","impliedFormat":99},{"version":"85441c4f6883f7cfd1c5a211c26e702d33695acbabec8044e7fa6831ed501b45","impliedFormat":99},{"version":"0f268017a6b1891fdeea69c2a11d576646d7fd9cdfc8aac74d003cd7e87e9c5a","impliedFormat":99},{"version":"9ece188c336c80358742a5a0279f2f550175f5a07264349d8e0ce64db9701c0b","impliedFormat":99},{"version":"cf41b0fc7d57643d1a8d21af07b0247db2f2d7e2391c2e55929e9c00fbe6ab9a","impliedFormat":99},{"version":"11e7ddddd9eddaac56a6f23d8699ae7a94c2a55ae8c986fdabc719d3c3e875a1","impliedFormat":99},{"version":"dd129c2d348be7dbf9f15d34661defdfc11ee00628ca6f7161bead46095c6bc3","impliedFormat":99},{"version":"c38d8e7cfc64bbfc14a63346388249c1cfa2cc02166c5f37e5a57da4790ce27f","impliedFormat":99},{"version":"36e3eb67df2d2ff3187b4b40391f14d70e47f4818599b050e86faee36e318052","impliedFormat":99},{"version":"5c44b3eec57983546666ba931b822bd9002e9af72e68af8d93549e2cc308473e","impliedFormat":99},{"version":"a1e91dce7758dc0c3ce7739cb33fcabca89022dc9dbc73306759ae064e6e135f","impliedFormat":99},{"version":"c66ff8dd0860f2193f41a2793b813a92fdda421a96b63c06d85a63cc1be5c323","signature":"7b87720aae5dbfb749d597c437531239e4019502dc0e78633561735db617b6f3"},{"version":"f9d9485f3794f9488ca10430ab7e9210b54a46a729c2fa68ae794e55383d6c4f","signature":"3f2cef8e84b1552df60bc9b5ceb253f9daedd2f9cb2255075ae28b1cccd3812e"},{"version":"adaf00eb3d0365ac62cea66723983d8c6a14d23139300e45c008329385012344","signature":"c1c0fdbb129948e18a8b11c893490ee3ce0055631ad8de1eee247343d8359ce6"},{"version":"bf83ae8b72f9ab9ccbc506710f0d16d28fd2dcdb815013e9a9c1bb6a8853917b","signature":"0837cd0625e7b32e97e5c11e3d01ea77db26dcb21c617e6961075173100e4d55"},{"version":"f78285344bc1a7c271a0f4d83ea3d5f31fa3082fc1f3d1bb22a07d6dbdf146ca","signature":"9fa5e308f91ef5eb998c178b080a716db9a3f38d4f0431172f76b4cc14475f24"},{"version":"d8b632b9e5a22dbbc4d1aeadf2839577ce1007dd47d64f2e0a0e684db9621259","signature":"176a02ed76811ecd46987cd39bbe17dff1618359d07f0eb6133018521116ed11"},{"version":"f309dd3ba4f0ac6b6e8da18667e3cc000100543005dbaac8381732c7155f0b2e","signature":"cb35f32ada4c9518afd80bd03570d27e50a966ddf376683c9fe282db1b577ed3"},{"version":"cbc938b4c09829c4945386c0e887a459a91d365e0a98b86c96b02e8876b44a3a","signature":"c528b30eab7013aab3a95470fb9bce1c0e0e399e022655b4be09a7a36380319f"},{"version":"48648af05e33be9e1240538a6158551c8662511d0574766f2ca90dd87d93f785","signature":"a635de126078ac9905e4213235a1081db3ac127078dcd4e42b20005ba2e73bd4"},{"version":"a5ea1d394fe2bd081eb10a3727a6670fd0473d050dbece8ff5c98f1f03031e9a","signature":"157b0dda6e8050731b3bbfc5d029d1dcc05dbaa467bc1d9781f320bb69642e86"},{"version":"6ce55335012d76737df504baabc950805760acf3be988142d1985aa4893f919e","impliedFormat":1},{"version":"88efe27bebddb62da9655a9f093e0c27719647e96747f16650489dc9671075d6","impliedFormat":1},{"version":"e348f128032c4807ad9359a1fff29fcbc5f551c81be807bfa86db5a45649b7ba","impliedFormat":1},{"version":"8ee6b07974528da39b7835556e12dd3198c0a13e4a9de321217cd2044f3de22e","impliedFormat":1},{"version":"deefd8c43b40f9797c3921d78d3f9243959621a17b817be7f5d95c149f23a9dd","impliedFormat":1},{"version":"5f12132800d430adbe59b49c2c0354d85a71ada7d756e34250a655baa8ad4ae5","impliedFormat":1},{"version":"1996d1cd7d585a8359a35878f67abdd73cc35b1f675c9c6b147b202fdd8dfc3f","impliedFormat":1},{"version":"b16e757e4c35434065120a2b3bf13a518fc9e621dc9c2ed668f91635a9dc4e75","impliedFormat":1},{"version":"d22cd2e880dc30d21cf20b26b6341e0478f3505ea645d1504c7e9c14cdff1198","impliedFormat":1},{"version":"d02ced7accb512e6198b796b8d284e7979abde0f089b0a77969747a5f27bfb23","impliedFormat":1},{"version":"4374cefdde5c6e9bad52b0436e887b8325b8f407c12035194ad02c28f1553a3a","impliedFormat":1},{"version":"5f1ba0898eb0a54a644cb9c95c2240beaa961d87fd080cbb90807a6cc03daeb3","impliedFormat":1},{"version":"8e92ee8710ba85b158c5d91b0bbc9d0d033f5e062b6e70178063f01b20f63a14","impliedFormat":1},{"version":"ee933420aacba1f60aa70fb8ba47c5e69001b005073b71973114587089a13c7f","impliedFormat":1},{"version":"0a0714999d0a5bdfacd15c7b34cffbcc6f263f6cb0ccb42076cdc541c6987797","impliedFormat":1},{"version":"56584bfc655f9df64afc0f22f7d1122c29e5b74b342c203b891e19de9fa37de8","impliedFormat":1},{"version":"40ec58f0fadd0b3981b3d383e1c12fa0680115ae9f018387fc2cfc0bbcf23204","impliedFormat":1},{"version":"849b9e7283b7309a4556c9b90bb8e2dfc27751f157798065bbc513dcddb09a8c","impliedFormat":1},{"version":"76bba0c97594248c1be19af32d5799f7eff51cec2926d8e4dd59267d7636a0b4","impliedFormat":1},{"version":"10e109212c7be8a9f66e988e5d6c2a8900c9d14bf6beadf5fa70d32ada3425cf","impliedFormat":1},{"version":"2b821aeb31e690092f8eae671dd961a9d0fd598ff4883ce0a600c90e9e8fa716","impliedFormat":1},{"version":"26602933b613e4df3868a6c82e14fffa2393a08531cb333ed27b151923462981","impliedFormat":1},{"version":"f57a588d8f6b3ce5c8b494f2dc759a8885eaee18e80a4952df47de45403fedbe","impliedFormat":1},{"version":"34735727b3fe7a0ed0651a0f88d06449163d1989a2b2de7f047473adc7c1c383","impliedFormat":1},{"version":"a5b13abc88ab3186e713c445e59e2f6eee20c6167943517bc2f56985d89b8c55","impliedFormat":1},{"version":"c8a206a6ba4e32710ebb4a389187772423de0f4f6180b95a7ef1a5a1934c1be6","impliedFormat":1},{"version":"7ae65fe95b18205e241e6695cb2c61c0828d660aca7d08f68781b439a800e6b8","impliedFormat":1},{"version":"c2c8c166199d3a7bd093152437d1f6399d05e458a9ca9364456feecba920cda4","impliedFormat":1},{"version":"369b7270eeeb37982203b2cb18c7302947b89bf5818c1d3d2e95a0418f02b74e","impliedFormat":1},{"version":"94f95d223e2783b0aef4d15d7f6990a6a550fe17d099c501395f690337f7105e","impliedFormat":1},{"version":"039bd8d1e0d151570b66e75ee152877fb0e2f42eca43718632ac195e6884be34","impliedFormat":1},{"version":"d565d66b38d54de037c9d46dede1f12630010d9b45fd9c6b432c7a40b2e30502","impliedFormat":1},{"version":"d7386a1ebe9a3eae227a5561c898c10cacb61a49f941c5a18cdf593f979c693c","impliedFormat":1},{"version":"d3cfde44f8089768ebb08098c96d01ca260b88bccf238d55eee93f1c620ff5a5","impliedFormat":1},{"version":"293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec","impliedFormat":1},{"version":"36eb5babc665b890786550d4a8cb20ef7105673a6d5551fbdd7012877bb26942","impliedFormat":1},{"version":"fec412ded391a7239ef58f455278154b62939370309c1fed322293d98c8796a6","impliedFormat":1},{"version":"e3498cf5e428e6c6b9e97bd88736f26d6cf147dedbfa5a8ad3ed8e05e059af8a","impliedFormat":1},{"version":"dba3f34531fd9b1b6e072928b6f885aa4d28dd6789cbd0e93563d43f4b62da53","impliedFormat":1},{"version":"f672c876c1a04a223cf2023b3d91e8a52bb1544c576b81bf64a8fec82be9969c","impliedFormat":1},{"version":"e4b03ddcf8563b1c0aee782a185286ed85a255ce8a30df8453aade2188bbc904","impliedFormat":1},{"version":"2329d90062487e1eaca87b5e06abcbbeeecf80a82f65f949fd332cfcf824b87b","impliedFormat":1},{"version":"25b3f581e12ede11e5739f57a86e8668fbc0124f6649506def306cad2c59d262","impliedFormat":1},{"version":"93c3e73824ad57f98fd23b39335dbdae2db0bd98199b0dc0b9ccc60bf3c5134a","impliedFormat":1},{"version":"a9ebb67d6bbead6044b43714b50dcb77b8f7541ffe803046fdec1714c1eba206","impliedFormat":1},{"version":"833e92c058d033cde3f29a6c7603f517001d1ddd8020bc94d2067a3bc69b2a8e","impliedFormat":1},{"version":"c1a2e05eb6d7ca8d7e4a7f4c93ccf0c2857e842a64c98eaee4d85841ee9855e6","impliedFormat":1},{"version":"835fb2909ce458740fb4a49fc61709896c6864f5ce3db7f0a88f06c720d74d02","impliedFormat":1},{"version":"6e5857f38aa297a859cab4ec891408659218a5a2610cd317b6dcbef9979459cc","impliedFormat":1},{"version":"ead8e39c2e11891f286b06ae2aa71f208b1802661fcdb2425cffa4f494a68854","impliedFormat":1},{"version":"82919acbb38870fcf5786ec1292f0f5afe490f9b3060123e48675831bd947192","impliedFormat":1},{"version":"e222701788ec77bd57c28facbbd142eadf5c749a74d586bc2f317db7e33544b1","impliedFormat":1},{"version":"09154713fae0ed7befacdad783e5bd1970c06fc41a5f866f7f933b96312ce764","impliedFormat":1},{"version":"8d67b13da77316a8a2fabc21d340866ddf8a4b99e76a6c951cc45189142df652","impliedFormat":1},{"version":"a91c8d28d10fee7fe717ddf3743f287b68770c813c98f796b6e38d5d164bd459","impliedFormat":1},{"version":"68add36d9632bc096d7245d24d6b0b8ad5f125183016102a3dad4c9c2438ccb0","impliedFormat":1},{"version":"3a819c2928ee06bbcc84e2797fd3558ae2ebb7e0ed8d87f71732fb2e2acc87b4","impliedFormat":1},{"version":"f6f827cd43e92685f194002d6b52a9408309cda1cec46fb7ca8489a95cbd2fd4","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"a270a1a893d1aee5a3c1c8c276cd2778aa970a2741ee2ccf29cc3210d7da80f5","impliedFormat":1},{"version":"add0ce7b77ba5b308492fa68f77f24d1ed1d9148534bdf05ac17c30763fc1a79","impliedFormat":1},{"version":"8926594ee895917e90701d8cbb5fdf77fc238b266ac540f929c7253f8ad6233d","impliedFormat":1},{"version":"2f67911e4bf4e0717dc2ded248ce2d5e4398d945ee13889a6852c1233ea41508","impliedFormat":1},{"version":"d8430c275b0f59417ea8e173cfb888a4477b430ec35b595bf734f3ec7a7d729f","impliedFormat":1},{"version":"69364df1c776372d7df1fb46a6cb3a6bf7f55e700f533a104e3f9d70a32bec18","impliedFormat":1},{"version":"8e6427dd1a4321b0857499739c641b98657ea6dc7cc9a02c9b2c25a845c3c8e6","impliedFormat":1},{"version":"58da08d1fe876c79c47dcf88be37c5c3fab55d97b34c8c09a666599a2191208d","impliedFormat":1},{"version":"6042774c61ece4ba77b3bf375f15942eb054675b7957882a00c22c0e4fe5865c","impliedFormat":1},{"version":"5a3bd57ed7a9d9afef74c75f77fce79ba3c786401af9810cdf45907c4e93f30e","impliedFormat":1},{"version":"ed8763205f02fb65e84eff7432155258df7f93b7d938f01785cb447d043d53f3","impliedFormat":1},{"version":"30db853bb2e60170ba11e39ab48bacecb32d06d4def89eedf17e58ebab762a65","impliedFormat":1},{"version":"e27451b24234dfed45f6cf22112a04955183a99c42a2691fb4936d63cfe42761","impliedFormat":1},{"version":"2316301dd223d31962d917999acf8e543e0119c5d24ec984c9f22cb23247160c","impliedFormat":1},{"version":"58d65a2803c3b6629b0e18c8bf1bc883a686fcf0333230dd0151ab6e85b74307","impliedFormat":1},{"version":"e818471014c77c103330aee11f00a7a00b37b35500b53ea6f337aefacd6174c9","impliedFormat":1},{"version":"d4a5b1d2ff02c37643e18db302488cd64c342b00e2786e65caac4e12bda9219b","impliedFormat":1},{"version":"29f823cbe0166e10e7176a94afe609a24b9e5af3858628c541ff8ce1727023cd","impliedFormat":1},{"version":"f317cab60803426a36ddf639c3ca8656a77680874a6974b1208568910b00223f","signature":"06cdd9cf15ef8789a710d509f3ce8d521e19994dc81797ca814ec7b03921f9ad"},{"version":"39a7e1a4969c971b1edd7bf4c27d9698a74c2b9be2fd9ffcde8308720d454776","signature":"cae9d5f6d11c27f4968ec545519f445d9eca7c9f249919f1de9474471bfcf33a"},{"version":"ef199d5fdc234ac6e74d97830709a176aca59ef15416d353e98052d487c6f4a1","signature":"cb8fa67ea7cfc47a622b1fdc6ba487b3c2999c1cd648bb526ca4af548e0b5858"},{"version":"114b426af1d29db97181f9034777d6e4ad95eb1b8a6be884bdad7906535b89e8","signature":"443acdfdc9f37f247608939c852474831188558a193fc61d1989a085e4fbae61"},{"version":"7246f2eacd085588c633c43bc2e497fcb9916ff60797edf27b38f57e1323181a","signature":"9448e97f406c4fd65081438a9be4b09d79b391ce9188a822fcedbde7df2626bf"},{"version":"ca88e94ee6376344f7f7274c5f70ddf3c6b00bcf87fa7307e76d33fd49922d81","signature":"1377b4c1c1ac4ed44de0b27631c69124ed233a0d8ef63f5577960a51c2daac61"},{"version":"cbc44acfea4fb7424f3dc47ce9492ae09b0a16c390e9400787c9a2514ac76a57","signature":"5122472190637b8046aaf26db6d065f76c1610bd27ed69dcf2e47ab1e51dbda2"},{"version":"64c63593e47c42a7a8429d5ba6ba16fc57c485e9a21fdf23746cc3ad643e6aed","signature":"392f2e06ee257cac742ecd07f3983b3f6af1a5244b510c8cf0afe42868762561"},{"version":"bcafc6bc4c0378f671cfbedacd4417e0fb6cf49b7c712781282a3db368f82021","signature":"afbc9a19bda4825bdcca0124fdda6dd71d1b880b7c166beed38fdf6c63df6c29"},{"version":"8dfac2cd45cafa32633904c42d40e8271115ea7db6296f1995f6e3fd9b6d92d1","signature":"d6e5efdc5200862d8f3dbc8ea162fcc7eaf8732a26e666898ac0e0f7fe8af558"},{"version":"9f84dbabf2dd99ecb2222c2236974aa03bee53f0eb8df54f8425736b7e759926","signature":"31fc6caa7c71b180347b884b9bf133b8e252765bf9cbe47f90eca52e353284d7"},{"version":"cded87606639c0b3d0dff41725bff3f0a186471aad549a56dc34f76a3eb707bc","signature":"e09c1ff308f2fc75fa5bd0e97840859f9a89d7e9f9c8f8e7dd1df01f1f19d1a1"},{"version":"e58e722b9d7e6fd0b2539a11d9caeecffdd975466368640f6036b082b5ea2dc5","signature":"960489f5509b57f29a880b8a4d789d3df50d8a79bc5702a2785ca98ef62c0022"},{"version":"f7d43baa820d6057f4bfb5830e084406c332bc3cc679fa5ccd9ab8561d89bc7a","signature":"d1970d78871edd843a289ca4e25c0e2311e631bef5ae21545a47bd139261bea0"},{"version":"64dfdc8c5331f3cfb836c914669710917f95481ea8c4b0ebc1c257f687d40d15","signature":"3c1a36b69fc09964cf08b8554f8fe125ff03cfd69ddf86a5f4815a5af5e1f78f"},{"version":"e987c773365c259e61cd81f4902482df36cf2bf693590969e913fcb40d4bf966","signature":"8648e45571a83c67e32c1a8094b4dad16ff165269fd21845b4749d9e9a463519"},{"version":"caaedbb8fe193083fe7ce3d465a8ea15d8d32f7b1fa61ca11facac66c6becf85","signature":"d0e18ffc38571437d276ff272bfa584eb70045e322bde58cb1b11253f6dc3aa1"},{"version":"284d54948a15039b2b48e01844e3a7304eb30822ae2a72148ea9a8432969b871","signature":"eaf5a8f822efdb971aa7913b25d6b453f03691f9d1067a6e8a27b08796626a37"},{"version":"57793b36261f3357336168442e596d2daa568cf49d275f458b6a681d97e291b8","signature":"f9f620292b7843af8d20725583d08eb59309a7588aa148acf39743bdba39be40"},{"version":"1523c7142a141ab100f76dde6b112da703b88573df97de757cf0f6f2bba5b35a","signature":"c5cc7e67296da32b9464c4f6e95e3c18ea53e05c4f93ace3c20720bf49190816","affectsGlobalScope":true},{"version":"522547d2dd396f57c04d0ed76a0153b7272aff785d2b46c41f8a9335d8d25d5a","signature":"b7f38df2ae00a792b5793cbdfce2d18660e04795981569bd71c2f1f88aac4d1e"},{"version":"c688540c4b76649777f8413f6a8e5512d4c35585d24b510d07d7253ce111fa03","signature":"08dc8f9a3b50f186914d0fc136d6f91a0fb2d6817d4a4a29809bec075da7d47f"},{"version":"81537139c943d8256e7f5328b899146868c6eb90a8868db8df74dd74e0ed15ef","signature":"7f79273537c1b71635ffb6b2fb4d129e2e500e277fe00386c1101387b41151a4"},{"version":"7d5f5894b116f9e7444bdfad0c7210302b2c2c7b06ffab2020d6dcab0e6cd34f","signature":"4aa2df4251b076a98b47766d846e6e4dff29fd77a08345021bd8e7b38be8916a"},"d1986184a09a52db8228cb2bb2a61a8c05c9354e5b93cec8e2628d8579c892d7",{"version":"9d5367e3176a5968f66bdaaba12907b10f45ba920ce3bb795fbd8f608e547716","signature":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"},"d1986184a09a52db8228cb2bb2a61a8c05c9354e5b93cec8e2628d8579c892d7",{"version":"947c36c271436c7c95d8fb93512809a6a9da09529f9f6ab53d096ba2c3138773","affectsGlobalScope":true},{"version":"0e2abb55892acb5d73c70ff9173d649dccb5858058a91ecf44a3e2727b108677","signature":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"},{"version":"151ff381ef9ff8da2da9b9663ebf657eac35c4c9a19183420c05728f31a6761d","impliedFormat":1},{"version":"f3d8c757e148ad968f0d98697987db363070abada5f503da3c06aefd9d4248c1","impliedFormat":1},{"version":"96d14f21b7652903852eef49379d04dbda28c16ed36468f8c9fa08f7c14c9538","impliedFormat":1},{"version":"7fa8d75d229eeaee235a801758d9c694e94405013fe77d5d1dd8e3201fc414f1","impliedFormat":1}],"root":[[530,535],[544,560],[565,567],572,573,576,[616,625],[751,779]],"options":{"allowJs":true,"esModuleInterop":true,"jsx":4,"module":99,"skipLibCheck":true,"strict":true,"target":4},"referencedMap":[[777,1],[778,2],[779,3],[775,4],[530,2],[776,5],[531,6],[532,7],[740,8],[739,9],[374,2],[542,10],[541,11],[780,2],[781,2],[782,2],[140,12],[141,12],[142,13],[97,14],[143,15],[144,16],[145,17],[92,2],[95,18],[93,2],[94,2],[146,19],[147,20],[148,21],[149,22],[150,23],[151,24],[152,24],[153,25],[154,26],[155,27],[156,28],[98,2],[96,2],[157,29],[158,30],[159,31],[191,32],[160,33],[161,34],[162,35],[163,36],[164,37],[165,38],[166,39],[167,40],[168,41],[169,42],[170,42],[171,43],[172,2],[173,44],[175,45],[174,46],[176,47],[177,48],[178,49],[179,50],[180,51],[181,52],[182,53],[183,54],[184,55],[185,56],[186,57],[187,58],[188,59],[99,2],[100,2],[101,2],[139,60],[189,61],[190,62],[195,63],[459,64],[196,65],[194,66],[461,67],[460,68],[192,69],[457,2],[193,70],[83,2],[85,71],[456,64],[226,64],[783,2],[543,2],[84,2],[614,72],[613,73],[615,74],[611,73],[612,75],[577,2],[585,76],[579,77],[586,2],[608,78],[583,79],[607,80],[604,81],[587,82],[588,2],[581,2],[578,2],[609,83],[605,84],[589,2],[606,85],[590,86],[592,87],[593,88],[582,89],[594,90],[595,89],[597,90],[598,91],[599,92],[601,93],[596,94],[602,95],[603,96],[580,97],[600,98],[584,99],[591,2],[610,100],[570,101],[571,102],[574,103],[538,2],[564,64],[569,104],[568,2],[482,105],[487,106],[494,107],[477,108],[230,2],[238,109],[378,110],[381,111],[353,2],[366,112],[373,113],[255,2],[355,2],[236,2],[352,114],[398,115],[237,2],[228,116],[380,117],[382,118],[383,119],[454,120],[347,121],[300,122],[360,123],[361,124],[359,125],[358,2],[354,126],[379,127],[239,128],[424,2],[425,129],[266,130],[240,131],[267,130],[303,130],[206,130],[376,132],[375,2],[365,133],[472,2],[215,2],[493,134],[432,135],[433,136],[429,137],[511,2],[330,2],[434,138],[430,139],[516,140],[515,141],[510,2],[281,2],[333,142],[332,2],[509,143],[431,64],[286,144],[293,145],[295,146],[285,2],[290,147],[292,148],[294,149],[289,150],[287,2],[291,151],[512,2],[508,2],[514,152],[513,2],[284,153],[503,154],[506,155],[274,156],[273,157],[272,158],[519,64],[271,159],[260,2],[521,2],[562,160],[561,2],[522,64],[523,161],[198,2],[362,162],[363,163],[364,164],[202,2],[367,2],[222,165],[197,2],[446,64],[204,166],[445,167],[444,168],[435,2],[436,2],[443,2],[438,2],[441,169],[437,2],[439,170],[442,171],[440,170],[235,2],[232,2],[233,130],[387,2],[392,172],[393,173],[391,174],[389,175],[390,176],[385,2],[452,138],[227,138],[481,177],[488,178],[492,179],[321,180],[320,2],[315,2],[468,181],[476,182],[348,183],[349,184],[427,185],[337,2],[450,186],[325,64],[342,187],[453,188],[338,2],[341,189],[339,2],[451,190],[448,191],[447,2],[449,2],[345,2],[423,192],[210,193],[323,194],[327,195],[343,196],[346,197],[335,198],[328,199],[475,200],[401,201],[319,202],[207,203],[474,204],[203,205],[394,206],[386,2],[395,207],[412,208],[384,2],[411,209],[91,2],[406,210],[231,2],[426,211],[402,2],[216,2],[218,2],[357,2],[410,212],[234,2],[258,213],[344,214],[264,215],[324,2],[409,2],[388,2],[414,216],[415,217],[356,2],[417,218],[419,219],[418,220],[368,2],[408,203],[421,221],[318,222],[407,223],[413,224],[243,2],[247,2],[246,2],[245,2],[250,2],[244,2],[253,2],[252,2],[249,2],[248,2],[251,2],[254,225],[242,2],[310,226],[309,2],[314,227],[311,228],[313,229],[316,227],[312,228],[223,230],[302,231],[471,232],[469,2],[498,233],[500,234],[464,235],[499,236],[211,237],[208,237],[241,2],[225,238],[224,239],[220,240],[221,241],[229,242],[257,242],[268,242],[304,243],[269,243],[213,244],[212,2],[308,245],[307,246],[306,247],[305,248],[214,249],[455,250],[256,251],[463,252],[428,253],[458,254],[462,255],[351,256],[350,257],[331,258],[317,259],[299,260],[301,261],[298,262],[420,263],[322,2],[486,2],[219,264],[422,265],[470,266],[329,2],[259,267],[336,268],[334,269],[261,270],[396,271],[465,2],[262,272],[397,272],[484,2],[483,2],[485,2],[467,2],[466,2],[399,273],[326,2],[296,274],[217,275],[275,2],[201,276],[263,2],[490,64],[200,2],[502,277],[283,64],[496,138],[282,278],[479,279],[280,277],[205,2],[504,280],[278,64],[279,64],[270,2],[199,2],[277,281],[276,282],[265,283],[340,41],[400,41],[416,2],[404,284],[403,2],[288,153],[209,2],[297,64],[473,165],[480,285],[86,64],[89,286],[90,287],[87,64],[88,2],[377,288],[372,289],[371,2],[370,290],[369,2],[478,291],[489,292],[491,293],[495,294],[563,295],[497,296],[501,297],[529,298],[505,298],[528,299],[507,300],[517,301],[518,302],[520,303],[524,304],[527,165],[526,2],[525,305],[626,2],[642,306],[643,306],[644,306],[658,307],[645,308],[646,308],[647,309],[639,310],[637,311],[628,2],[632,312],[636,313],[634,314],[641,315],[629,316],[630,317],[631,318],[633,319],[635,320],[638,321],[640,322],[648,308],[649,308],[650,308],[651,306],[652,308],[653,308],[627,308],[654,2],[656,323],[655,308],[657,306],[575,324],[537,325],[540,326],[536,2],[539,2],[405,327],[81,2],[82,2],[13,2],[14,2],[16,2],[15,2],[2,2],[17,2],[18,2],[19,2],[20,2],[21,2],[22,2],[23,2],[24,2],[3,2],[25,2],[26,2],[4,2],[27,2],[31,2],[28,2],[29,2],[30,2],[32,2],[33,2],[34,2],[5,2],[35,2],[36,2],[37,2],[38,2],[6,2],[42,2],[39,2],[40,2],[41,2],[43,2],[7,2],[44,2],[49,2],[50,2],[45,2],[46,2],[47,2],[48,2],[8,2],[54,2],[51,2],[52,2],[53,2],[55,2],[9,2],[56,2],[57,2],[58,2],[60,2],[59,2],[61,2],[62,2],[10,2],[63,2],[64,2],[65,2],[11,2],[66,2],[67,2],[68,2],[69,2],[70,2],[1,2],[71,2],[72,2],[12,2],[76,2],[74,2],[79,2],[78,2],[73,2],[77,2],[75,2],[80,2],[117,328],[127,329],[116,328],[137,330],[108,331],[107,332],[136,305],[130,333],[135,334],[110,335],[124,336],[109,337],[133,338],[105,339],[104,305],[134,340],[106,341],[111,342],[112,2],[115,342],[102,2],[138,343],[128,344],[119,345],[120,346],[122,347],[118,348],[121,349],[131,305],[113,350],[114,351],[123,352],[103,353],[126,344],[125,342],[129,2],[132,354],[750,355],[663,356],[670,357],[665,2],[666,2],[664,358],[667,359],[659,2],[660,2],[671,360],[662,361],[668,2],[669,362],[661,363],[744,364],[748,365],[745,365],[741,364],[749,366],[746,367],[747,365],[742,368],[743,369],[735,370],[679,371],[681,372],[734,2],[680,373],[738,374],[737,375],[736,376],[672,2],[682,371],[683,2],[674,377],[678,378],[673,2],[675,379],[676,380],[677,2],[684,381],[685,381],[686,381],[687,381],[688,381],[689,381],[690,381],[691,381],[692,381],[693,381],[694,381],[695,381],[696,381],[698,381],[697,381],[699,381],[700,381],[701,381],[702,381],[733,382],[703,381],[704,381],[705,381],[706,381],[707,381],[708,381],[709,381],[710,381],[711,381],[712,381],[713,381],[714,381],[715,381],[717,381],[716,381],[718,381],[719,381],[720,381],[721,381],[722,381],[723,381],[724,381],[725,381],[726,381],[727,381],[728,381],[729,381],[732,381],[730,381],[731,381],[621,383],[620,384],[618,385],[622,386],[752,387],[754,388],[755,389],[624,390],[756,391],[757,392],[759,393],[758,394],[625,395],[761,396],[762,397],[763,398],[765,399],[766,400],[767,401],[576,402],[768,403],[769,404],[616,405],[770,406],[771,407],[623,408],[753,409],[760,410],[567,11],[619,411],[617,411],[572,412],[566,413],[772,414],[565,415],[764,416],[573,417],[773,418],[751,409],[774,419],[533,11],[534,11],[535,11],[556,420],[555,417],[545,421],[553,421],[550,421],[552,421],[548,421],[551,421],[547,421],[546,421],[549,421],[554,422],[544,423],[557,11],[558,11],[559,11],[560,11]],"affectedFilesPendingEmit":[779,776,532,621,620,618,622,752,754,755,624,756,757,759,758,625,761,762,763,765,766,767,576,768,769,616,770,771,623,753,760,567,619,617,572,566,772,565,764,573,773,751,774,533,534,535,556,555,545,553,550,552,548,551,547,546,549,554,544,557,558,559,560],"version":"5.9.3"}
 ```
 

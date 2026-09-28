@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import Product from '../models/Product';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, pausedProductsFilter, findPauseMatch, describePause } from '../services/productVisibilityService';
 
 // Helper to normalize array input (stringified JSON, comma-separated string, or array)
 const parseArrayField = (input: any): string[] => {
@@ -32,8 +33,17 @@ const parseBooleanInput = (input: any): boolean | undefined => {
 // @desc    Get all products (with optional filtering)
 // @route   GET /api/products
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
-    const { category, subcategory, occasion, occasionSub, sort, search, isBestseller } = req.query;
+    const { category, subcategory, occasion, occasionSub, sort, search, isBestseller, includePaused } = req.query;
     let query: any = {};
+
+    // Admin-only escape hatch so a paused product can still be inspected in the dashboard.
+    const wantsPaused = includePaused === 'true' && req.user?.role === 'admin';
+    if (!wantsPaused) {
+        const pauseFilter = pausedProductsFilter(await getPausedIndex());
+        if (pauseFilter) {
+            query.$nor = [...(query.$nor || []), ...(pauseFilter.$nor || [])];
+        }
+    }
 
     const bestsellerFilter = parseBooleanInput(isBestseller);
     if (bestsellerFilter !== undefined) query.isBestseller = bestsellerFilter;
@@ -107,6 +117,16 @@ export const getProductBySlug = asyncHandler(async (req: Request, res: Response,
     if (!product) {
         return next(new ErrorResponse('Product narrative not found in the archives.', 404));
     }
+
+    // A paused product is treated as absent everywhere: direct links, shares and old bookmarks
+    // must not surface it. Admins can still inspect it with ?includePaused=true.
+    if (!(req.query.includePaused === 'true' && req.user?.role === 'admin')) {
+        const pause = findPauseMatch(product, await getPausedIndex());
+        if (pause) {
+            return next(new ErrorResponse(`This design is ${describePause(pause)} and is not available right now.`, 404));
+        }
+    }
+
     res.status(200).json({ success: true, data: product });
 });
 

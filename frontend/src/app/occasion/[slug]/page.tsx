@@ -9,6 +9,7 @@ import { fetchOccasions } from "@/redux/slices/occasionSlice";
 import { RootState } from "@/redux/store";
 import { getImageUrl } from "@/utils/getImageUrl";
 import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight, X } from "lucide-react";
+import PausedSectionNotice from "@/components/PausedSectionNotice";
 import { Product } from "@/data/products";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -82,6 +83,13 @@ export default function OccasionPage({ params }: { params: Promise<{ slug: strin
   const pageDesc = currentOccasion?.description || mainOccasion?.description || "Thoughtfully curated miniatures for every celebration — birthdays, weddings, festivals and every special moment worth treasuring.";
   const bgImage = getImageUrl(currentOccasion?.image || mainOccasion?.image) || '/hero-bg.jpg';
 
+  // A paused occasion stays browsable; this explains why its products are not listed.
+  const isSectionPaused = slug !== 'all' && !!currentOccasion?.isEffectivelyPaused;
+  const sectionPausedBecause =
+    currentOccasion?.isPaused || !currentOccasion?.pausedBecause
+      ? null
+      : currentOccasion.pausedBecause;
+
   return (
     <div className="flex flex-col min-h-screen font-sans bg-[var(--bg)]">
 
@@ -143,6 +151,16 @@ export default function OccasionPage({ params }: { params: Promise<{ slug: strin
           </motion.div>
         </div>
       </section>
+
+      {isSectionPaused && (
+        <PausedSectionNotice
+          kind="occasion"
+          sectionName={currentOccasion?.name || pageTitle}
+          pausedBecause={sectionPausedBecause}
+          browseAllHref="/category/all"
+          browseAllLabel="Browse all products"
+        />
+      )}
 
       {/* ── SHOP LAYOUT ── */}
       <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-12 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 lg:gap-16 items-start w-full">

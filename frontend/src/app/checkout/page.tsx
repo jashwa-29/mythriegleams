@@ -7,7 +7,7 @@ import Script from "next/script";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/utils/api";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { createOrder, resetOrderSuccess } from "@/redux/slices/orderSlice";
+import { createOrder, resetOrderSuccess, setCurrentOrder } from "@/redux/slices/orderSlice";
 import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
 import { useCart } from "@/hooks/useCart";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
@@ -18,6 +18,7 @@ import {
   MapPin, User, Mail, Phone, Home, Package,
   CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface ShippingForm {
   label: string;
@@ -37,6 +38,31 @@ function validate(f: ShippingForm): FormErrors {
   if (!/^\d{6}$/.test(f.zip)) e.zip = "Enter a valid 6-digit PIN code.";
   return e;
 }
+
+// Survives a reload/tab close mid-payment so the backend can be re-asked about the order.
+const PENDING_PAYMENT_KEY = "mg_pending_payment";
+
+type PendingPayment = { orderId: string; rzpOrderId?: string; startedAt: number };
+
+const readPendingPayment = (): PendingPayment | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_PAYMENT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingPayment;
+    // Ignore ancient markers: Razorpay orders expire, and a week-old one is noise.
+    if (!parsed?.orderId || Date.now() - (parsed.startedAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writePendingPayment = (value: PendingPayment | null) => {
+  if (typeof window === "undefined") return;
+  if (value) window.sessionStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(value));
+  else window.sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+};
 
 const INDIAN_STATES = [
   "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana",
@@ -120,6 +146,38 @@ export default function CheckoutPage() {
     if (!paymentSuccess && !success && items.length === 0) router.replace("/category/all");
   }, [items, paymentSuccess, success, router]);
 
+  // Reload safety net: if the tab died during payment, the Razorpay callback never ran.
+  // Ask the server (which re-checks with Razorpay) whether the money actually landed.
+  useEffect(() => {
+    const pending = readPendingPayment();
+    if (!pending) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: checkRes } = await api.post(`/payments/razorpay/check/${pending.orderId}`);
+        writePendingPayment(null);
+        if (cancelled || !checkRes?.data?.isPaid) return;
+
+        const { data: orderRes } = await api.get(`/orders/${pending.orderId}`);
+        if (cancelled) return;
+
+        dispatch(setCurrentOrder(orderRes.data));
+        setPaymentSuccess(true);
+        dispatch(clearCartThunk());
+        toast.success("Payment received — your order is confirmed.");
+      } catch {
+        // Never created, deleted, or no access: nothing to recover.
+        writePendingPayment(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const touch = (k: keyof ShippingForm) => setTouched(p => ({ ...p, [k]: true }));
 
   const shippingPrice = calculateShipping(totalPrice);
@@ -197,6 +255,10 @@ export default function CheckoutPage() {
       const { data: createData } = await api.post('/payments/razorpay/create', { orderId });
       const { id: rzpOrderId, key } = createData.data;
 
+      // Written BEFORE the popup opens: if the tab dies mid-payment, the server is still
+      // asked to confirm this order when the customer comes back.
+      writePendingPayment({ orderId, rzpOrderId, startedAt: Date.now() });
+
       const options = {
         key: key,
         amount: Math.round(amount * 100),
@@ -214,6 +276,7 @@ export default function CheckoutPage() {
             });
 
             if (verifyRes.data.success) {
+              writePendingPayment(null);
               setPaymentSuccess(true);
               setIsProcessingPayment(false);
               if (isAuth) dispatch(clearCartThunk());
@@ -221,6 +284,7 @@ export default function CheckoutPage() {
             }
           } catch (error) {
             console.error(error);
+            // The webhook/reconciler may still confirm this payment, so the marker stays.
             setIsProcessingPayment(false);
             alert("Payment verification failed. Please contact support.");
           }
@@ -242,6 +306,7 @@ export default function CheckoutPage() {
 
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', function (response: any) {
+        writePendingPayment(null); // No money moved, so nothing to recover.
         setIsProcessingPayment(false);
         alert("Payment failed: " + response.error.description);
       });
@@ -249,6 +314,7 @@ export default function CheckoutPage() {
 
     } catch (error: any) {
       console.error(error);
+      writePendingPayment(null);
       setIsProcessingPayment(false);
       const apiMsg = error.response?.data?.error || error.response?.data?.message;
       alert(apiMsg || "Failed to initiate payment. Please try again.");

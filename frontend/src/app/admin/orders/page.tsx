@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { fetchOrders, updateOrderStatus, resetOrderSuccess } from '@/redux/slices/orderSlice';
 import { 
     ShoppingBag, 
@@ -11,18 +12,18 @@ import {
     Calendar,
     User,
     Package,
-    ShieldCheck,
-    Hammer,
+        Hammer,
     X,
     MapPin,
     Copy,
     Hash,
     Download,
-    CircleDollarSign,
+    Banknote,
     Zap,
     Truck,
     Clock,
-    MoreHorizontal
+    MoreHorizontal,
+    Plus
 } from 'lucide-react';
 import { RootState } from '@/redux/store';
 import Modal from '@/components/ui/Modal';
@@ -47,8 +48,13 @@ const OrderManagement = () => {
     const [pendingAction, setPendingAction] = useState<{id: string, status: string, tracking?: string, deliveryNote?: string} | null>(null);
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
+    // Payment filter
+    const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+
     useEffect(() => {
-        dispatch(fetchOrders({ includeUnpaid: false }));
+        // Unpaid orders must be listed: they are exactly the ones an admin may need to
+        // confirm by hand, and they are also what proves a payment is still outstanding.
+        dispatch(fetchOrders({ includeUnpaid: true }));
     }, [dispatch]);
 
     useEffect(() => {
@@ -107,19 +113,26 @@ const OrderManagement = () => {
 
     const filteredOrders = useMemo(() => {
         let result = userId ? orders.filter((o: any) => o.user === userId || o.user?._id === userId) : orders;
-        result = result.filter((o: any) => o.isPaid); // Only show paid orders
+
+        if (paymentFilter === 'paid') result = result.filter((o: any) => o.isPaid);
+        if (paymentFilter === 'unpaid') result = result.filter((o: any) => !o.isPaid);
 
         if (searchTerm) {
             const lowTerm = searchTerm.toLowerCase();
-            result = result.filter((o: any) => 
+            result = result.filter((o: any) =>
                 o._id.toLowerCase().includes(lowTerm) ||
                 o.razorpayOrderId?.toLowerCase().includes(lowTerm) ||
+                o.paymentReference?.toLowerCase().includes(lowTerm) ||
                 o.shippingAddress?.name?.toLowerCase().includes(lowTerm) ||
-                o.shippingAddress?.email?.toLowerCase().includes(lowTerm)
+                o.shippingAddress?.email?.toLowerCase().includes(lowTerm) ||
+                o.shippingAddress?.phone?.toLowerCase().includes(lowTerm)
             );
         }
         return result;
-    }, [orders, userId, searchTerm]);
+    }, [orders, userId, searchTerm, paymentFilter]);
+
+    const paidCount = orders.filter((o: any) => o.isPaid).length;
+    const unpaidCount = orders.length - paidCount;
 
     return (
         <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
@@ -130,12 +143,36 @@ const OrderManagement = () => {
                     <p className="text-xs text-zinc-500 font-medium">View and manage customer orders and fulfillment.</p>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <Link
+                        href="/admin/orders/create-custom"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-zinc-900 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-black transition-all shadow-sm"
+                    >
+                        <Plus size={14} />
+                        <span>Create Custom</span>
+                    </Link>
+                    <Link
+                        href="/admin/orders/offline"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-white text-zinc-900 border border-zinc-200 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-50 transition-all"
+                    >
+                        <Banknote size={14} />
+                        <span>Offline Order</span>
+                    </Link>
                     <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
                         <Download size={14} />
                         <span>Export</span>
                     </button>
                     <div className="flex bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-                        <button className="bg-zinc-900 text-white shadow-sm px-3 sm:px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all">Paid Only</button>
+                        {([['all', `All ${orders.length}`], ['paid', `Paid ${paidCount}`], ['unpaid', `Unpaid ${unpaidCount}`]] as const).map(([key, label]) => (
+                            <button
+                                key={key}
+                                onClick={() => setPaymentFilter(key)}
+                                className={`px-3 sm:px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${
+                                    paymentFilter === key ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -289,6 +326,40 @@ const OrderManagement = () => {
                                                 <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase border ${inspectedOrder.isPaid ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>{inspectedOrder.isPaid ? 'Paid' : 'Unpaid'}</span>
                                             </div>
                                             <div className="text-2xl font-bold">₹{inspectedOrder.totalPrice.toLocaleString()}</div>
+                                            {inspectedOrder.isPaid && (
+                                                <div className="space-y-1.5 pt-3 border-t border-white/10 text-[10px]">
+                                                    <div className="flex justify-between gap-3">
+                                                        <span className="text-zinc-500 font-bold uppercase">Paid on</span>
+                                                        <span className="font-bold text-zinc-200 text-right">{inspectedOrder.paidAt ? new Date(inspectedOrder.paidAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-3">
+                                                        <span className="text-zinc-500 font-bold uppercase">Via</span>
+                                                        <span className="font-bold text-zinc-200 text-right">
+                                                            {inspectedOrder.paymentChannel === 'manual'
+                                                                ? `Manual — ${inspectedOrder.paymentMethod || 'unspecified'}`
+                                                                : `Razorpay (${inspectedOrder.paymentChannel || 'gateway'})`}
+                                                        </span>
+                                                    </div>
+                                                    {(inspectedOrder.paymentReference || inspectedOrder.razorpayPaymentId) && (
+                                                        <div className="flex justify-between gap-3">
+                                                            <span className="text-zinc-500 font-bold uppercase">Reference</span>
+                                                            <span className="font-mono font-bold text-zinc-200 text-right break-all">{inspectedOrder.paymentReference || inspectedOrder.razorpayPaymentId}</span>
+                                                        </div>
+                                                    )}
+                                                    {inspectedOrder.markedPaidByName && (
+                                                        <div className="flex justify-between gap-3">
+                                                            <span className="text-zinc-500 font-bold uppercase">Recorded by</span>
+                                                            <span className="font-bold text-amber-300/90 text-right">{inspectedOrder.markedPaidByName}</span>
+                                                        </div>
+                                                    )}
+                                                    {inspectedOrder.paymentNote && (
+                                                        <div className="pt-2">
+                                                            <span className="text-zinc-500 font-bold uppercase">Note</span>
+                                                            <p className="mt-1 text-zinc-300 italic leading-relaxed">{inspectedOrder.paymentNote}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                             <div className="pt-4 border-t border-white/10 flex justify-between items-center">
                                                 <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Total Weight</span>
                                                 <span className="text-[11px] font-bold text-zinc-200 tabular-nums">{formatWeight(orderWeight(inspectedOrder)) || "—"}</span>

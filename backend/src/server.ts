@@ -1,8 +1,8 @@
 import app from './app';
 import connectDB from './config/db';
 import dotenv from 'dotenv';
-import Order from './models/Order';
 import { seedAdmin } from './seedAdmin';
+import { createOrderReconciler, RECONCILE_INTERVAL_MS } from './services/orderReconciler';
 dotenv.config();
 
 const PORT = process.env.PORT || 5010;
@@ -27,27 +27,11 @@ const server = app.listen(PORT, () => {
     console.log(`🚀 Mythris Gleams Server running in ${process.env.NODE_ENV || 'production'} mode on http://localhost:${PORT}`);
 }); 
 
-// Background job to clean up pending (unpaid) orders older than 20 minutes
-const cleanPendingOrders = async () => {
-    try {
-        const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
-        const result = await Order.deleteMany({
-            isPaid: false,
-            createdAt: { $lt: twentyMinutesAgo }
-        });
-        if (result.deletedCount > 0) {
-            console.log(`🧹 Background Job: Cleaned up ${result.deletedCount} pending orders older than 20 minutes.`);
-        }
-    } catch (error: any) {
-        console.error(`❌ Background Job Error (Order Cleanup): ${error.message}`);
-    }
-};
-
-// Run immediately when server starts
-cleanPendingOrders();
-
-// Check every 1 minute
-setInterval(cleanPendingOrders, 1 * 60 * 1000);
+// Run once on boot, then on a timer. Reconciles missed payments with Razorpay before
+// anything is cleaned up, and never touches admin custom orders.
+const reconcileAndCleanOrders = createOrderReconciler();
+reconcileAndCleanOrders();
+setInterval(reconcileAndCleanOrders, RECONCILE_INTERVAL_MS);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err: any, promise) => {

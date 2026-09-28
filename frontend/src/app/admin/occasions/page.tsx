@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-import { fetchOccasions, createOccasion, updateOccasion, deleteOccasion, resetOccasionState, type OccasionItem } from '@/redux/slices/occasionSlice';
+import { fetchOccasions, createOccasion, updateOccasion, deleteOccasion, setOccasionPause, resetOccasionState, type OccasionItem } from '@/redux/slices/occasionSlice';
 import { 
     Gift, 
     Plus, 
@@ -27,6 +27,7 @@ import Modal from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getImageUrl } from '@/utils/getImageUrl';
+import PauseToggle from '@/components/admin/PauseToggle';
 
 const occasionSchema = z.object({
     name: z.string().min(2, "Occasion name required"),
@@ -76,7 +77,8 @@ const OccasionManagement = () => {
     }, [occasionName, setValue, editingOccasion]);
 
     useEffect(() => {
-        dispatch(fetchOccasions());
+        // ?all=true → paused and deactivated occasions stay visible here so they can be managed.
+        dispatch(fetchOccasions({ all: true }));
     }, [dispatch]);
 
     useEffect(() => {
@@ -89,7 +91,7 @@ const OccasionManagement = () => {
             setImage(null);
             setPreview(null);
             dispatch(resetOccasionState());
-            dispatch(fetchOccasions());
+            dispatch(fetchOccasions({ all: true }));
         }
         if (error) {
             toast.error(error);
@@ -136,6 +138,19 @@ const OccasionManagement = () => {
         if (inspectedOccasion) {
             dispatch(deleteOccasion(inspectedOccasion._id));
             setDeleteModalOpen(false);
+        }
+    };
+
+    const handlePauseToggle = async (id: string, isPaused: boolean) => {
+        const name = occasions.find(o => o._id === id)?.name || 'Occasion';
+        try {
+            const res = await dispatch(setOccasionPause({ id, isPaused })).unwrap();
+            toast.success(res.message || (isPaused ? `${name} paused` : `${name} is live again`));
+            // The slice already flips the row, but refetching keeps inherited pauses accurate.
+            dispatch(fetchOccasions({ all: true }));
+        } catch (err) {
+            toast.error(typeof err === 'string' ? err : `Could not update ${name}`);
+            throw err;
         }
     };
 
@@ -234,6 +249,7 @@ const OccasionManagement = () => {
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Occasion Tree</th>
                                     <th className="px-6 py-4">Slug</th>
+                                    <th className="px-6 py-4">Storefront</th>
                                     <th className="px-6 py-4 text-right">Type</th>
                                 </tr>
                             </thead>
@@ -263,6 +279,13 @@ const OccasionManagement = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-[9px] text-zinc-400 font-bold uppercase">/{occ.slug}</td>
+                                                <td className="px-6 py-4">
+                                                    <PauseToggle
+                                                        kind="occasion"
+                                                        item={{ _id: occ._id, name: occ.name, isPaused: occ.isPaused, childCount: subs.length }}
+                                                        onToggle={handlePauseToggle}
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <span className="px-2 py-0.5 rounded-full border border-zinc-900/10 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-900/5">
                                                         {subs.length} Sub-occasions
@@ -289,6 +312,13 @@ const OccasionManagement = () => {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-3 font-mono text-[9px] text-zinc-400 font-bold uppercase pl-16">/{sub.slug}</td>
+                                                    <td className="px-6 py-3">
+                                                        <PauseToggle
+                                                            kind="occasion"
+                                                            item={{ _id: sub._id, name: sub.name, isPaused: sub.isPaused }}
+                                                            onToggle={handlePauseToggle}
+                                                        />
+                                                    </td>
                                                     <td className="px-6 py-3 text-right">
                                                         <span className="px-2 py-0.5 rounded-full border border-zinc-200 text-[9px] font-bold uppercase text-zinc-400 bg-white">Sub-occasion</span>
                                                     </td>

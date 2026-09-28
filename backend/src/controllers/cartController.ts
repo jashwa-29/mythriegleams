@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import Cart from '../models/Cart';
+import Product from '../models/Product';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, findPauseMatch, describePause } from '../services/productVisibilityService';
 
 /**
  * @desc   Get the logged-in user's cart
@@ -13,7 +16,44 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
         return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
     }
     const cart = await Cart.findOne({ user: req.user._id });
-    res.status(200).json({ success: true, data: cart?.items || [] });
+    if (!cart || cart.items.length === 0) {
+        return res.status(200).json({ success: true, data: [], removed: [] });
+    }
+
+    // A design can be paused after it was added, so the stored bag is cleaned on read: paused
+    // products are dropped instead of being shown and then rejected at checkout.
+    const index = await getPausedIndex();
+    if (index.collectionNames.size === 0 && index.occasionNames.size === 0) {
+        return res.status(200).json({ success: true, data: cart.items, removed: [] });
+    }
+
+    const ids = cart.items
+        .map((item) => (item.product as any)?._id ? String((item.product as any)._id) : String(item.product))
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const products = await Product.find({ _id: { $in: ids } })
+        .select('category categories subcategory subcategories occasion occasions occasionSub occasionSubs')
+        .lean();
+    const byId = new Map(products.map((p: any) => [String(p._id), p]));
+
+    const kept: typeof cart.items = [];
+    const removed: { name: string; reason: string }[] = [];
+    for (const item of cart.items) {
+        const id = (item.product as any)?._id ? String((item.product as any)._id) : String(item.product);
+        const product = byId.get(id);
+        const pause = product ? findPauseMatch(product, index) : null;
+        if (pause) {
+            removed.push({ name: item.name, reason: describePause(pause) });
+        } else {
+            kept.push(item);
+        }
+    }
+
+    if (removed.length > 0) {
+        cart.items = kept;
+        await cart.save();
+    }
+
+    res.status(200).json({ success: true, data: cart.items, removed });
 });
 
 /**
@@ -21,11 +61,22 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
  * @route  POST /api/cart
  * @access Private
  */
-export const addToCart = asyncHandler(async (req: Request, res: Response) => {
+export const addToCart = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user?._id) {
         return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
     }
     const { productId, name, image, price, weight = 0, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
+
+    // A paused product must never enter a cart: the storefront hides it, and the money path
+    // refuses it too, so a stale page or a crafted request cannot buy a paused design.
+    const product = await Product.findById(productId);
+    if (!product) {
+        return next(new ErrorResponse('This design is no longer available.', 404));
+    }
+    const pause = findPauseMatch(product, await getPausedIndex());
+    if (pause) {
+        return next(new ErrorResponse(`This design is ${describePause(pause)} and cannot be added to your bag.`, 409));
+    }
 
     let cart = await Cart.findOne({ user: req.user._id });
 

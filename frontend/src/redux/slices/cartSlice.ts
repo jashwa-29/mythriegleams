@@ -19,6 +19,8 @@ interface CartState {
     loading: boolean;
     error: string | null;
     isOpen: boolean;
+    /** Items removed on this load because their collection/occasion is paused. */
+    removedPausedItems: { name: string; reason: string }[];
 }
 
 const initialState: CartState = {
@@ -26,6 +28,7 @@ const initialState: CartState = {
     loading: false,
     error: null,
     isOpen: false,
+    removedPausedItems: [],
 };
 
 /* ─── Thunks ─────────────────────────────────────────────────── */
@@ -33,7 +36,11 @@ const initialState: CartState = {
 export const fetchCart = createAsyncThunk('cart/fetch', async (_, thunkAPI) => {
     try {
         const { data } = await api.get('/cart');
-        return data.data as CartItem[];
+        // The server drops items whose collection/occasion got paused and explains why.
+        return {
+            items: data.data as CartItem[],
+            removed: (data.removed || []) as { name: string; reason: string }[]
+        };
     } catch (err: any) {
         return thunkAPI.rejectWithValue(err.response?.data?.error || err.response?.data?.message || err.message);
     }
@@ -131,7 +138,7 @@ const cartSlice = createSlice({
         };
         builder
             .addCase(fetchCart.pending,          (state) => { state.loading = true; })
-            .addCase(fetchCart.fulfilled,         (state, action) => { state.items = action.payload; state.loading = false; })
+            .addCase(fetchCart.fulfilled,         (state, action) => { state.items = action.payload.items; state.removedPausedItems = action.payload.removed; state.loading = false; })
             .addCase(fetchCart.rejected,          (state, action) => { state.loading = false; state.error = action.payload as string; })
             .addCase(addItemToCart.pending,       (state) => { state.loading = true; })
             .addCase(addItemToCart.fulfilled,     setItems)

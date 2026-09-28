@@ -10,6 +10,13 @@ export interface OccasionItem {
     image?: string;
     parent?: string | { _id: string; name: string; slug: string } | null;
     isActive?: boolean;
+    /** Paused occasions stay in the nav, but their products are hidden from the storefront. */
+    isPaused?: boolean;
+    pausedAt?: string;
+    /** True when this occasion is unsellable because it, or an ancestor, is paused. */
+    isEffectivelyPaused?: boolean;
+    /** Name of the occasion that carries the pause when it is an ancestor. */
+    pausedBecause?: string | null;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -30,10 +37,30 @@ const initialState: OccasionState = {
 
 export const fetchOccasions = createAsyncThunk(
     'occasions/fetchAll',
-    async (_, thunkAPI) => {
+    async (options: { all?: boolean } | undefined, thunkAPI) => {
         try {
-            const { data } = await api.get('/occasions');
+            // ?all=true is honoured server-side only for admins; it also returns deactivated
+            // occasions so the admin screen can bring them back.
+            const { data } = await api.get('/occasions', {
+                params: options?.all ? { all: 'true' } : undefined
+            });
             return data.data as OccasionItem[];
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+/**
+ * Pause / resume an occasion. Pausing hides every product in that occasion (and in its
+ * sub-occasions) from the storefront, cart and checkout.
+ */
+export const setOccasionPause = createAsyncThunk(
+    'occasions/setPause',
+    async ({ id, isPaused }: { id: string; isPaused: boolean }, thunkAPI) => {
+        try {
+            const { data } = await api.put(`/occasions/${id}/pause`, { isPaused });
+            return { item: data.data as OccasionItem, message: data.message as string };
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
@@ -108,6 +135,13 @@ const occasionSlice = createSlice({
             })
             .addCase(deleteOccasion.fulfilled, (state, action) => {
                 state.occasions = state.occasions.filter(o => o._id !== action.payload && !(typeof o.parent === 'object' && o.parent && o.parent._id === action.payload));
+            })
+            // No `success`/`error` flag here on purpose: the page reports the outcome itself so
+            // pausing does not close the add/edit modal.
+            .addCase(setOccasionPause.fulfilled, (state, action) => {
+                state.occasions = state.occasions.map(o =>
+                    o._id === action.payload.item._id ? action.payload.item : o
+                );
             });
     }
 });

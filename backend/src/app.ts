@@ -18,7 +18,15 @@ app.use(cors({
     credentials: true
 }));
 app.use(morgan('dev')); // Logger
-app.use(express.json()); // Body parser
+// Keep a copy of the raw payload: the Razorpay webhook signs the unparsed body, so the
+// signature can only be verified against the bytes Razorpay actually sent. Capturing it
+// here (instead of a route-level express.raw()) means the webhook works no matter where
+// this router gets mounted.
+app.use(express.json({
+    verify: (req, _res, buf) => {
+        (req as Request).rawBody = Buffer.from(buf);
+    }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Import Routes

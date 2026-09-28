@@ -14,7 +14,6 @@ import { fetchHomepageSettings, type HomepageSettingsReferenceValue } from "@/re
 import { RootState } from "@/redux/store";
 import { getImageUrl } from "@/utils/getImageUrl";
 import { useCart } from "@/hooks/useCart";
-import { EXCEL_PRODUCTS } from "@/data/excelProducts";
 import {
   ChevronLeft,
   ChevronRight,
@@ -82,9 +81,59 @@ const ProductImage = ({
   return <img src={getImageUrl(image)} alt={alt} className={className} />;
 };
 
+type MarketTabKey = "fruits" | "veggies";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ApiProduct = any;
+
+type MarketItem = {
+  _id?: string;
+  sku: string;
+  name: string;
+  slug: string;
+  image: string;
+  price: number;
+  mrp: number;
+  shortDesc: string;
+  weight?: number;
+  stockStatus?: string;
+  requiresImage?: boolean;
+};
+
+const MARKET_GROUPS: Record<MarketTabKey, { category: string }> = {
+  fruits: { category: "Miniature Fruit Baskets" },
+  veggies: { category: "Miniature Vegetable Crates" },
+};
+
+const toMarketProduct = (p: ApiProduct): MarketItem => ({
+  _id: p._id,
+  sku: p.sku || `MG-${String(p._id).slice(-6).toUpperCase()}`,
+  name: p.name,
+  slug: p.slug,
+  image: p.images?.[0] || p.image || "",
+  price: p.price,
+  mrp: p.mrp || p.price,
+  shortDesc: p.story || p.details || "",
+  weight: p.weight,
+  stockStatus: p.stockStatus,
+  requiresImage: p.requiresImage,
+});
+
+// Live catalog from the API only
+const getMarketItems = (products: ApiProduct[], tab: MarketTabKey): MarketItem[] => {
+  const { category } = MARKET_GROUPS[tab];
+  return (products || [])
+    .filter(
+      (p: ApiProduct) =>
+        p.category === category ||
+        (Array.isArray(p.categories) && p.categories.includes(category))
+    )
+    .map(toMarketProduct);
+};
+
 export default function HomePage() {
   const dispatch = useAppDispatch();
-  const { products } = useAppSelector(
+  const { products, loading: productsLoading } = useAppSelector(
     (state: RootState) => state.products
   );
   const { collections } = useAppSelector(
@@ -136,13 +185,16 @@ export default function HomePage() {
     [products]
   );
   const fruitBaskets = useMemo(
-    () => EXCEL_PRODUCTS.filter((p) => p.group === "fruit-baskets"),
-    []
+    () => getMarketItems(products, "fruits"),
+    [products]
   );
   const vegetableCrates = useMemo(
-    () => EXCEL_PRODUCTS.filter((p) => p.group === "vegetable-crates"),
-    []
+    () => getMarketItems(products, "veggies"),
+    [products]
   );
+  const activeMarketItems =
+    activeMarketTab === "fruits" ? fruitBaskets : vegetableCrates;
+  const marketLoading = productsLoading && products.length === 0;
   const fallbackSeasonalCollection = collections.find(
     (collection) =>
       collection.slug === SEASONAL_COLLECTION_SLUG ||
@@ -1306,10 +1358,34 @@ export default function HomePage() {
           */}
 
           {/* Product Grid */}
+          {marketLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-full rounded-[20px] bg-white border border-[var(--border)] overflow-hidden shadow-sm animate-pulse"
+                >
+                  <div className="aspect-[4/3] sm:aspect-square w-full bg-stone-100" />
+                  <div className="p-4 space-y-2">
+                    <div className="h-3 w-4/5 rounded bg-stone-100" />
+                    <div className="h-3 w-1/3 rounded bg-stone-100" />
+                    <div className="h-9 w-full rounded-xl bg-stone-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : activeMarketItems.length === 0 ? (
+            <p className="text-center text-[13px] text-[var(--text-muted)] py-10">
+              {activeMarketTab === "fruits"
+                ? "No fruit baskets available right now."
+                : "No vegetable crates available right now."}
+            </p>
+          ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4 md:gap-5">
-            {(activeMarketTab === "fruits" ? fruitBaskets : vegetableCrates).map((item) => (
-              <div
-                key={item.sku}
+            {activeMarketItems.map((item) => (
+              <Link
+                key={item._id || item.slug}
+                href={`/product/${item.slug}`}
                 className="group relative flex flex-col h-full rounded-[20px] bg-white border border-[var(--border)] overflow-hidden shadow-sm hover:shadow-xl hover:border-[var(--accent-gold)] transition-all duration-500"
               >
                 {/* Image */}
@@ -1363,9 +1439,10 @@ export default function HomePage() {
                     </button>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
+          )}
 
         </div>
       </section>

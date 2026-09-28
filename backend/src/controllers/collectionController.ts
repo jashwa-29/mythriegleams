@@ -3,14 +3,37 @@ import mongoose from 'mongoose';
 import Collection from '../models/Collection';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, describeSectionPause, invalidatePausedIndex } from '../services/productVisibilityService';
 
-// @desc    Get all active collections (top-level and subcategories)
-// @route   GET /api/collections
+/** Accepts true/false/"true"/"false"/1/0 from a form or JSON body. */
+export const parsePauseInput = (value: unknown): boolean | null => {
+    if (value === true || value === 'true' || value === 1 || value === '1') return true;
+    if (value === false || value === 'false' || value === 0 || value === '0') return false;
+    return null;
+};
+
+// @desc    Get collections. Paused sections stay listed (their products are hidden instead),
+//          but ?all=1 lets an admin also see deactivated ones so they can be reactivated.
+// @route    GET /api/collections
 export const getCollections = asyncHandler(async (req: Request, res: Response) => {
-    const collections = await Collection.find({ isActive: true })
-        .populate('parent', 'name slug')
+    const includeInactive = req.query.all === 'true' && req.user?.role === 'admin';
+    const collections = await Collection.find(includeInactive ? {} : { isActive: true })
+        .populate('parent', 'name slug isPaused')
         .sort({ createdAt: 1 });
-    res.status(200).json({ success: true, count: collections.length, data: collections });
+
+    // A sub-collection below a paused parent is not sellable either, so the storefront needs the
+    // effective state to explain the empty page.
+    const index = await getPausedIndex();
+    const data = collections.map((col: any) => {
+        const reason = describeSectionPause(index, 'collection', col.name);
+        return {
+            ...col.toObject(),
+            isEffectivelyPaused: !!reason,
+            pausedBecause: reason ? reason.pausedName : null
+        };
+    });
+
+    res.status(200).json({ success: true, count: data.length, data });
 });
 
 // @desc    Create new collection (Admin Only)
@@ -49,13 +72,17 @@ export const updateCollection = asyncHandler(async (req: Request, res: Response,
         return next(new ErrorResponse('Collection narrative for revision not found.', 404));
     }
 
-    const { name, slug, description, metaDescription, parent, isActive } = req.body;
+    const { name, slug, description, metaDescription, parent, isActive, isPaused } = req.body;
 
     if (name) collection.name = name;
     if (slug) collection.slug = slug;
     if (description !== undefined) collection.description = description;
     if (metaDescription !== undefined) collection.metaDescription = metaDescription;
     if (isActive !== undefined) collection.isActive = isActive === true || isActive === 'true';
+    if (isPaused !== undefined) {
+        collection.isPaused = isPaused === true || isPaused === 'true';
+        collection.pausedAt = collection.isPaused ? new Date() : undefined;
+    }
 
     if (parent !== undefined) {
         if (parent === '' || parent === 'null' || parent === null) {
@@ -80,7 +107,36 @@ export const updateCollection = asyncHandler(async (req: Request, res: Response,
     }
 
     const updatedCollection = await collection.save();
+    // Pause state is cached for a few seconds; drop it so the storefront reacts immediately.
+    invalidatePausedIndex();
     res.status(200).json({ success: true, data: updatedCollection });
+});
+
+// @desc    Pause / resume a collection's products (Admin Only)
+// @route   PUT /api/collections/:id/pause
+export const setCollectionPause = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const collection = await Collection.findById(req.params.id);
+    if (!collection) {
+        return next(new ErrorResponse('Collection narrative for revision not found.', 404));
+    }
+
+    const isPaused = parsePauseInput(req.body?.isPaused);
+    if (isPaused === null) {
+        return next(new ErrorResponse('isPaused must be true or false.', 400));
+    }
+
+    collection.isPaused = isPaused;
+    collection.pausedAt = isPaused ? new Date() : undefined;
+    await collection.save();
+    invalidatePausedIndex();
+
+    res.status(200).json({
+        success: true,
+        message: isPaused
+            ? `"${collection.name}" is paused. Its products are now hidden from the storefront.`
+            : `"${collection.name}" is live again. Its products are back on the storefront.`,
+        data: collection
+    });
 });
 
 // @desc    Delete collection and its subcategories (Admin Only)

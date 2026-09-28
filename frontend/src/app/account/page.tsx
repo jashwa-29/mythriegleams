@@ -9,10 +9,11 @@ import { fetchCart, clearGuest } from "@/redux/slices/cartSlice";
 import { 
   Eye, EyeOff, Sparkles, LogIn, UserPlus, AlertCircle, 
   User, Package, ChevronRight, LogOut, Settings, 
-  ShoppingBag, MapPin, Heart
+  ShoppingBag, MapPin, Heart, PauseCircle
 } from "lucide-react";
 import Link from "next/link";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
+import toast from "react-hot-toast";
 
 type Tab = "login" | "register";
 
@@ -61,7 +62,17 @@ export default function AccountPage() {
   // Sync cart on login
   useEffect(() => {
     if (userInfo) {
-      dispatch(fetchCart());
+      dispatch(fetchCart()).unwrap().then((res) => {
+        // Designs paused since the bag was filled are removed server-side; say so plainly
+        // instead of letting the shopper wonder where an item went.
+        if (res.removed.length > 0) {
+          const names = res.removed.map((r) => `\u201c${r.name}\u201d`).join(', ');
+          toast(
+            `${res.removed.length === 1 ? 'One design was' : `${res.removed.length} designs were`} removed from your bag \u2014 ${names} is no longer available.`,
+            { icon: <PauseCircle size={15} />, duration: 6000 }
+          );
+        }
+      }).catch(() => {});
       const searchParams = new URLSearchParams(window.location.search);
       const redirect = searchParams.get('redirect');
       if (redirect) {
