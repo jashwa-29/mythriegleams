@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
@@ -16,7 +16,7 @@ import { formatWeight } from '@/utils/formatWeight';
 import { FREE_SHIPPING_THRESHOLD, calculateShipping } from '@/utils/shipping';
 import {
   MapPin, User, Mail, Phone, Home, Package,
-  CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
+  CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2, Globe
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -88,6 +88,56 @@ export default function CheckoutPage() {
   });
 
   const [userAddresses, setUserAddresses] = useState<any[]>([]);
+
+  const catalogProducts = useAppSelector(s => s.products?.products || []);
+
+  useEffect(() => {
+    if (catalogProducts.length === 0) {
+      dispatch(fetchProducts({}));
+    }
+  }, [dispatch, catalogProducts.length]);
+
+  const hasNavaratriItems = useMemo(() => {
+    return items.some((item) => {
+      const name = (item.name || "").toLowerCase();
+      // Match on item name
+      const nameMatch =
+        name.includes("navaratri") ||
+        name.includes("navarathri") ||
+        name.includes("golu") ||
+        name.includes("kolu") ||
+        name.includes("thamboolam") ||
+        name.includes("manjal") ||
+        name.includes("kumkum");
+
+      if (nameMatch) return true;
+
+      // Match on catalog product category/occasion
+      const prodId = String(item.product || item._id);
+      const catProd = catalogProducts.find((cp: any) => String(cp._id) === prodId || cp.slug === prodId);
+      if (catProd) {
+        const textFields = [
+          catProd.category,
+          catProd.subcategory,
+          ...(catProd.categories || []),
+          ...(catProd.subcategories || []),
+          catProd.occasion,
+          catProd.occasionSub,
+          ...(catProd.occasions || []),
+          ...(catProd.occasionSubs || []),
+        ].filter(Boolean).map((s: string) => s.toLowerCase());
+
+        return textFields.some((t) =>
+          t.includes("navaratri") ||
+          t.includes("navarathri") ||
+          t.includes("golu") ||
+          t.includes("kolu") ||
+          t.includes("thamboolam")
+        );
+      }
+      return false;
+    });
+  }, [items, catalogProducts]);
 
   useEffect(() => {
     if (isAuth) {
@@ -442,6 +492,16 @@ export default function CheckoutPage() {
                 </div>
                 <h3 className="text-base sm:text-lg text-[var(--text)]">Delivery Address</h3>
               </div>
+
+              {hasNavaratriItems && (
+                <div className="p-3.5 sm:p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3 text-amber-900 text-[12px] leading-relaxed">
+                  <Globe size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-amber-950">Foreign Orders Paused for Navaratri &amp; Golu Items: </span>
+                    <span>Your order contains items from the festive collection. We are currently delivering exclusively to Indian addresses to ensure delivery prior to Navaratri. Please provide an Indian delivery address.</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2 mb-1 sm:mb-2">
                 <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Destination Type</label>

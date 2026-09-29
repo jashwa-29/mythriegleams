@@ -15,6 +15,8 @@ import {
   X,
   Truck,
   Sparkles,
+  AlertCircle,
+  Globe,
 } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
@@ -216,6 +218,30 @@ export default function Navbar() {
           scrolled ? "shadow-lg" : ""
         }`}
       >
+        {/* ─── MOVING ANNOUNCEMENT BANNER (Foreign Orders Paused for Navaratri & Golu) ─── */}
+        <div className="bg-[#24130d] text-amber-200 border-b border-amber-500/20 py-1.5 overflow-hidden select-none">
+          <div className="flex w-max animate-marquee hover:[animation-play-state:paused] text-[11px] sm:text-[12px] font-medium tracking-wide">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-8 shrink-0 px-4">
+                <span className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[9.5px] font-bold tracking-wider uppercase bg-amber-500 text-stone-950">
+                    Important Notice
+                  </span>
+                  <span>
+                    Foreign orders for <strong className="text-white font-semibold underline decoration-amber-400/50 underline-offset-2">Navaratri &amp; Golu Celebrations</strong> products are currently paused due to high festive shipping demand.
+                  </span>
+                </span>
+                <span className="text-amber-500/60">✦</span>
+                <span className="text-amber-100/90">
+                  Domestic orders within India are active &amp; delivering on time.
+                </span>
+                <span className="text-amber-500/60">✦</span>
+            
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* ─── TIER 1: TOP UTILITY BAR ─── */}
         <div className="hidden md:block bg-[#1f1a16] text-white">
           <div className="max-w-[1440px] mx-auto px-6 sm:px-8 flex items-center justify-between h-9 text-[11px]">
@@ -471,7 +497,7 @@ export default function Navbar() {
       {/* ══════════════════════════════════════════════════════════
           SPACER (push content below fixed header)
       ═══════════════════════════════════════════════════════════ */}
-      <div className="h-[64px] md:h-[116px]" aria-hidden />
+      <div className="h-[94px] md:h-[146px]" aria-hidden />
 
       {/* ══════════════════════════════════════════════════════════
           MOBILE DRAWER

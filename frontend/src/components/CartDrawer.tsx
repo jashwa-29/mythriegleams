@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/hooks/useCart";
-import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2 } from "lucide-react";
+import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2, Globe } from "lucide-react";
 import { CartItem } from "@/redux/slices/cartSlice";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { formatWeight } from '@/utils/formatWeight';
@@ -12,6 +12,19 @@ import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE, calculateShipping } from '@/util
 
 export default function CartDrawer() {
   const { items, isOpen, close, setQty, remove, totalPrice, totalWeight, totalItems, loading } = useCart();
+
+  const hasNavaratriItems = items.some((item) => {
+    const name = (item.name || "").toLowerCase();
+    return (
+      name.includes("navaratri") ||
+      name.includes("navarathri") ||
+      name.includes("golu") ||
+      name.includes("kolu") ||
+      name.includes("thamboolam") ||
+      name.includes("manjal") ||
+      name.includes("kumkum")
+    );
+  });
 
   return (
     <AnimatePresence>
@@ -184,7 +197,12 @@ export default function CartDrawer() {
                     {calculateShipping(totalPrice) === 0 ? <span className="text-[#2e7d32]">Free</span> : `₹${SHIPPING_FEE.toLocaleString()}`}
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--text-faint)]">Shipping & taxes calculated at checkout.</p>
+                {hasNavaratriItems && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2 text-amber-900 text-[11px] leading-snug">
+                    <Globe size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                    <span><strong>Notice:</strong> Foreign deliveries for Navaratri &amp; Golu products are paused. Domestic delivery across India is fully operational.</span>
+                  </div>
+                )}
 
                 <Link
                   href="/checkout"
