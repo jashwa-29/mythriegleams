@@ -126,7 +126,7 @@ export default function CheckoutPage() {
           catProd.occasionSub,
           ...(catProd.occasions || []),
           ...(catProd.occasionSubs || []),
-        ].filter(Boolean).map((s: string) => s.toLowerCase());
+        ].filter((s): s is string => Boolean(s)).map((s) => s.toLowerCase());
 
         return textFields.some((t) =>
           t.includes("navaratri") ||

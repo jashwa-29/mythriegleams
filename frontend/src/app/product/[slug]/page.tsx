@@ -110,7 +110,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
       p.occasionSub,
       ...(p.occasions || []),
       ...(p.occasionSubs || []),
-    ].filter(Boolean).map((s: string) => s.toLowerCase());
+    ].filter((s): s is string => Boolean(s)).map((s) => s.toLowerCase());
 
     return targets.some((text) =>
       text.includes("navaratri") ||
