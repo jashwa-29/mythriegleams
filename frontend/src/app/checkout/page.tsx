@@ -9,6 +9,7 @@ import api from "@/utils/api";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { createOrder, resetOrderSuccess, setCurrentOrder } from "@/redux/slices/orderSlice";
 import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
+import { fetchProducts } from "@/redux/slices/productSlice";
 import { useCart } from "@/hooks/useCart";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
 import { getImageUrl } from '@/utils/getImageUrl';
