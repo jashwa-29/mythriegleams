@@ -4,8 +4,9 @@ import Link from "next/link";
 import { CATEGORIES } from "@/data/categories";
 import { type Product } from "@/data/products";
 import { useCart } from "@/hooks/useCart";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, PauseCircle } from "lucide-react";
 import { getImageUrl } from '@/utils/getImageUrl';
+import toast from "react-hot-toast";
 
 interface ProductCardProps {
   product: Product;
@@ -24,6 +25,23 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if ((product as any).isEffectivelyPaused) {
+      toast.error((product as any).pauseReason || "This product is temporarily paused.", {
+        duration: 4000,
+        position: 'top-center',
+        style: {
+          background: '#fee2e2',
+          color: '#991b1b',
+          fontWeight: 'bold',
+          padding: '16px',
+          borderRadius: '12px'
+        },
+        icon: <PauseCircle size={20} className="text-red-600" />
+      });
+      return;
+    }
+
     addToCart({
       productId: productId,
       name:      product.name,
@@ -80,7 +98,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             onClick={handleAddToCart}
             className="hidden md:flex absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
           >
-            <ShoppingBag size={12} strokeWidth={2} /> Quick Add
+            { (product as any).isEffectivelyPaused ? <><PauseCircle size={12} strokeWidth={2} /> Paused</> : <><ShoppingBag size={12} strokeWidth={2} /> Quick Add</> }
           </button>
         )}
       </div>
@@ -122,10 +140,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             ) : (
               <button
                 onClick={handleAddToCart}
-                className="inline-flex items-center gap-1 bg-[var(--accent)] text-white px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider active:scale-95 shadow-sm"
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider active:scale-95 shadow-sm ${(product as any).isEffectivelyPaused ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-[var(--accent)] text-white'}`}
                 aria-label={`Add ${product.name} to cart`}
               >
-                <ShoppingBag size={10} /> Add
+                { (product as any).isEffectivelyPaused ? <PauseCircle size={10} /> : <ShoppingBag size={10} /> }
+                { (product as any).isEffectivelyPaused ? 'Paused' : 'Add' }
               </button>
             )}
           </div>

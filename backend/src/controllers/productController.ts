@@ -37,13 +37,8 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     let query: any = {};
 
     // Admin-only escape hatch so a paused product can still be inspected in the dashboard.
-    const wantsPaused = includePaused === 'true' && req.user?.role === 'admin';
-    if (!wantsPaused) {
-        const pauseFilter = pausedProductsFilter(await getPausedIndex());
-        if (pauseFilter) {
-            query.$nor = [...(query.$nor || []), ...(pauseFilter.$nor || [])];
-        }
-    }
+    // Admin-only escape hatch is no longer strictly necessary to bypass hiding since we show them everywhere,
+    // but we still calculate the pause state below.
 
     const bestsellerFilter = parseBooleanInput(isBestseller);
     if (bestsellerFilter !== undefined) query.isBestseller = bestsellerFilter;
@@ -107,7 +102,18 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     if (sort === 'newest') products = products.sort({ createdAt: -1 });
 
     const data = await products.lean();
-    res.status(200).json({ success: true, count: data.length, data });
+    
+    const pausedIndex = await getPausedIndex();
+    const dataWithPause = data.map((p: any) => {
+        const pauseMatch = findPauseMatch(p, pausedIndex);
+        return {
+            ...p,
+            isEffectivelyPaused: !!pauseMatch,
+            pauseReason: pauseMatch ? describePause(pauseMatch) : null
+        };
+    });
+
+    res.status(200).json({ success: true, count: dataWithPause.length, data: dataWithPause });
 });
 
 // @desc    Get single product by slug
@@ -118,16 +124,14 @@ export const getProductBySlug = asyncHandler(async (req: Request, res: Response,
         return next(new ErrorResponse('Product narrative not found in the archives.', 404));
     }
 
-    // A paused product is treated as absent everywhere: direct links, shares and old bookmarks
-    // must not surface it. Admins can still inspect it with ?includePaused=true.
-    if (!(req.query.includePaused === 'true' && req.user?.role === 'admin')) {
-        const pause = findPauseMatch(product, await getPausedIndex());
-        if (pause) {
-            return next(new ErrorResponse(`This design is ${describePause(pause)} and is not available right now.`, 404));
-        }
+    const pauseMatch = findPauseMatch(product, await getPausedIndex());
+    const productData = product.toObject();
+    if (pauseMatch) {
+        productData.isEffectivelyPaused = true;
+        productData.pauseReason = describePause(pauseMatch);
     }
 
-    res.status(200).json({ success: true, data: product });
+    res.status(200).json({ success: true, data: productData });
 });
 
 // @desc    Create product (Admin only)

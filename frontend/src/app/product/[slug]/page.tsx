@@ -15,8 +15,9 @@ import {
   Loader2, ChevronRight, Truck,
   MessageCircle,
   Minus, Plus, Leaf, Droplets, Wind, Home, Camera, ImageUp, X,
-  AlertCircle, Globe
+  AlertCircle, Globe, PauseCircle
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function ProductStoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -355,6 +356,24 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
             </div>
           )}
 
+          {/* Collection Paused Notice */}
+          {(p as any).isEffectivelyPaused && (
+            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-start gap-3 text-red-900">
+              <PauseCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
+              <div className="text-[12px] leading-relaxed">
+                <p className="font-semibold text-red-950 flex items-center gap-1.5">
+                  <span>Product Unavailable:</span>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-200 text-red-900">
+                    Paused
+                  </span>
+                </p>
+                <p className="text-red-900/90 mt-0.5">
+                  {(p as any).pauseReason || 'This product is temporarily paused.'} You cannot add it to your cart at this time.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Form / Actions */}
           <div className="space-y-6">
             {/* Variants */}
@@ -445,21 +464,38 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
               </div>
 
               <button
-                className="flex-1 h-12 bg-[var(--text)] text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.2em] hover:bg-[var(--accent)] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 shadow-md disabled:opacity-40 disabled:hover:bg-[var(--text)] disabled:hover:translate-y-0 disabled:hover:shadow-md"
+                className={`flex-1 h-12 text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.2em] transition-all duration-300 flex items-center justify-center gap-2 shadow-md ${(p as any).isEffectivelyPaused ? 'bg-gray-400 cursor-not-allowed opacity-80' : 'bg-[var(--text)] hover:bg-[var(--accent)] hover:shadow-lg hover:-translate-y-0.5'} disabled:opacity-40 disabled:hover:bg-[var(--text)] disabled:hover:translate-y-0 disabled:hover:shadow-md`}
                 disabled={requiresImage && !customerImage}
-                onClick={() => addToCart({
-                  productId: (p as any)._id || String(p.id),
-                  name: p.name,
-                  image: (p as any).images?.[0] || (p as any).image || "",
-                  price: p.price,
-                  weight: p.weight || 0,
-                  quantity: qty,
-                  selectedVariant,
-                  selectedColor,
-                  customerImage,
-                })}
+                onClick={() => {
+                  if ((p as any).isEffectivelyPaused) {
+                    toast.error((p as any).pauseReason || "This product is temporarily paused and cannot be added to cart.", {
+                      duration: 4000,
+                      position: 'top-center',
+                      style: {
+                        background: '#fee2e2',
+                        color: '#991b1b',
+                        fontWeight: 'bold',
+                        padding: '16px',
+                        borderRadius: '12px'
+                      },
+                      icon: <PauseCircle size={20} className="text-red-600" />
+                    });
+                    return;
+                  }
+                  addToCart({
+                    productId: (p as any)._id || String(p.id),
+                    name: p.name,
+                    image: (p as any).images?.[0] || (p as any).image || "",
+                    price: p.price,
+                    weight: p.weight || 0,
+                    quantity: qty,
+                    selectedVariant,
+                    selectedColor,
+                    customerImage,
+                  });
+                }}
               >
-                {requiresImage && !customerImage ? "Upload a photo to continue" : "Add to Cart"}
+                {requiresImage && !customerImage ? "Upload a photo to continue" : ((p as any).isEffectivelyPaused ? "Paused" : "Add to Cart")}
               </button>
             </div>
 
@@ -577,21 +613,38 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           </div>
         </div>
         <button
-          className="flex-1 max-w-[210px] h-11 bg-[var(--text)] text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.15em] hover:bg-[var(--accent)] transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-40"
+          className={`flex-1 max-w-[210px] h-11 text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-2 shadow-md ${(p as any).isEffectivelyPaused ? 'bg-gray-400 cursor-not-allowed opacity-80' : 'bg-[var(--text)] hover:bg-[var(--accent)]'} disabled:opacity-40`}
           disabled={requiresImage && !customerImage}
-          onClick={() => addToCart({
-            productId: (p as any)._id || String(p.id),
-            name: p.name,
-            image: (p as any).images?.[0] || (p as any).image || "",
-            price: p.price,
-            weight: p.weight || 0,
-            quantity: qty,
-            selectedVariant,
-            selectedColor,
-            customerImage,
-          })}
+          onClick={() => {
+            if ((p as any).isEffectivelyPaused) {
+              toast.error((p as any).pauseReason || "This product is temporarily paused and cannot be added to cart.", {
+                duration: 4000,
+                position: 'top-center',
+                style: {
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  fontWeight: 'bold',
+                  padding: '16px',
+                  borderRadius: '12px'
+                },
+                icon: <PauseCircle size={20} className="text-red-600" />
+              });
+              return;
+            }
+            addToCart({
+              productId: (p as any)._id || String(p.id),
+              name: p.name,
+              image: (p as any).images?.[0] || (p as any).image || "",
+              price: p.price,
+              weight: p.weight || 0,
+              quantity: qty,
+              selectedVariant,
+              selectedColor,
+              customerImage,
+            });
+          }}
         >
-          {requiresImage && !customerImage ? "Upload Photo" : "Add to Cart"}
+          {requiresImage && !customerImage ? "Upload Photo" : ((p as any).isEffectivelyPaused ? "Paused" : "Add to Cart")}
         </button>
       </div>
     </div>
