@@ -218,7 +218,7 @@ export default function Navbar() {
           scrolled ? "shadow-lg" : ""
         }`}
       >
-        {/* ─── MOVING ANNOUNCEMENT BANNER (Foreign Orders Paused for Navaratri & Golu) ─── */}
+        {/* ─── MOVING ANNOUNCEMENT BANNER ─── */}
         <div className="bg-[#24130d] text-amber-200 border-b border-amber-500/20 py-1.5 overflow-hidden select-none">
           <div className="flex w-max animate-marquee hover:[animation-play-state:paused] text-[11px] sm:text-[12px] font-medium tracking-wide">
             {[1, 2].map((i) => (
@@ -228,7 +228,7 @@ export default function Navbar() {
                     Important Notice
                   </span>
                   <span>
-                    Foreign orders for <strong className="text-white font-semibold underline decoration-amber-400/50 underline-offset-2">Navaratri &amp; Golu Celebrations</strong> products are currently paused due to high festive shipping demand.
+                    🌍 International Orders Now Open! ✨ 10 Days of Crafting Time for All Products.
                   </span>
                 </span>
                 <span className="text-amber-500/60">✦</span>
@@ -236,7 +236,6 @@ export default function Navbar() {
                   Domestic orders within India are active &amp; delivering on time.
                 </span>
                 <span className="text-amber-500/60">✦</span>
-            
               </div>
             ))}
           </div>
