@@ -16,6 +16,7 @@ import {
     Inbox, 
     Gift,
     Settings,
+    Truck,
     X
 } from 'lucide-react';
 import { useAppDispatch } from '@/redux/hooks';
@@ -38,6 +39,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onClose }) 
         { name: 'Occasions', icon: <Gift size={16} />, path: '/admin/occasions' },
         { name: 'Homepage', icon: <Settings size={16} />, path: '/admin/settings' },
         { name: 'Orders', icon: <ShoppingBag size={16} />, path: '/admin/orders' },
+        { name: 'Shipping', icon: <Truck size={16} />, path: '/admin/shipping' },
         { name: 'Inquiries', icon: <Inbox size={16} />, path: '/admin/inquiries' },
         { name: 'Customers', icon: <Users size={16} />, path: '/admin/customers' },
     ];

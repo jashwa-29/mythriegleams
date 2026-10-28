@@ -168,7 +168,7 @@ export default function OrderDetailsPage() {
                       <Link href={`/product/${item.product}`} className="font-serif text-[18px] text-[#3d332a] hover:text-[#a69076] transition-colors inline-block mb-1">
                         {item.name}
                       </Link>
-                      {item.selectedVariant && <p className="text-[11px] text-[#8c8273] uppercase tracking-wide mb-2">{item.selectedVariant}</p>}
+                      {[item.selectedVariant, item.selectedColor, item.selectedPricedOption].filter(Boolean).length > 0 && <p className="text-[11px] text-[#8c8273] uppercase tracking-wide mb-2">{[item.selectedVariant, item.selectedColor, item.selectedPricedOption].filter(Boolean).join(" · ")}</p>}
                       <div className="flex items-center justify-between mt-4">
                         <p className="text-[13px] text-[#8c8273]">Qty: <span className="font-medium text-[#3d332a]">{item.qty}</span></p>
                         <p className="font-serif text-[16px] text-[#594a3c]">₹{(item.price * item.qty).toLocaleString()}</p>
@@ -226,7 +226,7 @@ export default function OrderDetailsPage() {
                   </div>
                   <div className="flex items-center justify-between text-[#8c8273]">
                     <span>Shipping</span>
-                    <span>{order.shippingPrice ? `₹${order.shippingPrice.toLocaleString()}` : 'Free'}</span>
+                    <span>₹{(order.shippingPrice ?? 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-[#e8e4db] mt-2">
                     <span className="font-serif text-[16px] text-[#3d332a]">Grand Total</span>

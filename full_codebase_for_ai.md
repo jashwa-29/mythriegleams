@@ -6,27 +6,37 @@
 # Environment Variables
 NODE_ENV=production
 PORT=5010
-MONGO_URI=mongodb://localhost:27017/mythris_gleam
+MONGO_URI=mongodb://localhost:27017/mythris_gleams
 JWT_SECRET=your_jwt_secret_change_this_for_production
 CLIENT_URL=http://localhost:3000,https://mythrisgleams.com,https://www.mythrisgleams.com
 
 # Email Config (Nodemailer)
 EMAIL_SERVICE=gmail
 EMAIL_USER=swiflare@gmail.com
-EMAIL_PASS=hqkdjoycflcblhcp
+EMAIL_PASS=rbexgamczebfbifw
 EMAIL_FROM=Mythris Gleams <noreply@mythrisgleams.com>
 SUPPORT_EMAIL=swiflare@gmail.com
+# Store inbox: every order / payment / enquiry notification is delivered here.
+ADMIN_EMAIL=mythris.gleams@gmail.com
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 
 
 # Razorpay Keys
-# RAZORPAY_KEY_ID="rzp_live_ShbzVUWfxBnc97" 
-# RAZORPAY_KEY_SECRET="BNxx3vvoHTQcBQ7xb2KjQs7H"
+RAZORPAY_KEY_ID="rzp_live_ShbzVUWfxBnc97" 
+RAZORPAY_KEY_SECRET="BNxx3vvoHTQcBQ7xb2KjQs7H"
 
 
-RAZORPAY_KEY_ID=rzp_test_S62vBzEAbojS89
-RAZORPAY_KEY_SECRET=HwGyrn45FBD46D5squa7d0ZR
+# RAZORPAY_KEY_ID=rzp_test_S62vBzEAbojS89
+# RAZORPAY_KEY_SECRET=HwGyrn45FBD46D5squa7d0ZR
+
+# Razorpay Webhook secret. Set this to the SAME value you configure in
+# Razorpay Dashboard -> Settings -> Webhooks for
+# https://<your-domain>/api/payments/razorpay/webhook
+# Subscribe to: payment.captured, order.paid, payment.failed, refund.processed
+# Until this is filled in, the webhook endpoint returns 500 and only the
+# browser callback + background reconciler confirm payments.
+RAZORPAY_WEBHOOK_SECRET=SRxx3vvoRTQcAB7xb2CjQs7G
 
 
 
@@ -105,7 +115,15 @@ app.use(cors({
     credentials: true
 }));
 app.use(morgan('dev')); // Logger
-app.use(express.json()); // Body parser
+// Keep a copy of the raw payload: the Razorpay webhook signs the unparsed body, so the
+// signature can only be verified against the bytes Razorpay actually sent. Capturing it
+// here (instead of a route-level express.raw()) means the webhook works no matter where
+// this router gets mounted.
+app.use(express.json({
+    verify: (req, _res, buf) => {
+        (req as Request).rawBody = Buffer.from(buf);
+    }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Import Routes
@@ -365,9 +383,12 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
 
 ```typescript
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import Cart from '../models/Cart';
+import Product from '../models/Product';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, findPauseMatch, describePause } from '../services/productVisibilityService';
 
 /**
  * @desc   Get the logged-in user's cart
@@ -379,7 +400,44 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
         return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
     }
     const cart = await Cart.findOne({ user: req.user._id });
-    res.status(200).json({ success: true, data: cart?.items || [] });
+    if (!cart || cart.items.length === 0) {
+        return res.status(200).json({ success: true, data: [], removed: [] });
+    }
+
+    // A design can be paused after it was added, so the stored bag is cleaned on read: paused
+    // products are dropped instead of being shown and then rejected at checkout.
+    const index = await getPausedIndex();
+    if (index.collectionNames.size === 0 && index.occasionNames.size === 0) {
+        return res.status(200).json({ success: true, data: cart.items, removed: [] });
+    }
+
+    const ids = cart.items
+        .map((item) => (item.product as any)?._id ? String((item.product as any)._id) : String(item.product))
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const products = await Product.find({ _id: { $in: ids } })
+        .select('category categories subcategory subcategories occasion occasions occasionSub occasionSubs')
+        .lean();
+    const byId = new Map(products.map((p: any) => [String(p._id), p]));
+
+    const kept: typeof cart.items = [];
+    const removed: { name: string; reason: string }[] = [];
+    for (const item of cart.items) {
+        const id = (item.product as any)?._id ? String((item.product as any)._id) : String(item.product);
+        const product = byId.get(id);
+        const pause = product ? findPauseMatch(product, index) : null;
+        if (pause) {
+            removed.push({ name: item.name, reason: describePause(pause) });
+        } else {
+            kept.push(item);
+        }
+    }
+
+    if (removed.length > 0) {
+        cart.items = kept;
+        await cart.save();
+    }
+
+    res.status(200).json({ success: true, data: cart.items, removed });
 });
 
 /**
@@ -387,11 +445,22 @@ export const getCart = asyncHandler(async (req: Request, res: Response) => {
  * @route  POST /api/cart
  * @access Private
  */
-export const addToCart = asyncHandler(async (req: Request, res: Response) => {
+export const addToCart = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user?._id) {
         return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
     }
     const { productId, name, image, price, weight = 0, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
+
+    // A paused product must never enter a cart: the storefront hides it, and the money path
+    // refuses it too, so a stale page or a crafted request cannot buy a paused design.
+    const product = await Product.findById(productId);
+    if (!product) {
+        return next(new ErrorResponse('This design is no longer available.', 404));
+    }
+    const pause = findPauseMatch(product, await getPausedIndex());
+    if (pause) {
+        return next(new ErrorResponse(`This design is ${describePause(pause)} and cannot be added to your bag.`, 409));
+    }
 
     let cart = await Cart.findOne({ user: req.user._id });
 
@@ -483,14 +552,37 @@ import mongoose from 'mongoose';
 import Collection from '../models/Collection';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, describeSectionPause, invalidatePausedIndex } from '../services/productVisibilityService';
 
-// @desc    Get all active collections (top-level and subcategories)
-// @route   GET /api/collections
+/** Accepts true/false/"true"/"false"/1/0 from a form or JSON body. */
+export const parsePauseInput = (value: unknown): boolean | null => {
+    if (value === true || value === 'true' || value === 1 || value === '1') return true;
+    if (value === false || value === 'false' || value === 0 || value === '0') return false;
+    return null;
+};
+
+// @desc    Get collections. Paused sections stay listed (their products are hidden instead),
+//          but ?all=1 lets an admin also see deactivated ones so they can be reactivated.
+// @route    GET /api/collections
 export const getCollections = asyncHandler(async (req: Request, res: Response) => {
-    const collections = await Collection.find({ isActive: true })
-        .populate('parent', 'name slug')
+    const includeInactive = req.query.all === 'true' && req.user?.role === 'admin';
+    const collections = await Collection.find(includeInactive ? {} : { isActive: true })
+        .populate('parent', 'name slug isPaused')
         .sort({ createdAt: 1 });
-    res.status(200).json({ success: true, count: collections.length, data: collections });
+
+    // A sub-collection below a paused parent is not sellable either, so the storefront needs the
+    // effective state to explain the empty page.
+    const index = await getPausedIndex();
+    const data = collections.map((col: any) => {
+        const reason = describeSectionPause(index, 'collection', col.name);
+        return {
+            ...col.toObject(),
+            isEffectivelyPaused: !!reason,
+            pausedBecause: reason ? reason.pausedName : null
+        };
+    });
+
+    res.status(200).json({ success: true, count: data.length, data });
 });
 
 // @desc    Create new collection (Admin Only)
@@ -529,13 +621,17 @@ export const updateCollection = asyncHandler(async (req: Request, res: Response,
         return next(new ErrorResponse('Collection narrative for revision not found.', 404));
     }
 
-    const { name, slug, description, metaDescription, parent, isActive } = req.body;
+    const { name, slug, description, metaDescription, parent, isActive, isPaused } = req.body;
 
     if (name) collection.name = name;
     if (slug) collection.slug = slug;
     if (description !== undefined) collection.description = description;
     if (metaDescription !== undefined) collection.metaDescription = metaDescription;
     if (isActive !== undefined) collection.isActive = isActive === true || isActive === 'true';
+    if (isPaused !== undefined) {
+        collection.isPaused = isPaused === true || isPaused === 'true';
+        collection.pausedAt = collection.isPaused ? new Date() : undefined;
+    }
 
     if (parent !== undefined) {
         if (parent === '' || parent === 'null' || parent === null) {
@@ -560,7 +656,36 @@ export const updateCollection = asyncHandler(async (req: Request, res: Response,
     }
 
     const updatedCollection = await collection.save();
+    // Pause state is cached for a few seconds; drop it so the storefront reacts immediately.
+    invalidatePausedIndex();
     res.status(200).json({ success: true, data: updatedCollection });
+});
+
+// @desc    Pause / resume a collection's products (Admin Only)
+// @route   PUT /api/collections/:id/pause
+export const setCollectionPause = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const collection = await Collection.findById(req.params.id);
+    if (!collection) {
+        return next(new ErrorResponse('Collection narrative for revision not found.', 404));
+    }
+
+    const isPaused = parsePauseInput(req.body?.isPaused);
+    if (isPaused === null) {
+        return next(new ErrorResponse('isPaused must be true or false.', 400));
+    }
+
+    collection.isPaused = isPaused;
+    collection.pausedAt = isPaused ? new Date() : undefined;
+    await collection.save();
+    invalidatePausedIndex();
+
+    res.status(200).json({
+        success: true,
+        message: isPaused
+            ? `"${collection.name}" is paused. Its products are now hidden from the storefront.`
+            : `"${collection.name}" is live again. Its products are back on the storefront.`,
+        data: collection
+    });
 });
 
 // @desc    Delete collection and its subcategories (Admin Only)
@@ -582,34 +707,17 @@ export const deleteCollection = asyncHandler(async (req: Request, res: Response,
 ```typescript
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import Razorpay from 'razorpay';
 import Order from '../models/Order';
 import User from '../models/User';
-import sendEmail from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
-
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.SUPPORT_EMAIL || 'admin@mythrisgleams.com';
-
-const shortOrderCode = (id: any) => String(id).slice(-8).toUpperCase();
-
-/**
- * Constant-time signature comparison to avoid leaking timing information.
- */
-const isAuthenticSignature = (expected: string, received: any): boolean => {
-    if (typeof received !== 'string' || received.length !== expected.length) return false;
-    try {
-        return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(received, 'utf8'));
-    } catch {
-        return false;
-    }
-};
+import { getRazorpay, isValidPaymentSignature, markOrderPaid, shortOrderCode } from '../services/paymentService';
 
 /**
  * Load an order and validate the caller-supplied payment token.
  * Shared by every public (token-gated) endpoint.
  */
-const loadOrderByToken = async (id: string, token: any, next: NextFunction) => {
+const loadOrderByToken = async (id: string, token: unknown, next: NextFunction) => {
     if (!token || typeof token !== 'string') {
         next(new ErrorResponse('Payment link is missing its access token.', 401));
         return null;
@@ -798,10 +906,7 @@ export const createPublicRazorpayOrder = asyncHandler(async (req: Request, res: 
         return next(new ErrorResponse('This order has already been paid.', 400));
     }
 
-    const rzp = new Razorpay({
-        key_id: process.env.RAZORPAY_KEY_ID as string,
-        key_secret: process.env.RAZORPAY_KEY_SECRET as string,
-    });
+    const rzp = getRazorpay();
 
     const rzpOrder = await rzp.orders.create({
         amount: Math.round(order.totalPrice * 100), // Paise
@@ -849,61 +954,21 @@ export const verifyPublicRazorpayPayment = asyncHandler(async (req: Request, res
         return next(new ErrorResponse('Payment does not match the initiated order.', 400));
     }
 
-    const expectedSignature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET as string)
-        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-        .digest('hex');
-
-    if (!isAuthenticSignature(expectedSignature, razorpay_signature)) {
+    if (!isValidPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
         return next(new ErrorResponse('Invalid payment signature detected. Payment rejected.', 400));
     }
 
-    order.isPaid = true;
-    order.paidAt = new Date();
-    order.razorpayPaymentId = razorpay_payment_id;
-    order.razorpaySignature = razorpay_signature;
-    order.status = 'Handcrafting';
-    order.paymentToken = undefined; // Single-use link
-    await order.save();
-
-    const code = shortOrderCode(order._id);
-    const customerName = order.shippingAddress?.name || 'friend';
-
-    // Confirmation emails (best-effort — never block the order on SMTP issues)
-    try {
-        if (order.shippingAddress?.email) {
-            await sendEmail({
-                email: order.shippingAddress.email,
-                subject: `Payment Confirmed — Order #${code}`,
-                message: `Hi ${customerName}, we've received your payment of Rs.${order.totalPrice} for order #${code}. We're now handcrafting your piece.`,
-                html: `
-                    <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 40px; border-radius: 20px;">
-                        <h1 style="color: #000; font-style: italic;">Payment Confirmed</h1>
-                        <p>Hi ${customerName}, thank you for choosing MythrieGleams. Your payment for order <strong>#${code}</strong> is received and your piece is now in <strong>Handcrafting</strong>.</p>
-                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                            <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Order Summary</p>
-                            <p style="font-size: 14px;"><strong>Order ID:</strong> #${code}</p>
-                            <p style="font-size: 14px;"><strong>Total Paid:</strong> ₹${order.totalPrice}</p>
-                        </div>
-                    </div>
-                `,
-            });
-        }
-
-        await sendEmail({
-            email: ADMIN_EMAIL,
-            subject: `Custom order paid: #${code}`,
-            message: `Order #${code} paid Rs.${order.totalPrice} by ${customerName} (${order.shippingAddress?.phone}).`,
-            html: `<h2>New custom order paid</h2><p><strong>#${code}</strong> — ₹${order.totalPrice}</p><p>Customer: ${customerName} (${order.shippingAddress?.email || 'no email'} / ${order.shippingAddress?.phone})</p>`,
-        });
-    } catch (emailError: any) {
-        console.error('Email sending failed after custom payment verification. Error:', emailError.message);
-    }
+    // Idempotent, and the single place confirmation emails are triggered from.
+    await markOrderPaid(order, {
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        channel: 'client-verify',
+    });
 
     res.status(200).json({
         success: true,
         message: 'Payment verified and order placed.',
-        data: { orderCode: code, totalPrice: order.totalPrice, status: order.status },
+        data: { orderCode: shortOrderCode(order._id), totalPrice: order.totalPrice, status: order.status },
     });
 });
 
@@ -1011,7 +1076,7 @@ export const updateHomepageSettings = asyncHandler(async (req: Request, res: Res
 ```typescript
 import { Request, Response, NextFunction } from 'express';
 import Inquiry from '../models/Inquiry';
-import sendEmail from '../utils/sendEmail';
+import sendEmail, { storeNotificationEmail } from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
 
@@ -1045,7 +1110,7 @@ export const createInquiry = asyncHandler(async (req: Request, res: Response, ne
 
         // Email Alert to Admin
         await sendEmail({
-            email: process.env.ADMIN_EMAIL || 'admin@mythrisgleams.com',
+            email: storeNotificationEmail(),
             subject: `📦 NEW INQUIRY: ${type} from ${name}`,
             message: `Inquiry #${inquiry._id} - ${subject}. Check the admin dashboard for details.`
         });
@@ -1110,14 +1175,31 @@ import mongoose from 'mongoose';
 import Occasion from '../models/Occasion';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, describeSectionPause, invalidatePausedIndex } from '../services/productVisibilityService';
+import { parsePauseInput } from './collectionController';
 
-// @desc    Get all active occasions (top-level and subcategories)
+// @desc    Get occasions. Paused occasions stay listed (their products are hidden instead),
+//          but ?all=1 lets an admin also see deactivated ones so they can be reactivated.
 // @route   GET /api/occasions
 export const getOccasions = asyncHandler(async (req: Request, res: Response) => {
-    const occasions = await Occasion.find({ isActive: true })
-        .populate('parent', 'name slug')
+    const includeInactive = req.query.all === 'true' && req.user?.role === 'admin';
+    const occasions = await Occasion.find(includeInactive ? {} : { isActive: true })
+        .populate('parent', 'name slug isPaused')
         .sort({ createdAt: 1 });
-    res.status(200).json({ success: true, count: occasions.length, data: occasions });
+
+    // A sub-occasion below a paused parent is not sellable either, so the storefront needs the
+    // effective state to explain the empty page.
+    const index = await getPausedIndex();
+    const data = occasions.map((occ: any) => {
+        const reason = describeSectionPause(index, 'occasion', occ.name);
+        return {
+            ...occ.toObject(),
+            isEffectivelyPaused: !!reason,
+            pausedBecause: reason ? reason.pausedName : null
+        };
+    });
+
+    res.status(200).json({ success: true, count: data.length, data });
 });
 
 // @desc    Create new occasion (Admin Only)
@@ -1156,13 +1238,18 @@ export const updateOccasion = asyncHandler(async (req: Request, res: Response, n
         return next(new ErrorResponse('Occasion for revision not found.', 404));
     }
 
-    const { name, slug, description, metaDescription, parent, isActive } = req.body;
+    const { name, slug, description, metaDescription, parent, isActive, isPaused } = req.body;
 
     if (name) occasion.name = name;
     if (slug) occasion.slug = slug;
     if (description !== undefined) occasion.description = description;
     if (metaDescription !== undefined) occasion.metaDescription = metaDescription;
     if (isActive !== undefined) occasion.isActive = isActive === true || isActive === 'true';
+    if (isPaused !== undefined) {
+        const isPausedValue = parsePauseInput(isPaused);
+        occasion.isPaused = isPausedValue === true;
+        occasion.pausedAt = occasion.isPaused ? new Date() : undefined;
+    }
 
     if (parent !== undefined) {
         if (parent === '' || parent === 'null' || parent === null) {
@@ -1187,7 +1274,36 @@ export const updateOccasion = asyncHandler(async (req: Request, res: Response, n
     }
 
     const updatedOccasion = await occasion.save();
+    // Pause state is cached for a few seconds; drop it so the storefront reacts immediately.
+    invalidatePausedIndex();
     res.status(200).json({ success: true, data: updatedOccasion });
+});
+
+// @desc    Pause / resume an occasion's products (Admin Only)
+// @route   PUT /api/occasions/:id/pause
+export const setOccasionPause = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const occasion = await Occasion.findById(req.params.id);
+    if (!occasion) {
+        return next(new ErrorResponse('Occasion narrative for revision not found.', 404));
+    }
+
+    const isPaused = parsePauseInput(req.body?.isPaused);
+    if (isPaused === null) {
+        return next(new ErrorResponse('isPaused must be true or false.', 400));
+    }
+
+    occasion.isPaused = isPaused;
+    occasion.pausedAt = isPaused ? new Date() : undefined;
+    await occasion.save();
+    invalidatePausedIndex();
+
+    res.status(200).json({
+        success: true,
+        message: isPaused
+            ? `"${occasion.name}" is paused. Its products are now hidden from the storefront.`
+            : `"${occasion.name}" is live again. Its products are back on the storefront.`,
+        data: occasion
+    });
 });
 
 // @desc    Delete occasion and its subcategories (Admin Only)
@@ -1204,15 +1320,276 @@ export const deleteOccasion = asyncHandler(async (req: Request, res: Response, n
 });
 ```
 
+## File: `backend/src/controllers/offlineOrderController.ts`
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import Order from '../models/Order';
+import Product from '../models/Product';
+import User from '../models/User';
+import asyncHandler from '../middlewares/asyncHandler';
+import ErrorResponse from '../utils/errorResponse';
+import { markOrderPaid, shortOrderCode } from '../services/paymentService';
+import { calculateShipping } from '../utils/shipping';
+import { getPausedIndex, findPauseMatch, describePause } from '../services/productVisibilityService';
+
+/** Trim + cap anything a client can send, so a long paste can never bloat a document. */
+const str = (value: unknown, max = 200): string => {
+    if (typeof value !== 'string') return '';
+    return value.trim().slice(0, max);
+};
+
+const num = (value: unknown): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/** Quantities are whole pieces — a fractional qty would quietly corrupt the line total. */
+const wholeQty = (value: unknown): number => {
+    const qty = Math.floor(num(value));
+    return qty > 0 ? qty : 0;
+};
+
+const MAX_LINES = 30;
+const MAX_QTY_PER_LINE = 99;
+
+/**
+ * @desc    Admin logs an order that came in by phone/WhatsApp. Items are chosen from the
+ *          live catalogue and every price is re-derived from the database, so the admin
+ *          cannot mistype or tamper with a line total. No payment link is ever created:
+ *          the money either arrived offline (marked paid on the spot) or is recorded later
+ *          with PUT /api/orders/:id/paid.
+ * @route   POST /api/orders/admin/offline
+ * @access  Private/Admin
+ */
+export const createAdminOfflineOrder = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const {
+        customerName,
+        customerEmail,
+        customerPhone,
+        customerStreet,
+        customerCity,
+        customerState,
+        customerZip,
+        items,
+        customItem,
+        paymentReceived = false,
+        method,
+        reference,
+        note,
+    } = req.body || {};
+
+    const name = str(customerName, 100);
+    const phone = str(customerPhone, 20);
+    if (!name) return next(new ErrorResponse('Customer name is required.', 400));
+    if (!phone) return next(new ErrorResponse('Phone number is required.', 400));
+    if (phone.length < 6) return next(new ErrorResponse('Enter a valid phone number.', 400));
+
+    const email = str(customerEmail, 150).toLowerCase();
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) {
+        return next(new ErrorResponse('Enter a valid email address.', 400));
+    }
+
+    const requestedItems: any[] = Array.isArray(items) ? items : [];
+    const bespoke = customItem && typeof customItem === 'object' ? customItem : null;
+    const bespokeQty = bespoke ? wholeQty(bespoke.qty ?? 1) : 0;
+    const bespokeAmount = bespoke ? num(bespoke.amount) : 0;
+
+    if (requestedItems.length === 0 && (!bespoke || bespokeQty === 0 || bespokeAmount <= 0)) {
+        return next(new ErrorResponse('Add at least one product to the order.', 400));
+    }
+    if (requestedItems.length + (bespokeQty ? 1 : 0) > MAX_LINES) {
+        return next(new ErrorResponse(`An offline order can hold at most ${MAX_LINES} items.`, 400));
+    }
+
+    // Catalogue lines: look every one up and take name/price/weight from the database.
+    // The client only ever gets to say *which* product and *how many*.
+    const requestedIds = requestedItems
+        .map((i: any) => str(i?.product, 40))
+        .filter((id: string) => /^[a-f\d]{24}$/i.test(id));
+
+    const liveProducts = await Product.find({ _id: { $in: requestedIds } }).select(
+        '_id name price weight images variants stockStatus category categories occasion occasions'
+    );
+    const liveById = new Map<string, any>(liveProducts.map((p: any) => [String(p._id), p]));
+
+    const missing = requestedItems.filter((i: any) => {
+        const id = str(i?.product, 40);
+        return !/^[a-f\d]{24}$/i.test(id) || !liveById.has(id);
+    });
+    if (missing.length > 0) {
+        return next(new ErrorResponse(`${missing.length} selected product(s) no longer exist. Refresh and try again.`, 409));
+    }
+
+    // A paused design is still sellable to someone who already asked for it in person, so
+    // this is a warning rather than a hard block — but the admin is always told.
+    const pausedIndex = await getPausedIndex();
+    const warnings: string[] = [];
+
+    const orderItems: any[] = requestedItems.map((i: any) => {
+        const product = liveById.get(str(i?.product, 40));
+        const qty = wholeQty(i?.qty);
+        if (qty === 0) throw new ErrorResponse(`Choose a quantity for "${product.name}".`, 400);
+        if (qty > MAX_QTY_PER_LINE) {
+            throw new ErrorResponse(`"${product.name}" is limited to ${MAX_QTY_PER_LINE} per order.`, 400);
+        }
+
+        const pause = findPauseMatch(product, pausedIndex);
+        if (pause) {
+            warnings.push(`"${product.name}" is ${describePause(pause)} — it will not be sellable on the storefront.`);
+        }
+        if (product.stockStatus === 'out-of-stock') {
+            warnings.push(`"${product.name}" is marked out of stock.`);
+        }
+
+        return {
+            name: product.name,
+            qty,
+            image: product.images?.[0] || '',
+            price: num(product.price),
+            weight: num(product.weight),
+            product: product._id,
+            selectedVariant: str(i?.selectedVariant, 60),
+            selectedColor: str(i?.selectedColor, 60),
+        };
+    });
+
+    if (bespoke && bespokeQty > 0) {
+        const bespokeName = str(bespoke.name, 160);
+        if (!bespokeName) return next(new ErrorResponse('Name the custom item, or remove it from the order.', 400));
+        if (bespokeQty > MAX_QTY_PER_LINE) {
+            return next(new ErrorResponse(`"${bespokeName}" is limited to ${MAX_QTY_PER_LINE} per order.`, 400));
+        }
+        orderItems.push({
+            name: bespokeName,
+            qty: bespokeQty,
+            image: str(bespoke.image, 300),
+            price: Math.round(bespokeAmount * 100) / 100,
+            weight: Math.max(0, num(bespoke.weight)),
+            product: 'admin-bespoke',
+            description: str(bespoke.description, 1000),
+        });
+    }
+
+    // Money already in hand must always say how it arrived, or the books stay unauditable.
+    const cleanMethod = str(method, 60);
+    if (paymentReceived && !cleanMethod) {
+        return next(new ErrorResponse('Select how the payment was received.', 400));
+    }
+
+    // Link to a registered account when the email matches, so the order also shows
+    // up under "My Orders" for that customer.
+    const linkedUser = email ? await User.findOne({ email }).select('_id') : null;
+
+    const itemsPrice = Math.round(orderItems.reduce((sum, line) => sum + line.price * line.qty, 0) * 100) / 100;
+    if (itemsPrice <= 0) return next(new ErrorResponse('The order total must be greater than zero.', 400));
+    const shippingPrice = calculateShipping(itemsPrice);
+
+    const order = new Order({
+        user: linkedUser ? linkedUser._id : undefined,
+        orderItems,
+        shippingAddress: {
+            label: 'Offline',
+            name,
+            email,
+            street: str(customerStreet, 200),
+            city: str(customerCity, 100),
+            state: str(customerState, 100),
+            zip: str(customerZip, 20),
+            phone,
+        },
+        itemsPrice,
+        shippingPrice,
+        totalPrice: Math.round((itemsPrice + shippingPrice) * 100) / 100,
+        isPaid: false,
+        status: 'Pending',
+        source: 'offline',
+    });
+
+    const created = await order.save();
+
+    if (paymentReceived) {
+        // Same single settlement path as every other channel, so the audit trail,
+        // status advance and confirmation email behave identically.
+        const settled = await markOrderPaid(created, {
+            channel: 'manual',
+            manual: {
+                method: cleanMethod,
+                reference: str(reference, 120),
+                note: str(note, 500),
+                markedBy: req.user?._id,
+                markedByName: (req.user as any)?.name || 'admin',
+            },
+        });
+
+        if (!settled) {
+            return next(new ErrorResponse('This order was settled by another channel while saving.', 409));
+        }
+    }
+
+    const fresh = await Order.findById(created._id);
+
+    res.status(201).json({
+        success: true,
+        message: paymentReceived
+            ? `Order #${shortOrderCode(created._id)} recorded and marked paid.`
+            : `Order #${shortOrderCode(created._id)} recorded as awaiting payment.`,
+        data: {
+            orderId: fresh?._id,
+            orderCode: shortOrderCode(created._id),
+            totalPrice: fresh?.totalPrice,
+            isPaid: fresh?.isPaid,
+            status: fresh?.status,
+        },
+        warnings,
+    });
+});
+
+/**
+ * @desc    Admin list of offline orders, newest first, so a payment taken later can
+ *          be recorded against the right order.
+ * @route   GET /api/orders/admin/offline
+ * @access  Private/Admin
+ */
+export const getAdminOfflineOrders = asyncHandler(async (req: Request, res: Response) => {
+    const orders = await Order.find({ source: 'offline' }).sort({ createdAt: -1 }).limit(100);
+
+    res.status(200).json({
+        success: true,
+        count: orders.length,
+        data: orders.map((order) => ({
+            _id: order._id,
+            orderCode: shortOrderCode(order._id),
+            customerName: order.shippingAddress?.name || '',
+            customerPhone: order.shippingAddress?.phone || '',
+            title: order.orderItems?.map((i) => `${i.qty}x ${i.name}`).join(', ') || 'Offline Order',
+            totalPrice: order.totalPrice,
+            isPaid: order.isPaid,
+            status: order.status,
+            paidAt: order.paidAt || null,
+            paymentChannel: order.paymentChannel,
+            paymentMethod: order.paymentMethod,
+            paymentReference: order.paymentReference,
+            markedPaidByName: order.markedPaidByName,
+            createdAt: order.createdAt,
+        })),
+    });
+});
+
+```
+
 ## File: `backend/src/controllers/orderController.ts`
 
 ```typescript
 import { Request, Response, NextFunction } from 'express';
 import Order from '../models/Order';
-import sendEmail from '../utils/sendEmail';
+import Product from '../models/Product';
+import sendEmail, { storeNotificationEmail } from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
 import { calculateShipping } from '../utils/shipping';
+import { shortOrderCode, markOrderPaid } from '../services/paymentService';
+import { getPausedIndex, findPauseMatch, describePause } from '../services/productVisibilityService';
 
 /**
  * @desc    Create new order
@@ -1228,6 +1605,30 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
 
     if (!shippingAddress || !shippingAddress.street || !shippingAddress.email) {
         throw new ErrorResponse('Fulfillment Narrative incomplete. Destination details (street/email) missing.', 400);
+    }
+
+    // Re-check every line against the live catalogue. Prices are already re-derived below, and
+    // this closes the same hole for paused designs: a cart saved before a pause, or a crafted
+    // request, cannot place an order for a product that is no longer sellable.
+    const pausedIndex = await getPausedIndex();
+    const requestedIds = orderItems.map((item: any) => item.product).filter(Boolean);
+    const liveProducts = await Product.find({ _id: { $in: requestedIds } }).select(
+        '_id name price category categories occasion occasions isBestseller'
+    );
+    const liveById = new Map<string, any>(liveProducts.map((p: any) => [String(p._id), p]));
+
+    const blocked = orderItems
+        .map((item: any) => {
+            const live = liveById.get(String(item.product));
+            if (!live) return { name: item.name, reason: 'no longer exists' };
+            const pause = findPauseMatch(live, pausedIndex);
+            return pause ? { name: live.name, reason: describePause(pause) } : null;
+        })
+        .filter(Boolean);
+
+    if (blocked.length > 0) {
+        const details = blocked.map((b: any) => `"${b.name}" — ${b.reason}`).join('; ');
+        throw new ErrorResponse(`Some items in your bag cannot be ordered: ${details}.`, 409);
     }
 
     // Authoritative totals: derive items price from line items, shipping from the free-shipping rule,
@@ -1247,6 +1648,42 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
     });
 
     const createdOrder = await order.save();
+
+    // Notify the store that an order came in. Payment is confirmed separately (Razorpay
+    // callback / webhook / reconciler), so this is deliberately a "new order" alert.
+    const code = shortOrderCode(createdOrder._id);
+    const address = createdOrder.shippingAddress;
+    try {
+        await sendEmail({
+            email: storeNotificationEmail(),
+            subject: `New order received — #${code} (₹${createdOrder.totalPrice})`,
+            message: `Order #${code} for ₹${createdOrder.totalPrice} from ${address?.name} (${address?.phone}). ${createdOrder.orderItems.length} item(s). Awaiting payment.`,
+            html: `
+                <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 40px; border-radius: 20px;">
+                    <h1 style="color: #000; font-style: italic; margin-top: 0;">New Order</h1>
+                    <p>Order <strong>#${code}</strong> is awaiting payment.</p>
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                        <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Customer</p>
+                        <p style="font-size: 14px;"><strong>${address?.name || '—'}</strong></p>
+                        <p style="font-size: 14px;">${address?.phone || '—'}</p>
+                        <p style="font-size: 14px;">${address?.email || 'no email'}</p>
+                        <p style="font-size: 14px;">${[address?.street, address?.city, address?.state, address?.zip].filter(Boolean).join(', ') || '—'}</p>
+                    </div>
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                        <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Items (${createdOrder.orderItems.length})</p>
+                        ${createdOrder.orderItems
+                            .map((item) => `<p style="font-size: 14px; margin: 4px 0;">${item.qty} × ${item.name} — ₹${item.price}</p>`)
+                            .join('')}
+                    </div>
+                    <p style="margin-top: 30px; font-size: 16px;">Order Total: <strong>₹${createdOrder.totalPrice}</strong></p>
+                </div>
+            `
+        });
+    } catch (emailError: any) {
+        // The order is already saved — a mail failure must never fail checkout.
+        console.error('New order notification failed:', emailError.message);
+    }
+
     res.status(201).json({ success: true, data: createdOrder });
 });
 
@@ -1322,6 +1759,69 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
 });
 
 /**
+ * @desc    Mark an order as paid by hand (bank transfer, cash, UPI outside the gateway, etc.)
+ * @route   PUT /api/orders/:id/paid
+ * @access  Private/Admin
+ *
+ * This is the escape hatch for payments the gateway never saw — a bank transfer that cleared,
+ * cash at the studio, or a gateway webhook that was never delivered. It deliberately records who
+ * confirmed it and why, because a manual entry is an assertion by a human, not evidence from
+ * Razorpay. Idempotent: an already-paid order is refused rather than silently re-confirmed, so
+ * the customer is never emailed twice.
+ */
+export const markOrderPaidManually = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const { method, reference, note } = req.body || {};
+
+    const cleanMethod = typeof method === 'string' ? method.trim().slice(0, 60) : '';
+    if (!cleanMethod) {
+        return next(new ErrorResponse('Select how this order was paid.', 400));
+    }
+    const cleanReference = typeof reference === 'string' ? reference.trim().slice(0, 120) : '';
+    const cleanNote = typeof note === 'string' ? note.trim().slice(0, 500) : '';
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+        return next(new ErrorResponse('Order not found.', 404));
+    }
+
+    if (order.isPaid) {
+        const code = shortOrderCode(order._id);
+        return res.status(409).json({
+            success: false,
+            error: `Order #${code} is already marked paid.`,
+            data: order
+        });
+    }
+
+    const settled = await markOrderPaid(order, {
+        channel: 'manual',
+        manual: {
+            method: cleanMethod,
+            reference: cleanReference,
+            note: cleanNote,
+            markedBy: req.user?._id,
+            markedByName: (req.user as any)?.name || 'admin'
+        }
+    });
+
+    // Lost the race against a webhook that landed at the same moment — report the real state.
+    if (!settled) {
+        const fresh = await Order.findById(order._id);
+        return res.status(409).json({
+            success: false,
+            error: `Order #${shortOrderCode(order._id)} was confirmed as paid by another channel a moment ago.`,
+            data: fresh
+        });
+    }
+
+    res.status(200).json({
+        success: true,
+        message: `Order #${shortOrderCode(order._id)} marked as paid.`,
+        data: await Order.findById(order._id)
+    });
+});
+
+/**
  * @desc    Get logged-in user's orders
  * @route   GET /api/orders/mine
  * @access  Private
@@ -1353,23 +1853,14 @@ export const getOrders = asyncHandler(async (req: Request, res: Response) => {
 
 ```typescript
 import { Request, Response, NextFunction } from 'express';
-import Razorpay from 'razorpay';
-import crypto from 'crypto';
 import Order from '../models/Order';
-import sendEmail from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
-
-const getRazorpayInstance = () => {
-    return new Razorpay({
-        key_id: process.env.RAZORPAY_KEY_ID as string,
-        key_secret: process.env.RAZORPAY_KEY_SECRET as string,
-    });
-};
+import { getRazorpay, isValidPaymentSignature, markOrderPaid } from '../services/paymentService';
 
 /**
  * @desc    Create Razorpay Order
- * @route   POST /api/payment/razorpay/create
+ * @route   POST /api/payments/razorpay/create
  * @access  Public (Guest/User)
  */
 export const createRazorpayOrder = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
@@ -1389,7 +1880,7 @@ export const createRazorpayOrder = asyncHandler(async (req: Request, res: Respon
         receipt: `receipt_order_${orderId}`,
     };
 
-    const rzp = getRazorpayInstance();
+    const rzp = getRazorpay();
     const rzpOrder = await rzp.orders.create(options);
 
     if (!rzpOrder) {
@@ -1413,72 +1904,44 @@ export const createRazorpayOrder = asyncHandler(async (req: Request, res: Respon
 
 /**
  * @desc    Verify Razorpay Payment
- * @route   POST /api/payment/razorpay/verify
+ * @route   POST /api/payments/razorpay/verify
  * @access  Public (Guest/User)
+ *
+ * This is the fast path only: it depends on the customer's browser surviving the payment.
+ * The webhook (/razorpay/webhook) and the background reconciler are the authoritative
+ * confirmation routes, so a closed tab can never lose a paid order.
  */
 export const verifyRazorpayPayment = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const { internalOrderId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    if (!internalOrderId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return next(new ErrorResponse('Incomplete payment verification payload.', 400));
+    }
 
-    const expectedSignature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET as string)
-        .update(body.toString())
-        .digest('hex');
-
-    const isAuthentic = expectedSignature === razorpay_signature;
-
-    if (isAuthentic) {
-        // Find our order and update it
-        const order: any = await Order.findById(internalOrderId).populate('user', 'name email');
-        if (order) {
-            order.isPaid = true;
-            order.paidAt = new Date();
-            order.razorpayPaymentId = razorpay_payment_id;
-            order.razorpaySignature = razorpay_signature;
-            order.status = 'Handcrafting'; // Start the process automatically upon payment
-            await order.save();
-
-            // Send Confirmation Emails
-            try {
-                // To Customer
-                await sendEmail({
-                    email: order.shippingAddress.email || order.user?.email || 'customer@example.com',
-                    subject: `Order Confirmed! Your MythrieGleams Journey Begins - #${order._id}`,
-                    message: `Hi! We've received your payment for order #${order._id}. We're already handcrafting your artisanal pieces!`,
-                    html: `
-                        <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 40px; border-radius: 20px;">
-                            <h1 style="color: #000; font-style: italic;">Payment Confirmed! ✨</h1>
-                            <p>Thank you for choosing MythrieGleams. This is to confirm that your order <strong>#${order._id}</strong> has been successfully placed and is now proceeding to our <strong>Handcrafting</strong> stage.</p>
-                            <p>We will keep you updated on your order's lifecycle.</p>
-                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                                <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Order Summary</p>
-                                <p style="font-size: 14px;"><strong>Order ID:</strong> ${order._id}</p>
-                                <p style="font-size: 14px;"><strong>Payment ID:</strong> ${razorpay_payment_id}</p>
-                                <p style="font-size: 14px;"><strong>Total Paid:</strong> ₹${order.totalPrice}</p>
-                            </div>
-                        </div>
-                    `
-                });
-
-                // To Admin
-                await sendEmail({
-                    email: process.env.ADMIN_EMAIL || 'admin@mythrisgleams.com',
-                    subject: `💰 NEW PAID ORDER: #${order._id}`,
-                    message: `Payment verified for order #${order._id}. Amount: ₹${order.totalPrice}. Status updated to Handcrafting.`,
-                    html: `<h2>New Sale! 💰</h2><p>Order <strong>#${order._id}</strong> has been paid and is ready for fulfillment.</p><p>Customer: ${order.shippingAddress.name} (${order.shippingAddress.email})</p>`
-                });
-            } catch (emailError: any) {
-                console.error('Email sending failed after payment verification. Error:', emailError.message);
-            }
-            
-            return res.status(200).json({ success: true, message: 'Payment verified and registry updated.' });
-        } else {
-             return next(new ErrorResponse('Internal Order narrative lost during verification.', 404));
-        }
-    } else {
+    if (!isValidPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature)) {
         return next(new ErrorResponse('Invalid signature detected. Payment narrative rejected.', 400));
     }
+
+    const order = await Order.findById(internalOrderId);
+    if (!order) {
+        return next(new ErrorResponse('Internal Order narrative lost during verification.', 404));
+    }
+
+    // The signature must belong to the Razorpay order we created for THIS order — blocks
+    // replaying a genuine signature captured from a different payment.
+    if (order.razorpayOrderId && order.razorpayOrderId !== razorpay_order_id) {
+        return next(new ErrorResponse('Payment does not match the initiated order.', 400));
+    }
+
+    // Idempotent: if the webhook already confirmed this payment, this is a no-op and the
+    // customer is not emailed twice.
+    await markOrderPaid(order, {
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        channel: 'client-verify',
+    });
+
+    return res.status(200).json({ success: true, message: 'Payment verified and registry updated.' });
 });
 
 ```
@@ -1490,6 +1953,7 @@ import { Request, Response, NextFunction } from 'express';
 import Product from '../models/Product';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
+import { getPausedIndex, pausedProductsFilter, findPauseMatch, describePause } from '../services/productVisibilityService';
 
 // Helper to normalize array input (stringified JSON, comma-separated string, or array)
 const parseArrayField = (input: any): string[] => {
@@ -1520,8 +1984,12 @@ const parseBooleanInput = (input: any): boolean | undefined => {
 // @desc    Get all products (with optional filtering)
 // @route   GET /api/products
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
-    const { category, subcategory, occasion, occasionSub, sort, search, isBestseller } = req.query;
+    const { category, subcategory, occasion, occasionSub, sort, search, isBestseller, includePaused } = req.query;
     let query: any = {};
+
+    // Admin-only escape hatch so a paused product can still be inspected in the dashboard.
+    // Admin-only escape hatch is no longer strictly necessary to bypass hiding since we show them everywhere,
+    // but we still calculate the pause state below.
 
     const bestsellerFilter = parseBooleanInput(isBestseller);
     if (bestsellerFilter !== undefined) query.isBestseller = bestsellerFilter;
@@ -1585,7 +2053,18 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     if (sort === 'newest') products = products.sort({ createdAt: -1 });
 
     const data = await products.lean();
-    res.status(200).json({ success: true, count: data.length, data });
+    
+    const pausedIndex = await getPausedIndex();
+    const dataWithPause = data.map((p: any) => {
+        const pauseMatch = findPauseMatch(p, pausedIndex);
+        return {
+            ...p,
+            isEffectivelyPaused: !!pauseMatch,
+            pauseReason: pauseMatch ? describePause(pauseMatch) : null
+        };
+    });
+
+    res.status(200).json({ success: true, count: dataWithPause.length, data: dataWithPause });
 });
 
 // @desc    Get single product by slug
@@ -1595,7 +2074,15 @@ export const getProductBySlug = asyncHandler(async (req: Request, res: Response,
     if (!product) {
         return next(new ErrorResponse('Product narrative not found in the archives.', 404));
     }
-    res.status(200).json({ success: true, data: product });
+
+    const pauseMatch = findPauseMatch(product, await getPausedIndex());
+    const productData = product.toObject();
+    if (pauseMatch) {
+        productData.isEffectivelyPaused = true;
+        productData.pauseReason = describePause(pauseMatch);
+    }
+
+    res.status(200).json({ success: true, data: productData });
 });
 
 // @desc    Create product (Admin only)
@@ -1817,6 +2304,189 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
 
 ```
 
+## File: `backend/src/controllers/webhookController.ts`
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
+import Order from '../models/Order';
+import asyncHandler from '../middlewares/asyncHandler';
+import ErrorResponse from '../utils/errorResponse';
+import { isAuthenticSignature, markOrderPaid, reconcileOrderWithRazorpay } from '../services/paymentService';
+
+const orderCode = (id: unknown) => String(id).slice(-8).toUpperCase();
+
+/**
+ * Locate the internal order a Razorpay event refers to. `order.paid` only carries an
+ * `order_id`, so we resolve it through the order we ourselves created earlier.
+ */
+const findOrderForPaymentEntity = async (paymentEntity: any) => {
+    const razorpayOrderId = paymentEntity?.order_id;
+    const razorpayPaymentId = paymentEntity?.id;
+    if (razorpayOrderId) return Order.findOne({ razorpayOrderId });
+    if (razorpayPaymentId) return Order.findOne({ razorpayPaymentId });
+    return null;
+};
+
+/**
+ * Processing runs after the 200 so Razorpay never retries a slow handler.
+ */
+const processWebhookEvent = async (event: any) => {
+    const paymentEntity = event?.payload?.payment?.entity;
+
+    switch (event?.event) {
+        case 'payment.captured':
+        case 'order.paid': {
+            const order = await findOrderForPaymentEntity(paymentEntity);
+            if (!order) {
+                console.warn(`[webhook] ${event.event}: no local order for ${paymentEntity?.order_id || paymentEntity?.id}`);
+                return;
+            }
+            // Idempotent: if the browser callback already marked it paid, this is a no-op.
+            await markOrderPaid(order, {
+                razorpayPaymentId: paymentEntity?.id || order.razorpayPaymentId || 'unknown',
+                channel: 'webhook',
+            });
+            return;
+        }
+        case 'payment.failed': {
+            const order = await findOrderForPaymentEntity(paymentEntity);
+            console.warn(
+                `[webhook] payment.failed for ${paymentEntity?.order_id || 'unknown'}` +
+                    (order ? ` (local order ${order._id})` : ' — no local order')
+            );
+            return;
+        }
+        case 'refund.processed': {
+            const order = await findOrderForPaymentEntity(paymentEntity);
+            console.error(
+                `[webhook] REFUND processed for order ${order?._id || paymentEntity?.order_id || 'unknown'} — ` +
+                    'update the order status manually and arrange a return if required.'
+            );
+            return;
+        }
+        default:
+            return;
+    }
+};
+
+/**
+ * @desc    Razorpay webhook — the authoritative payment confirmation. Fires even if the
+ *          customer closes the tab, loses network, or their device dies mid-payment.
+ * @route   POST /api/payments/razorpay/webhook
+ * @access  Public (HMAC signature verified against the raw request body)
+ */
+export const razorpayWebhook = asyncHandler(async (req: Request, res: Response) => {
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const signature = req.headers['x-razorpay-signature'];
+    const rawBody = req.rawBody;
+
+    if (!webhookSecret) {
+        console.error('[webhook] RAZORPAY_WEBHOOK_SECRET is not configured — webhook disabled.');
+        return res.status(500).json({ success: false, error: 'Webhook secret not configured' });
+    }
+
+    if (typeof signature !== 'string' || !rawBody) {
+        console.error('[webhook] Missing signature or raw body.');
+        return res.status(400).json({ success: false, error: 'Missing signature' });
+    }
+
+    const expected = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+    if (!isAuthenticSignature(expected, signature)) {
+        console.error('[webhook] Signature mismatch — payload rejected.');
+        return res.status(400).json({ success: false, error: 'Invalid signature' });
+    }
+
+    let event: any;
+    try {
+        event = JSON.parse(rawBody.toString('utf8'));
+    } catch {
+        return res.status(400).json({ success: false, error: 'Malformed payload' });
+    }
+
+    // Acknowledge first, then process.
+    res.status(200).json({ success: true });
+
+    processWebhookEvent(event).catch((err) => console.error('[webhook] Processing failed:', err.message));
+});
+
+/**
+ * @desc    Ask Razorpay directly whether an order was paid, and heal the local record.
+ *          Used by the background reconciler and by the frontend as a reload safety net.
+ * @route   POST /api/payments/razorpay/check/:orderId
+ * @access  Owner, admin, or holder of the order's payment token
+ */
+export const reconcileRazorpayOrder = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return next(new ErrorResponse('Order not found.', 404));
+
+    const token = req.body?.token;
+    const hasValidToken = typeof token === 'string' && !!order.paymentToken && order.paymentToken === token;
+    const isOwner = !!order.user && !!req.user && String(order.user) === String(req.user._id);
+    const isAdmin = req.user?.role === 'admin';
+
+    if (!hasValidToken && !isOwner && !isAdmin) {
+        return next(new ErrorResponse('Unauthorized to check this order.', 401));
+    }
+
+    const result = await reconcileOrderWithRazorpay(order, 'reconciler');
+
+    res.status(200).json({
+        success: true,
+        data: {
+            _id: order._id,
+            orderCode: orderCode(order._id),
+            isPaid: order.isPaid,
+            status: order.status,
+            paidAt: order.paidAt || null,
+            totalPrice: order.totalPrice,
+            recovered: result.recovered,
+            rzpStatus: result.rzpStatus,
+            reason: result.reason,
+        },
+    });
+});
+
+/**
+ * @desc    Public reload safety net for the token-gated pay page. Once a payment settles,
+ *          the token is destroyed, so a returning customer proves ownership with the
+ *          Razorpay order id we handed them instead.
+ * @route   POST /api/orders/public/pay/:id/reconcile
+ * @access  Public (requires the order's own Razorpay order id)
+ */
+export const reconcilePublicPayOrder = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    const { razorpayOrderId } = req.body || {};
+
+    const order = await Order.findOne({ _id: id, source: 'admin-custom' });
+    if (!order) return next(new ErrorResponse('Order not found.', 404));
+
+    // Both halves must match this order, so this cannot be used to probe other orders.
+    if (!razorpayOrderId || !order.razorpayOrderId || order.razorpayOrderId !== razorpayOrderId) {
+        return next(new ErrorResponse('Invalid payment reference.', 401));
+    }
+
+    const result = await reconcileOrderWithRazorpay(order, 'reconciler');
+
+    res.status(200).json({
+        success: true,
+        data: {
+            _id: order._id,
+            orderCode: orderCode(order._id),
+            isPaid: order.isPaid,
+            status: order.status,
+            paidAt: order.paidAt || null,
+            totalPrice: order.totalPrice,
+            customerName: order.shippingAddress?.name || '',
+            recovered: result.recovered,
+            rzpStatus: result.rzpStatus,
+            reason: result.reason,
+        },
+    });
+});
+
+```
+
 ## File: `backend/src/middlewares/asyncHandler.ts`
 
 ```typescript
@@ -1999,6 +2669,8 @@ export interface ICollection extends Document {
     image?: string;
     parent: mongoose.Types.ObjectId | null; // null => top-level category
     isActive: boolean;
+    isPaused?: boolean;   // Hides this collection's products from the storefront
+    pausedAt?: Date;
     createdAt: Date;
 }
 
@@ -2010,6 +2682,8 @@ const CollectionSchema: Schema = new Schema({
     image: { type: String },
     parent: { type: Schema.Types.ObjectId, ref: 'Collection', default: null },
     isActive: { type: Boolean, default: true },
+    isPaused: { type: Boolean, default: false, index: true },
+    pausedAt: { type: Date },
 }, {
     timestamps: true
 });
@@ -2114,6 +2788,8 @@ export interface IOccasion extends Document {
     image?: string;
     parent: mongoose.Types.ObjectId | null; // null => top-level occasion
     isActive: boolean;
+    isPaused?: boolean;   // Hides this occasion's products from the storefront
+    pausedAt?: Date;
     createdAt: Date;
 }
 
@@ -2125,6 +2801,8 @@ const OccasionSchema: Schema = new Schema({
     image: { type: String },
     parent: { type: Schema.Types.ObjectId, ref: 'Occasion', default: null },
     isActive: { type: Boolean, default: true },
+    isPaused: { type: Boolean, default: false, index: true },
+    pausedAt: { type: Date },
 }, {
     timestamps: true
 });
@@ -2149,6 +2827,7 @@ export interface IOrder extends Document {
         selectedVariant?: string;
         selectedColor?: string;
         customerImage?: string;
+        description?: string;
     }[];
     shippingAddress: {
         label?: string;
@@ -2166,13 +2845,25 @@ export interface IOrder extends Document {
     isPaid: boolean;
     paidAt?: Date;
     status: 'Pending' | 'Handcrafting' | 'Quality Check' | 'Dispatched' | 'Delivered' | 'Cancelled';
-    source?: 'checkout' | 'admin-custom' | 'guest';
+    /** 'offline' = logged by an admin for money received outside the store's gateway. */
+    source?: 'checkout' | 'admin-custom' | 'offline' | 'guest';
     paymentToken?: string;
     trackingNumber?: string;
     deliveryNote?: string;
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
     razorpaySignature?: string;
+    /** How the payment was confirmed. 'manual' means an admin recorded it outside the gateway. */
+    paymentChannel?: 'client-verify' | 'webhook' | 'reconciler' | 'manual';
+    /** How the customer actually paid, as entered by the admin for a manual confirmation. */
+    paymentMethod?: string;
+    /** UTR / cheque number / txn id, so a manual payment can still be traced to a bank record. */
+    paymentReference?: string;
+    paymentNote?: string;
+    /** Audit trail for a manual confirmation. */
+    markedPaidBy?: mongoose.Types.ObjectId;
+    /** Denormalised so the trail survives the admin account being removed. */
+    markedPaidByName?: string;
     createdAt: Date;
 }
 
@@ -2187,7 +2878,9 @@ const OrderSchema: Schema = new Schema({
         product: { type: mongoose.Schema.Types.Mixed, required: true },
         selectedVariant: { type: String, default: '' },
         selectedColor: { type: String, default: '' },
-        customerImage: { type: String, default: '' }
+        customerImage: { type: String, default: '' },
+        /** Free-text instructions for the workshop — used by admin-entered (bespoke) orders. */
+        description: { type: String, default: '' }
     }],
     shippingAddress: {
         label: { type: String, default: 'Home' },
@@ -2212,7 +2905,7 @@ const OrderSchema: Schema = new Schema({
     },
     source: {
         type: String,
-        enum: ['checkout', 'admin-custom', 'guest'],
+        enum: ['checkout', 'admin-custom', 'offline', 'guest'],
         default: 'checkout'
     },
     paymentToken: { type: String, index: true, sparse: true },
@@ -2220,7 +2913,17 @@ const OrderSchema: Schema = new Schema({
     deliveryNote: { type: String },
     razorpayOrderId: { type: String },
     razorpayPaymentId: { type: String },
-    razorpaySignature: { type: String }
+    razorpaySignature: { type: String },
+    paymentChannel: {
+        type: String,
+        enum: ['client-verify', 'webhook', 'reconciler', 'manual'],
+        default: undefined
+    },
+    paymentMethod: { type: String },
+    paymentReference: { type: String },
+    paymentNote: { type: String },
+    markedPaidBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    markedPaidByName: { type: String }
 }, {
     timestamps: true
 });
@@ -2401,21 +3104,23 @@ export default router;
 
 ```typescript
 import { Router } from 'express';
-import { getCollections, createCollection, updateCollection, deleteCollection } from '../controllers/collectionController';
-import { protect, admin } from '../middlewares/authMiddleware';
+import { getCollections, createCollection, updateCollection, deleteCollection, setCollectionPause } from '../controllers/collectionController';
+import { protect, admin, optionalAuth } from '../middlewares/authMiddleware';
 import upload from '../middlewares/uploadMiddleware';
 
 const router = Router();
 
-// Public Routes
-router.get('/', getCollections);
+// Public Routes (optionalAuth enables ?all=1 for admins)
+router.get('/', optionalAuth, getCollections);
 
 // Admin Routes
 router.post('/', protect, admin, upload.single('image'), createCollection);
 router.put('/:id', protect, admin, upload.single('image'), updateCollection);
+router.put('/:id/pause', protect, admin, setCollectionPause);
 router.delete('/:id', protect, admin, deleteCollection);
 
 export default router;
+
 ```
 
 ## File: `backend/src/routes/homepageSettingsRoutes.ts`
@@ -2460,28 +3165,30 @@ export default router;
 
 ```typescript
 import { Router } from 'express';
-import { getOccasions, createOccasion, updateOccasion, deleteOccasion } from '../controllers/occasionController';
-import { protect, admin } from '../middlewares/authMiddleware';
+import { getOccasions, createOccasion, updateOccasion, deleteOccasion, setOccasionPause } from '../controllers/occasionController';
+import { protect, admin, optionalAuth } from '../middlewares/authMiddleware';
 import upload from '../middlewares/uploadMiddleware';
 
 const router = Router();
 
-// Public Routes
-router.get('/', getOccasions);
+// Public Routes (optionalAuth enables ?all=1 for admins)
+router.get('/', optionalAuth, getOccasions);
 
 // Admin Routes
 router.post('/', protect, admin, upload.single('image'), createOccasion);
 router.put('/:id', protect, admin, upload.single('image'), updateOccasion);
+router.put('/:id/pause', protect, admin, setOccasionPause);
 router.delete('/:id', protect, admin, deleteOccasion);
 
 export default router;
+
 ```
 
 ## File: `backend/src/routes/orderRoutes.ts`
 
 ```typescript
 import { Router } from 'express';
-import { addOrderItems, getOrderById, updateOrderStatus, getOrders, getMyOrders } from '../controllers/orderController';
+import { addOrderItems, getOrderById, updateOrderStatus, markOrderPaidManually, getOrders, getMyOrders } from '../controllers/orderController';
 import {
     createAdminCustomOrder,
     getAdminCustomOrder,
@@ -2489,6 +3196,8 @@ import {
     createPublicRazorpayOrder,
     verifyPublicRazorpayPayment,
 } from '../controllers/customOrderController';
+import { reconcilePublicPayOrder } from '../controllers/webhookController';
+import { createAdminOfflineOrder, getAdminOfflineOrders } from '../controllers/offlineOrderController';
 import { protect, admin, optionalAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
@@ -2497,16 +3206,22 @@ const router = Router();
 router.get('/public/pay/:id', getPublicOrderForPayment);
 router.post('/public/pay/:id/razorpay/create', createPublicRazorpayOrder);
 router.post('/public/pay/:id/razorpay/verify', verifyPublicRazorpayPayment);
+router.post('/public/pay/:id/reconcile', reconcilePublicPayOrder);
 
 // Admin — bespoke order with a shareable payment link
 router.post('/admin/custom', protect, admin, createAdminCustomOrder);
 router.get('/admin/custom/:id', protect, admin, getAdminCustomOrder);
+
+// Admin — order taken over the phone/WhatsApp and paid outside the gateway
+router.post('/admin/offline', protect, admin, createAdminOfflineOrder);
+router.get('/admin/offline', protect, admin, getAdminOfflineOrders);
 
 router.post('/',        optionalAuth, addOrderItems);    // Public (Guest) / Auth checkout
 router.get('/',         protect, admin, getOrders);      // Admin list
 router.get('/mine',     protect, getMyOrders);           // My orders
 router.get('/:id',      optionalAuth, getOrderById);     // Tracking (Secure)
 router.put('/:id/status', protect, admin, updateOrderStatus);
+router.put('/:id/paid', protect, admin, markOrderPaidManually);
 
 export default router;
 
@@ -2517,13 +3232,22 @@ export default router;
 ```typescript
 import { Router } from 'express';
 import { createRazorpayOrder, verifyRazorpayPayment } from '../controllers/paymentController';
-import { protect } from '../middlewares/authMiddleware';
+import { razorpayWebhook, reconcileRazorpayOrder } from '../controllers/webhookController';
+import { protect, optionalAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
 
 // Routes
 router.post('/razorpay/create', createRazorpayOrder); // Public/Guest (as guest orders are allowed)
 router.post('/razorpay/verify', verifyRazorpayPayment); // Public/Guest
+
+// Server-to-server confirmation. Registered in Razorpay Dashboard -> Settings -> Webhooks as
+// https://<your-domain>/api/payments/razorpay/webhook with the same secret as
+// RAZORPAY_WEBHOOK_SECRET. This is the path that saves a payment when the customer's browser dies.
+router.post('/razorpay/webhook', razorpayWebhook);
+
+// Recovery path: re-asks Razorpay about an order. Owner, admin, or payment-token holder only.
+router.post('/razorpay/check/:orderId', optionalAuth, reconcileRazorpayOrder);
 
 export default router;
 
@@ -2534,14 +3258,16 @@ export default router;
 ```typescript
 import { Router } from 'express';
 import { getProducts, getProductBySlug, createProduct, deleteProduct, updateProduct } from '../controllers/productController';
-import { protect, admin } from '../middlewares/authMiddleware';
+import { protect, admin, optionalAuth } from '../middlewares/authMiddleware';
 import upload from '../middlewares/uploadMiddleware';
 
 const router = Router();
 
 // Public Routes
-router.get('/', getProducts);
-router.get('/:slug', getProductBySlug);
+// optionalAuth lets an admin preview paused products with ?includePaused=true without
+// exposing them to shoppers (req.user stays undefined for anonymous visitors).
+router.get('/', optionalAuth, getProducts);
+router.get('/:slug', optionalAuth, getProductBySlug);
 
 // Admin Routes
 router.post('/', protect, admin, upload.array('images', 10), createProduct);
@@ -3861,8 +4587,8 @@ if (process.argv[2] === '-d') {
 import app from './app';
 import connectDB from './config/db';
 import dotenv from 'dotenv';
-import Order from './models/Order';
 import { seedAdmin } from './seedAdmin';
+import { createOrderReconciler, RECONCILE_INTERVAL_MS } from './services/orderReconciler';
 dotenv.config();
 
 const PORT = process.env.PORT || 5010;
@@ -3887,30 +4613,11 @@ const server = app.listen(PORT, () => {
     console.log(`🚀 Mythris Gleams Server running in ${process.env.NODE_ENV || 'production'} mode on http://localhost:${PORT}`);
 }); 
 
-// Background job to clean up pending (unpaid) orders older than 20 minutes.
-// Admin-created custom orders are excluded: they are paid on the customer's schedule,
-// not at checkout, so a 20 minute TTL would destroy live payment links.
-const cleanPendingOrders = async () => {
-    try {
-        const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
-        const result = await Order.deleteMany({
-            isPaid: false,
-            source: { $ne: 'admin-custom' },
-            createdAt: { $lt: twentyMinutesAgo }
-        });
-        if (result.deletedCount > 0) {
-            console.log(`🧹 Background Job: Cleaned up ${result.deletedCount} pending orders older than 20 minutes.`);
-        }
-    } catch (error: any) {
-        console.error(`❌ Background Job Error (Order Cleanup): ${error.message}`);
-    }
-};
-
-// Run immediately when server starts
-cleanPendingOrders();
-
-// Check every 1 minute
-setInterval(cleanPendingOrders, 1 * 60 * 1000);
+// Run once on boot, then on a timer. Reconciles missed payments with Razorpay before
+// anything is cleaned up, and never touches admin custom orders.
+const reconcileAndCleanOrders = createOrderReconciler();
+reconcileAndCleanOrders();
+setInterval(reconcileAndCleanOrders, RECONCILE_INTERVAL_MS);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err: any, promise) => {
@@ -3918,6 +4625,555 @@ process.on('unhandledRejection', (err: any, promise) => {
     // Close server & exit process
     // server.close(() => process.exit(1)); 
 });
+
+```
+
+## File: `backend/src/services/orderReconciler.ts`
+
+```typescript
+import Order from '../models/Order';
+import { fetchRazorpayPayment, markOrderPaid, razorpayConfigured, type PaymentLookup } from './paymentService';
+
+/** Checkout abandoned with no payment session started. */
+export const ABANDONED_AFTER_MS = 20 * 60 * 1000;
+/** Attempted but unpaid — kept retryable for a full day before it is dropped. */
+export const UNPAID_GRACE_MS = 24 * 60 * 60 * 1000;
+export const RECONCILE_BATCH = 50;
+export const RECONCILE_INTERVAL_MS = 2 * 60 * 1000;
+
+/**
+ * Safety net for payments whose browser callback never arrived (closed tab, dead network,
+ * missed webhook). Nothing is ever deleted on a local guess: Razorpay is asked first, and
+ * an attempted-but-unpaid order is kept for a day so the customer can retry.
+ *
+ * Admin custom orders are excluded entirely — they are paid on the customer's schedule.
+ */
+export const createOrderReconciler = (lookup: PaymentLookup = fetchRazorpayPayment) => async () => {
+    const now = Date.now();
+    const abandonedBefore = new Date(now - ABANDONED_AFTER_MS);
+    const graceBefore = new Date(now - UNPAID_GRACE_MS);
+    const summary = { deletedAbandoned: 0, recovered: 0, deletedUnpaid: 0 };
+
+    try {
+        // 1. Abandoned checkouts that never reached Razorpay — nothing was ever at stake.
+        const noGateway = await Order.deleteMany({
+            isPaid: false,
+            source: { $ne: 'admin-custom' },
+            $or: [{ razorpayOrderId: { $exists: false } }, { razorpayOrderId: null }, { razorpayOrderId: '' }],
+            createdAt: { $lt: abandonedBefore }
+        });
+        summary.deletedAbandoned = noGateway.deletedCount;
+        if (noGateway.deletedCount > 0) {
+            console.log(`[reconciler] Deleted ${noGateway.deletedCount} abandoned checkout(s) with no payment session.`);
+        }
+
+        if (!razorpayConfigured()) {
+            console.warn('[reconciler] Razorpay keys missing — skipping payment reconciliation.');
+            return summary;
+        }
+
+        // 2. Unpaid orders that DO have a payment session — ask Razorpay what happened.
+        //    Admin custom orders are included here (a link closed mid-payment still gets
+        //    healed) but are never deleted, since they are paid on the customer's schedule.
+        const stale = await Order.find({
+            isPaid: false,
+            razorpayOrderId: { $exists: true, $nin: [null, ''] },
+            createdAt: { $lt: abandonedBefore }
+        })
+            .sort({ createdAt: 1 })
+            .limit(RECONCILE_BATCH);
+
+        const deletable: any[] = [];
+
+        for (const order of stale) {
+            const isCustom = order.source === 'admin-custom';
+            try {
+                const result = await lookup(order.razorpayOrderId as string);
+
+                if (result.paid && result.paymentId) {
+                    if (await markOrderPaid(order, { razorpayPaymentId: result.paymentId, channel: 'reconciler' })) {
+                        summary.recovered++;
+                    }
+                } else if (isCustom) {
+                    // Keep it: the customer may still be about to pay.
+                } else if (result.status === 'created' && order.createdAt && order.createdAt < abandonedBefore) {
+                    // Session opened, customer never attempted a payment.
+                    deletable.push(order._id);
+                } else if (result.status === 'attempted' && order.createdAt && order.createdAt < graceBefore) {
+                    // Attempted and failed/abandoned for over a day.
+                    deletable.push(order._id);
+                }
+                // Any other outcome (gateway error, still processing) means keep it and
+                // retry on the next tick.
+            } catch (err: any) {
+                console.error(`[reconciler] Razorpay lookup failed for order ${order._id}:`, err.message);
+            }
+        }
+
+        if (deletable.length > 0) {
+            await Order.deleteMany({ _id: { $in: deletable } });
+            summary.deletedUnpaid = deletable.length;
+            console.log(`[reconciler] Deleted ${deletable.length} unpaid order(s) confirmed dead by Razorpay.`);
+        }
+        if (summary.recovered > 0) {
+            console.log(`[reconciler] Recovered ${summary.recovered} paid order(s) that the browser callback missed.`);
+        }
+    } catch (err: any) {
+        console.error('[reconciler] Fatal error:', err.message);
+    }
+
+    return summary;
+};
+
+```
+
+## File: `backend/src/services/paymentService.ts`
+
+```typescript
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
+import Order, { IOrder } from '../models/Order';
+import sendEmail, { storeNotificationEmail } from '../utils/sendEmail';
+
+export const shortOrderCode = (id: unknown) => String(id).slice(-8).toUpperCase();
+
+export const razorpayConfigured = () => !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
+
+export const getRazorpay = () =>
+    new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID as string,
+        key_secret: process.env.RAZORPAY_KEY_SECRET as string,
+    });
+
+/** Constant-time string comparison (length differences are not secret here). */
+export const isAuthenticSignature = (expected: string, received: unknown): boolean => {
+    if (typeof received !== 'string' || received.length !== expected.length) return false;
+    try {
+        return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(received, 'utf8'));
+    } catch {
+        return false;
+    }
+};
+
+/** Verifies the checkout signature (razorpay_order_id|razorpay_payment_id signed with the key secret). */
+export const isValidPaymentSignature = (razorpayOrderId: string, razorpayPaymentId: string, signature: unknown) => {
+    const expected = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET as string)
+        .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+        .digest('hex');
+    return isAuthenticSignature(expected, signature);
+};
+
+export type PaymentChannel = 'client-verify' | 'webhook' | 'reconciler' | 'manual';
+
+/** Extra provenance recorded when an admin confirms a payment outside the gateway. */
+export type ManualPaymentMeta = {
+    method?: string;
+    reference?: string;
+    note?: string;
+    markedBy?: unknown;
+    markedByName?: string;
+};
+
+/**
+ * Confirmation emails. Best effort: a mail failure must never fail a payment.
+ */
+const notifyPaymentReceived = async (
+    order: IOrder,
+    channel: PaymentChannel,
+    reference: string
+) => {
+    const code = shortOrderCode(order._id);
+    const customerName = order.shippingAddress?.name || 'friend';
+    const address = order.shippingAddress;
+    const isManual = channel === 'manual';
+    const referenceLabel = isManual ? 'Payment Reference' : 'Payment ID';
+    const methodLine = isManual && order.paymentMethod
+        ? `<p style="font-size: 14px;"><strong>Paid via:</strong> ${order.paymentMethod}</p>`
+        : '';
+
+    try {
+        if (address?.email) {
+            await sendEmail({
+                email: address.email,
+                subject: `Payment Confirmed — Order #${code}`,
+                message: `Hi ${customerName}, we've received your payment of Rs.${order.totalPrice} for order #${code}. Your piece is now in Handcrafting.`,
+                html: `
+                    <div style="font-family: serif; color: #1a1a1a; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 40px; border-radius: 20px;">
+                        <h1 style="color: #000; font-style: italic;">Payment Confirmed</h1>
+                        <p>Hi ${customerName}, thank you for choosing MythrieGleams. Your payment for order <strong>#${code}</strong> has been received and your piece is now in <strong>Handcrafting</strong>.</p>
+                        <p>We will keep you posted as it moves to Quality Check and Dispatch.</p>
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Order Summary</p>
+                            <p style="font-size: 14px;"><strong>Order ID:</strong> #${code}</p>
+                            ${methodLine}
+                            <p style="font-size: 14px;"><strong>${referenceLabel}:</strong> ${reference}</p>
+                            <p style="font-size: 14px;"><strong>Total Paid:</strong> ₹${order.totalPrice}</p>
+                        </div>
+                    </div>
+                `,
+            });
+        }
+
+        await sendEmail({
+            email: storeNotificationEmail(),
+            subject: `Payment received: #${code} (₹${order.totalPrice})`,
+            message: `Order #${code} paid Rs.${order.totalPrice} by ${customerName} (${address?.email || 'no email'} / ${address?.phone || 'no phone'}). Confirmed via ${channel}.`,
+            html: `<h2>New paid order</h2><p><strong>#${code}</strong> — ₹${order.totalPrice}</p><p>Customer: ${customerName} (${address?.email || 'no email'} / ${address?.phone || 'no phone'})</p><p>Confirmed via: ${channel}</p>` +
+                (isManual
+                    ? `<div style="background:#fff7ed;border:1px solid #fed7aa;padding:12px;margin-top:12px;border-radius:8px"><p><strong>Recorded manually by ${order.markedPaidByName || 'an admin'}</strong></p>` +
+                      `<p>Method: ${order.paymentMethod || '—'}</p>` +
+                      `<p>Reference: ${order.paymentReference || '—'}</p>` +
+                      (order.paymentNote ? `<p>Note: ${order.paymentNote}</p>` : '') +
+                      `</div>`
+                    : ''),
+        });
+    } catch (emailError: any) {
+        console.error('Payment confirmation email failed:', emailError.message);
+    }
+};
+
+/**
+ * The single place an order becomes paid.
+ *
+ * Idempotent and race-safe: the transition is a conditional update on `isPaid: false`, so a
+ * webhook racing the browser callback (or an admin marking it paid by hand) leaves exactly one
+ * winner and the confirmation emails are sent once.
+ *
+ * Returns true when THIS call is the one that settled the order.
+ */
+export const markOrderPaid = async (
+    order: IOrder,
+    input: {
+        razorpayPaymentId?: string;
+        razorpaySignature?: string;
+        channel: PaymentChannel;
+        manual?: ManualPaymentMeta;
+    }
+): Promise<boolean> => {
+    if (order.isPaid) return false;
+
+    const settledAt = new Date();
+    const updated = await Order.findOneAndUpdate(
+        { _id: order._id, isPaid: false },
+        {
+            $set: {
+                isPaid: true,
+                paidAt: settledAt,
+                ...(input.razorpayPaymentId ? { razorpayPaymentId: input.razorpayPaymentId } : {}),
+                ...(input.razorpaySignature ? { razorpaySignature: input.razorpaySignature } : {}),
+                paymentChannel: input.channel,
+                ...(input.manual?.method ? { paymentMethod: input.manual.method } : {}),
+                ...(input.manual?.reference ? { paymentReference: input.manual.reference } : {}),
+                ...(input.manual?.note ? { paymentNote: input.manual.note } : {}),
+                ...(input.manual?.markedBy ? { markedPaidBy: input.manual.markedBy } : {}),
+                ...(input.manual?.markedByName ? { markedPaidByName: input.manual.markedByName } : {})
+            },
+            // $unset, not `$set: undefined` — a settled order must stop accepting its
+            // single-use payment link, and $set with undefined leaves the field in place.
+            $unset: { paymentToken: 1 }
+        },
+        { new: true }
+    );
+
+    // Another channel won the race, or the order was already settled.
+    if (!updated) return false;
+
+    // Only nudge a freshly created order forward; never walk a later status backwards.
+    if (updated.status === 'Pending') {
+        await Order.updateOne({ _id: order._id, status: 'Pending' }, { $set: { status: 'Handcrafting' } });
+    }
+
+    console.log(`[payment] Order ${order._id} marked paid (${input.channel})`);
+    const reference = input.razorpayPaymentId || input.manual?.reference || 'not recorded';
+    await notifyPaymentReceived(updated, input.channel, reference);
+    return true;
+};
+
+/** Asks Razorpay whether an order was actually paid, and returns the settled payment id. */
+export const fetchRazorpayPayment = async (razorpayOrderId: string): Promise<PaymentLookupResult> => {
+    try {
+        const rzp = getRazorpay();
+        const rzpOrder: any = await rzp.orders.fetch(razorpayOrderId);
+
+        if (rzpOrder?.status !== 'paid') {
+            return { paid: false, status: rzpOrder?.status || 'unknown' };
+        }
+
+        const payments: any = await rzp.orders.fetchPayments(razorpayOrderId);
+        const settled = (payments?.items || []).find((p: any) => p.status === 'captured' || p.status === 'authorized');
+
+        return { paid: !!settled, status: 'paid', paymentId: settled?.id as string | undefined };
+    } catch (err: any) {
+        // A lookup that cannot be completed is NOT evidence of non-payment, so it reports as
+        // 'unknown' (never 'created'/'attempted') and every caller keeps the order for a retry.
+        const reason = err?.error?.description || err?.description || err?.message || 'unknown error';
+        console.warn(`[payment] Razorpay lookup failed for ${razorpayOrderId}: ${reason}`);
+        return { paid: false, status: 'unknown' };
+    }
+};
+
+export type ReconcileResult = {
+    isPaid: boolean;
+    rzpStatus?: string;
+    recovered?: boolean;
+    reason?: string;
+};
+
+/** Shape returned by a Razorpay payment lookup (injectable so the reconciler is testable). */
+export type PaymentLookupResult = { paid: boolean; status: string; paymentId?: string };
+export type PaymentLookup = (razorpayOrderId: string) => Promise<PaymentLookupResult>;
+
+/**
+ * Server-side reconciliation: the browser callback is not trusted as the source of truth,
+ * this is. Safe to call repeatedly.
+ */
+export const reconcileOrderWithRazorpay = async (order: IOrder, channel: PaymentChannel = 'reconciler'): Promise<ReconcileResult> => {
+    if (order.isPaid) return { isPaid: true, reason: 'already_paid' };
+    if (!order.razorpayOrderId) return { isPaid: false, reason: 'no_razorpay_order' };
+    if (!razorpayConfigured()) return { isPaid: false, reason: 'razorpay_not_configured' };
+
+    const result = await fetchRazorpayPayment(order.razorpayOrderId);
+
+    if (result.paid && result.paymentId) {
+        const recovered = await markOrderPaid(order, { razorpayPaymentId: result.paymentId, channel });
+        return { isPaid: true, recovered, rzpStatus: 'paid' };
+    }
+
+    return { isPaid: false, rzpStatus: result.status };
+};
+
+```
+
+## File: `backend/src/services/productVisibilityService.ts`
+
+```typescript
+import Collection from '../models/Collection';
+import Occasion from '../models/Occasion';
+
+/**
+ * How long a resolved pause index is reused. Pausing is a rare admin action, so a short cache
+ * keeps storefront listings from issuing two extra queries per request while still making a
+ * toggle feel instant.
+ */
+const CACHE_TTL_MS = 15 * 1000;
+
+export type GroupKind = 'collection' | 'occasion';
+
+export type PausedReason = {
+    kind: GroupKind;
+    /** Name of the section that actually carries the pause. */
+    pausedName: string;
+    /** Name of the descendant section covered by the pause, empty when it carries the pause itself. */
+    viaParent?: string;
+};
+
+export type PausedIndex = {
+    /** Lowercased names of paused sections, including every descendant of a paused parent. */
+    collectionNames: Set<string>;
+    occasionNames: Set<string>;
+    /** `${kind}:${lowercasedName}` -> why it is paused, for messages and admin UI. */
+    reasons: Map<string, PausedReason>;
+};
+
+type GroupRow = { _id: any; name: string; parent: any; isPaused?: boolean };
+
+let cached: { at: number; index: PausedIndex } | null = null;
+
+export const invalidatePausedIndex = () => {
+    cached = null;
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Resolves which section names are paused. A section is paused when it, or any ancestor, has
+ * isPaused set — so pausing "Wedding" also pauses "Wedding > Engagement".
+ *
+ * Walks the `parent` chain with a visited set so a cycle in stored data cannot hang a request.
+ */
+const resolvePausedNames = (rows: GroupRow[], kind: GroupKind) => {
+    const names = new Set<string>();
+    const reasons = new Map<string, PausedReason>();
+
+    const byId = new Map<string, GroupRow>();
+    for (const row of rows) byId.set(String(row._id), row);
+
+    for (const row of rows) {
+        const visited = new Set<string>([String(row._id)]);
+        let current: GroupRow | undefined = row;
+        let pausedAncestor: GroupRow | null = null;
+
+        while (current) {
+            if (current.isPaused) {
+                pausedAncestor = current;
+                break;
+            }
+            const parentId = current.parent ? String(current.parent) : null;
+            if (!parentId || !byId.has(parentId) || visited.has(parentId)) break;
+            visited.add(parentId);
+            current = byId.get(parentId);
+        }
+
+        if (!pausedAncestor) continue;
+
+        const ownName = (row.name || '').trim();
+        const ownKey = ownName.toLowerCase();
+        if (!ownKey) continue;
+
+        names.add(ownKey);
+        reasons.set(`${kind}:${ownKey}`, {
+            kind,
+            pausedName: pausedAncestor.name,
+            // Empty when this section carries the pause itself; otherwise name this section so the
+            // message can say which one is covered by the paused ancestor.
+            viaParent: pausedAncestor._id === row._id ? '' : ownName
+        });
+    }
+
+    return { names, reasons };
+};
+
+/**
+ * The pause state of the whole catalogue.
+ * `force` bypasses the cache and is used right after an admin toggles a pause.
+ */
+export const getPausedIndex = async (force = false): Promise<PausedIndex> => {
+    if (!force && cached && Date.now() - cached.at < CACHE_TTL_MS) {
+        return cached.index;
+    }
+
+    try {
+        const [collectionRows, occasionRows] = await Promise.all([
+            Collection.find({}).select('_id name parent isPaused').lean(),
+            Occasion.find({}).select('_id name parent isPaused').lean()
+        ]);
+
+        const collections = resolvePausedNames(collectionRows as GroupRow[], 'collection');
+        const occasions = resolvePausedNames(occasionRows as GroupRow[], 'occasion');
+
+        const index: PausedIndex = {
+            collectionNames: collections.names,
+            occasionNames: occasions.names,
+            reasons: new Map([...collections.reasons, ...occasions.reasons])
+        };
+
+        cached = { at: Date.now(), index };
+        return index;
+    } catch (err: any) {
+        // A pause lookup must never take the storefront down: fail open and show everything.
+        console.error('[visibility] Could not resolve pause state:', err.message);
+        return { collectionNames: new Set(), occasionNames: new Set(), reasons: new Map() };
+    }
+};
+
+/** Every product field that stores a collection or occasion name. */
+export type ProductGroups = {
+    category?: string;
+    categories?: string[];
+    subcategory?: string;
+    subcategories?: string[];
+    occasion?: string;
+    occasions?: string[];
+    occasionSub?: string;
+    occasionSubs?: string[];
+};
+
+const groupNamesOf = (product: ProductGroups, kind: GroupKind): string[] => {
+    // A product can sit in a sub-section without repeating its parent, so all of the sub
+    // fields have to be checked too.
+    const values = kind === 'collection'
+        ? [product.category, ...(product.categories || []), product.subcategory, ...(product.subcategories || [])]
+        : [product.occasion, ...(product.occasions || []), product.occasionSub, ...(product.occasionSubs || [])];
+
+    return values.map((v) => (v || '').trim()).filter(Boolean);
+};
+
+/** Which paused section a product belongs to, or null when it is sellable. */
+export const findPauseMatch = (product: ProductGroups, index: PausedIndex): PausedReason | null => {
+    for (const name of groupNamesOf(product, 'collection')) {
+        const key = name.toLowerCase();
+        if (index.collectionNames.has(key)) return index.reasons.get(`collection:${key}`) || { kind: 'collection', pausedName: name };
+    }
+    for (const name of groupNamesOf(product, 'occasion')) {
+        const key = name.toLowerCase();
+        if (index.occasionNames.has(key)) return index.reasons.get(`occasion:${key}`) || { kind: 'occasion', pausedName: name };
+    }
+    return null;
+};
+
+export const isProductPaused = async (product: ProductGroups, force = false): Promise<boolean> =>
+    findPauseMatch(product, await getPausedIndex(force)) !== null;
+
+/**
+ * Query fragment excluding every product that belongs to a paused collection or occasion.
+ * Uses $nor so it composes with the $or / $and filters already built in getProducts.
+ *
+ * Products reference sections by name rather than id, and the stored casing is not guaranteed
+ * to match the catalogue, so the match is case-insensitive.
+ *
+ * Collection and occasion names are only unique inside their own model — a paused collection
+ * called "Wedding" must not hide a live occasion also called "Wedding". Each group therefore
+ * gets its own clause instead of one shared pattern.
+ */
+export const pausedProductsFilter = (index: PausedIndex): Record<string, any> | null => {
+    if (index.collectionNames.size === 0 && index.occasionNames.size === 0) return null;
+
+    const patternFor = (names: Set<string>) =>
+        new RegExp(`^(${[...names].map(escapeRegExp).join('|')})$`, 'i');
+
+    const collectionRe = index.collectionNames.size > 0 ? patternFor(index.collectionNames) : null;
+    const occasionRe = index.occasionNames.size > 0 ? patternFor(index.occasionNames) : null;
+
+    const blocked: Record<string, any>[] = [];
+    if (collectionRe) {
+        blocked.push({ $or: [{ category: collectionRe }, { categories: collectionRe }, { subcategory: collectionRe }, { subcategories: collectionRe }] });
+    }
+    if (occasionRe) {
+        blocked.push({ $or: [{ occasion: occasionRe }, { occasions: occasionRe }, { occasionSub: occasionRe }, { occasionSubs: occasionRe }] });
+    }
+
+    // One $nor entry per model: a product is hidden when it matches any paused section.
+    return { $nor: blocked };
+};
+
+/**
+ * Effective pause state for a section, so the storefront can explain itself on sub-pages too:
+ * a sub-collection whose parent is paused has `isPaused` false but is not sellable.
+ */
+export const describeSectionPause = (index: PausedIndex, kind: GroupKind, name: string): PausedReason | null => {
+    const key = (name || '').trim().toLowerCase();
+    if (!key) return null;
+    return index.reasons.get(`${kind}:${key}`) || null;
+};
+
+/** Explanation for a paused product, used in error messages. */
+export const describePause = (match: PausedReason | null): string => {
+    if (!match) return 'currently unavailable';
+    if (match.viaParent) {
+        return `the ${match.kind} "${match.pausedName}" is paused (which also covers "${match.viaParent}")`;
+    }
+    return `the ${match.kind} "${match.pausedName}" is paused`;
+};
+
+```
+
+## File: `backend/src/types/express.d.ts`
+
+```typescript
+// Augments Express's Request with the raw body buffer captured by the JSON body parser.
+// Required for Razorpay webhook signature verification, which signs the unparsed payload.
+import 'express';
+
+declare global {
+    namespace Express {
+        interface Request {
+            rawBody?: Buffer;
+        }
+    }
+}
+
+export {};
 
 ```
 
@@ -4003,7 +5259,43 @@ seedAdmin();
 ```typescript
 import nodemailer from 'nodemailer';
 
+const DEFAULT_STORE_EMAIL = 'mythris.gleams@gmail.com';
+
+/**
+ * Where store-side notifications go (new orders, paid orders, enquiries).
+ *
+ * Read lazily on every call on purpose: a module-level constant would be evaluated while
+ * ES module imports are still being hoisted, which happens *before* dotenv.config() runs,
+ * so the value would silently fall through to the default instead of your .env setting.
+ */
+export const storeNotificationEmail = (): string =>
+    process.env.ADMIN_EMAIL || process.env.SUPPORT_EMAIL || DEFAULT_STORE_EMAIL;
+
+let warnedAboutSender = false;
+
+/**
+ * Gmail rejects a From address that is not the authenticated SMTP account (or a verified
+ * alias), so a mismatch fails every send with an unhelpful 550. Warn once instead.
+ */
+const assertSenderMatchesAccount = () => {
+    if (warnedAboutSender) return;
+
+    const user = (process.env.EMAIL_USER || '').trim().toLowerCase();
+    const from = (process.env.EMAIL_FROM || '').toLowerCase();
+    const fromAddress = from.match(/<(.+)>/)?.[1] || from;
+
+    if (user && fromAddress && !fromAddress.includes(user)) {
+        warnedAboutSender = true;
+        console.warn(
+            `[email] EMAIL_FROM "${process.env.EMAIL_FROM}" does not match EMAIL_USER "${process.env.EMAIL_USER}". ` +
+            'Gmail will reject these as "sender not authenticated" — align them or verify the alias.'
+        );
+    }
+};
+
 const sendEmail = async (options: { email: string; subject: string; message: string; html?: string }) => {
+    assertSenderMatchesAccount();
+
     // Create a transporter
     const transporter = nodemailer.createTransport({
         host: process.env.EMAIL_HOST || 'smtp.gmail.com',
@@ -4025,7 +5317,7 @@ const sendEmail = async (options: { email: string; subject: string; message: str
 
     const info = await transporter.sendMail(message);
 
-    console.log('📬 Email Message sent: %s', info.messageId);
+    console.log('📬 Email sent to %s — %s', options.email, info.messageId);
 };
 
 export default sendEmail;
@@ -4069,8 +5361,8 @@ export const calculateShipping = (itemsPrice: number): number =>
 ## File: `frontend/.env`
 
 ```
-# NEXT_PUBLIC_API_URL=https://mythrisgleams.com/api
- NEXT_PUBLIC_API_URL=http://localhost:5010/api
+NEXT_PUBLIC_API_URL=https://mythrisgleams.com/api
+#  NEXT_PUBLIC_API_URL=http://localhost:5010/api
 ```
 
 ## File: `frontend/AGENTS.md`
@@ -4112,18 +5404,6 @@ const eslintConfig = defineConfig([
 ]);
 
 export default eslintConfig;
-
-```
-
-## File: `frontend/next-env.d.ts`
-
-```typescript
-/// <reference types="next" />
-/// <reference types="next/image-types/global" />
-import "./.next/types/routes.d.ts";
-
-// NOTE: This file should not be edited
-// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
 
 ```
 
@@ -4733,10 +6013,11 @@ import { fetchCart, clearGuest } from "@/redux/slices/cartSlice";
 import { 
   Eye, EyeOff, Sparkles, LogIn, UserPlus, AlertCircle, 
   User, Package, ChevronRight, LogOut, Settings, 
-  ShoppingBag, MapPin, Heart
+  ShoppingBag, MapPin, Heart, PauseCircle
 } from "lucide-react";
 import Link from "next/link";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
+import toast from "react-hot-toast";
 
 type Tab = "login" | "register";
 
@@ -4785,7 +6066,17 @@ export default function AccountPage() {
   // Sync cart on login
   useEffect(() => {
     if (userInfo) {
-      dispatch(fetchCart());
+      dispatch(fetchCart()).unwrap().then((res) => {
+        // Designs paused since the bag was filled are removed server-side; say so plainly
+        // instead of letting the shopper wonder where an item went.
+        if (res.removed.length > 0) {
+          const names = res.removed.map((r) => `\u201c${r.name}\u201d`).join(', ');
+          toast(
+            `${res.removed.length === 1 ? 'One design was' : `${res.removed.length} designs were`} removed from your bag \u2014 ${names} is no longer available.`,
+            { icon: <PauseCircle size={15} />, duration: 6000 }
+          );
+        }
+      }).catch(() => {});
       const searchParams = new URLSearchParams(window.location.search);
       const redirect = searchParams.get('redirect');
       if (redirect) {
@@ -5354,7 +6645,7 @@ export default function ProfilePage() {
 
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-import { fetchCollections, createCollection, updateCollection, deleteCollection, resetCollectionState, type CollectionItem } from '@/redux/slices/collectionSlice';
+import { fetchCollections, createCollection, updateCollection, deleteCollection, setCollectionPause, resetCollectionState, type CollectionItem } from '@/redux/slices/collectionSlice';
 import { 
     Layers, 
     Plus, 
@@ -5379,6 +6670,7 @@ import Modal from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getImageUrl } from '@/utils/getImageUrl';
+import PauseToggle from '@/components/admin/PauseToggle';
 
 const collectionSchema = z.object({
     name: z.string().min(2, "Collection name required"),
@@ -5427,7 +6719,8 @@ const CollectionManagement = () => {
     }, [galleryName, setValue, editingCollection]);
 
     useEffect(() => {
-        dispatch(fetchCollections());
+        // ?all=true → paused and deactivated collections stay visible here so they can be managed.
+        dispatch(fetchCollections({ all: true }));
     }, [dispatch]);
 
     useEffect(() => {
@@ -5440,7 +6733,7 @@ const CollectionManagement = () => {
             setImage(null);
             setPreview(null);
             dispatch(resetCollectionState());
-            dispatch(fetchCollections());
+            dispatch(fetchCollections({ all: true }));
         }
         if (error) {
             toast.error(error);
@@ -5487,6 +6780,19 @@ const CollectionManagement = () => {
         if (inspectedCollection) {
             dispatch(deleteCollection(inspectedCollection._id));
             setDeleteModalOpen(false);
+        }
+    };
+
+    const handlePauseToggle = async (id: string, isPaused: boolean) => {
+        const name = collections.find(c => c._id === id)?.name || 'Collection';
+        try {
+            const res = await dispatch(setCollectionPause({ id, isPaused })).unwrap();
+            toast.success(res.message || (isPaused ? `${name} paused` : `${name} is live again`));
+            // The slice already flips the row, but refetching keeps inherited pauses accurate.
+            dispatch(fetchCollections({ all: true }));
+        } catch (err) {
+            toast.error(typeof err === 'string' ? err : `Could not update ${name}`);
+            throw err;
         }
     };
 
@@ -5587,6 +6893,7 @@ const CollectionManagement = () => {
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Category Tree</th>
                                     <th className="px-6 py-4">Slug</th>
+                                    <th className="px-6 py-4">Storefront</th>
                                     <th className="px-6 py-4 text-right">Type</th>
                                 </tr>
                             </thead>
@@ -5616,6 +6923,13 @@ const CollectionManagement = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-[9px] text-zinc-400 font-bold uppercase">/{col.slug}</td>
+                                                <td className="px-6 py-4">
+                                                    <PauseToggle
+                                                        kind="collection"
+                                                        item={{ _id: col._id, name: col.name, isPaused: col.isPaused, childCount: subs.length }}
+                                                        onToggle={handlePauseToggle}
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <span className="px-2 py-0.5 rounded-full border border-zinc-900/10 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-900/5">
                                                         {subs.length} Subcategories
@@ -5642,6 +6956,13 @@ const CollectionManagement = () => {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-3 font-mono text-[9px] text-zinc-400 font-bold uppercase pl-16">/{sub.slug}</td>
+                                                    <td className="px-6 py-3">
+                                                        <PauseToggle
+                                                            kind="collection"
+                                                            item={{ _id: sub._id, name: sub.name, isPaused: sub.isPaused }}
+                                                            onToggle={handlePauseToggle}
+                                                        />
+                                                    </td>
                                                     <td className="px-6 py-3 text-right">
                                                         <span className="px-2 py-0.5 rounded-full border border-zinc-200 text-[9px] font-bold uppercase text-zinc-400 bg-white">Subcategory</span>
                                                     </td>
@@ -6434,7 +7755,7 @@ export default AdminLoginPage;
 
 import React, { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-import { fetchOccasions, createOccasion, updateOccasion, deleteOccasion, resetOccasionState, type OccasionItem } from '@/redux/slices/occasionSlice';
+import { fetchOccasions, createOccasion, updateOccasion, deleteOccasion, setOccasionPause, resetOccasionState, type OccasionItem } from '@/redux/slices/occasionSlice';
 import { 
     Gift, 
     Plus, 
@@ -6459,6 +7780,7 @@ import Modal from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getImageUrl } from '@/utils/getImageUrl';
+import PauseToggle from '@/components/admin/PauseToggle';
 
 const occasionSchema = z.object({
     name: z.string().min(2, "Occasion name required"),
@@ -6508,7 +7830,8 @@ const OccasionManagement = () => {
     }, [occasionName, setValue, editingOccasion]);
 
     useEffect(() => {
-        dispatch(fetchOccasions());
+        // ?all=true → paused and deactivated occasions stay visible here so they can be managed.
+        dispatch(fetchOccasions({ all: true }));
     }, [dispatch]);
 
     useEffect(() => {
@@ -6521,7 +7844,7 @@ const OccasionManagement = () => {
             setImage(null);
             setPreview(null);
             dispatch(resetOccasionState());
-            dispatch(fetchOccasions());
+            dispatch(fetchOccasions({ all: true }));
         }
         if (error) {
             toast.error(error);
@@ -6568,6 +7891,19 @@ const OccasionManagement = () => {
         if (inspectedOccasion) {
             dispatch(deleteOccasion(inspectedOccasion._id));
             setDeleteModalOpen(false);
+        }
+    };
+
+    const handlePauseToggle = async (id: string, isPaused: boolean) => {
+        const name = occasions.find(o => o._id === id)?.name || 'Occasion';
+        try {
+            const res = await dispatch(setOccasionPause({ id, isPaused })).unwrap();
+            toast.success(res.message || (isPaused ? `${name} paused` : `${name} is live again`));
+            // The slice already flips the row, but refetching keeps inherited pauses accurate.
+            dispatch(fetchOccasions({ all: true }));
+        } catch (err) {
+            toast.error(typeof err === 'string' ? err : `Could not update ${name}`);
+            throw err;
         }
     };
 
@@ -6666,6 +8002,7 @@ const OccasionManagement = () => {
                                 <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                                     <th className="px-6 py-4">Occasion Tree</th>
                                     <th className="px-6 py-4">Slug</th>
+                                    <th className="px-6 py-4">Storefront</th>
                                     <th className="px-6 py-4 text-right">Type</th>
                                 </tr>
                             </thead>
@@ -6695,6 +8032,13 @@ const OccasionManagement = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-[9px] text-zinc-400 font-bold uppercase">/{occ.slug}</td>
+                                                <td className="px-6 py-4">
+                                                    <PauseToggle
+                                                        kind="occasion"
+                                                        item={{ _id: occ._id, name: occ.name, isPaused: occ.isPaused, childCount: subs.length }}
+                                                        onToggle={handlePauseToggle}
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <span className="px-2 py-0.5 rounded-full border border-zinc-900/10 text-[9px] font-bold uppercase text-zinc-700 bg-zinc-900/5">
                                                         {subs.length} Sub-occasions
@@ -6721,6 +8065,13 @@ const OccasionManagement = () => {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-3 font-mono text-[9px] text-zinc-400 font-bold uppercase pl-16">/{sub.slug}</td>
+                                                    <td className="px-6 py-3">
+                                                        <PauseToggle
+                                                            kind="occasion"
+                                                            item={{ _id: sub._id, name: sub.name, isPaused: sub.isPaused }}
+                                                            onToggle={handlePauseToggle}
+                                                        />
+                                                    </td>
                                                     <td className="px-6 py-3 text-right">
                                                         <span className="px-2 py-0.5 rounded-full border border-zinc-200 text-[9px] font-bold uppercase text-zinc-400 bg-white">Sub-occasion</span>
                                                     </td>
@@ -7353,6 +8704,825 @@ export default CreateCustomOrderPage;
 
 ```
 
+## File: `frontend/src/app/admin/orders/offline/page.tsx`
+
+```typescript
+"use client";
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { createOfflineOrder, fetchOfflineOrders, markOrderPaid } from '@/redux/slices/orderSlice';
+import { RootState } from '@/redux/store';
+import api from '@/utils/api';
+import {
+    ArrowLeft,
+    User,
+    Mail,
+    Phone,
+    MapPin,
+    Banknote,
+    Loader2,
+    CheckCircle2,
+    Hourglass,
+    History,
+    Search,
+    Plus,
+    X,
+    SearchX,
+    Package,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const PAYMENT_METHODS = [
+    'Bank Transfer',
+    'UPI',
+    'Cash',
+    'Card (in person)',
+    'Cheque',
+    'PayPal / International',
+    'Other',
+];
+
+const MAX_QTY = 99;
+const SEARCH_DEBOUNCE_MS = 300;
+
+const EMPTY_FORM = {
+    customerName: '',
+    customerEmail: '',
+    customerPhone: '',
+    customerStreet: '',
+    customerCity: '',
+    customerState: '',
+    customerZip: '',
+    method: PAYMENT_METHODS[0],
+    reference: '',
+    note: '',
+};
+
+const inputClass =
+    'w-full bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:bg-white outline-none transition-all';
+
+const SectionLabel = ({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) => (
+    <h2 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+        {icon}
+        {children}
+    </h2>
+);
+
+const formatTimestamp = (value: string) =>
+    new Date(value).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+
+const rupee = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
+
+type SearchHit = {
+    _id: string;
+    name: string;
+    price: number;
+    weight?: number;
+    images?: string[];
+    stockStatus?: string;
+    variants?: { type: string; options: string[] }[];
+};
+
+type Line = {
+    key: string;
+    product: string;
+    name: string;
+    price: number;
+    image: string;
+    stockStatus?: string;
+    variantOptions: string[];
+    colorOptions: string[];
+    qty: number;
+    selectedVariant: string;
+    selectedColor: string;
+};
+
+const OfflineOrderPage = () => {
+    const dispatch = useAppDispatch();
+    const router = useRouter();
+    const { offlineOrders, offlineLoading } = useAppSelector((state: RootState) => state.orders);
+
+    const [form, setForm] = useState({ ...EMPTY_FORM });
+    const [paymentReceived, setPaymentReceived] = useState(true);
+    // Per-row expansion for a payment that lands after the order was logged.
+    const [settling, setSettling] = useState<string | null>(null);
+    const [settleForm, setSettleForm] = useState({ method: PAYMENT_METHODS[0], reference: '', note: '' });
+    const [saving, setSaving] = useState(false);
+
+    // --- product search ---
+    const [query, setQuery] = useState('');
+    const [hits, setHits] = useState<SearchHit[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [lines, setLines] = useState<Line[]>([]);
+    const [showBespoke, setShowBespoke] = useState(false);
+    const [bespoke, setBespoke] = useState({ name: '', amount: '', qty: '1', weight: '', description: '' });
+    const searchRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        dispatch(fetchOfflineOrders());
+    }, [dispatch]);
+
+    useEffect(() => {
+        if (query.trim().length < 2) {
+            setHits([]);
+            setSearching(false);
+            return;
+        }
+
+        setSearching(true);
+        const timer = window.setTimeout(async () => {
+            try {
+                // includePaused lets the desk sell a paused design to someone who asked for it
+                // in person; the backend reports it back as a warning.
+                const { data } = await api.get('/products', {
+                    params: { search: query.trim(), includePaused: 'true' },
+                });
+                setHits((data.data || []).slice(0, 8));
+            } catch {
+                setHits([]);
+            } finally {
+                setSearching(false);
+            }
+        }, SEARCH_DEBOUNCE_MS);
+
+        return () => window.clearTimeout(timer);
+    }, [query]);
+
+    // Click-away closes the results without stealing focus from the search field.
+    useEffect(() => {
+        if (!searchOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [searchOpen]);
+
+    const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const addLine = (product: SearchHit) => {
+        setLines((prev) => {
+            const existing = prev.find((l) => l.product === product._id);
+            // Same product picked twice just bumps the count — no duplicate rows.
+            if (existing) {
+                return prev.map((l) => (l.product === product._id ? { ...l, qty: Math.min(MAX_QTY, l.qty + 1) } : l));
+            }
+            const sizeVariant = product.variants?.find((v) => v.type !== 'Color' && v.options?.length);
+            const colorVariant = product.variants?.find((v) => v.type === 'Color' && v.options?.length);
+            return [
+                ...prev,
+                {
+                    key: `${product._id}-${Date.now()}`,
+                    product: product._id,
+                    name: product.name,
+                    price: Number(product.price) || 0,
+                    image: product.images?.[0] || '',
+                    stockStatus: product.stockStatus,
+                    variantOptions: sizeVariant?.options || [],
+                    colorOptions: colorVariant?.options || [],
+                    qty: 1,
+                    selectedVariant: sizeVariant?.options?.[0] || '',
+                    selectedColor: colorVariant?.options?.[0] || '',
+                },
+            ];
+        });
+        setQuery('');
+        setHits([]);
+        setSearchOpen(false);
+        toast.success(`${product.name} added`);
+    };
+
+    const setQty = (key: string, qty: number) =>
+        setLines((prev) =>
+            prev.map((l) => (l.key === key ? { ...l, qty: Math.max(1, Math.min(MAX_QTY, qty || 1)) } : l))
+        );
+
+    const removeLine = (key: string) => setLines((prev) => prev.filter((l) => l.key !== key));
+
+    const itemsTotal = useMemo(() => lines.reduce((sum, l) => sum + l.price * l.qty, 0), [lines]);
+    const bespokeQty = Math.max(1, parseInt(bespoke.qty, 10) || 1);
+    const bespokeTotal = (parseFloat(bespoke.amount) || 0) * bespokeQty;
+    const hasBespoke = showBespoke && bespoke.name.trim() && bespokeTotal > 0;
+    const grandTotal = Math.round((itemsTotal + (hasBespoke ? bespokeTotal : 0)) * 100) / 100;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!form.customerName.trim()) return toast.error('Customer name is required.');
+        if (!form.customerPhone.trim()) return toast.error('Phone number is required.');
+        if (form.customerEmail && !/^\S+@\S+\.\S+$/.test(form.customerEmail)) {
+            return toast.error('Enter a valid email address.');
+        }
+        if (lines.length === 0 && !hasBespoke) return toast.error('Add at least one product to the order.');
+        if (hasBespoke && !bespoke.name.trim()) return toast.error('Name the custom item, or remove it.');
+        if (hasBespoke && bespokeTotal <= 0) return toast.error('Enter an amount for the custom item.');
+        if (paymentReceived && !form.method.trim()) return toast.error('Select how the payment was received.');
+
+        try {
+            const res = await dispatch(
+                createOfflineOrder({
+                    customerName: form.customerName.trim(),
+                    customerEmail: form.customerEmail.trim(),
+                    customerPhone: form.customerPhone.trim(),
+                    customerStreet: form.customerStreet.trim(),
+                    customerCity: form.customerCity.trim(),
+                    customerState: form.customerState.trim(),
+                    customerZip: form.customerZip.trim(),
+                    items: lines.map((l) => ({
+                        product: l.product,
+                        qty: l.qty,
+                        selectedVariant: l.selectedVariant || undefined,
+                        selectedColor: l.selectedColor || undefined,
+                    })),
+                    customItem: hasBespoke
+                        ? {
+                              name: bespoke.name.trim(),
+                              amount: parseFloat(bespoke.amount),
+                              qty: bespokeQty,
+                              weight: bespoke.weight ? Number(bespoke.weight) : 0,
+                              description: bespoke.description.trim(),
+                          }
+                        : undefined,
+                    paymentReceived,
+                    method: paymentReceived ? form.method.trim() : undefined,
+                    reference: paymentReceived ? form.reference.trim() : undefined,
+                    note: paymentReceived ? form.note.trim() : undefined,
+                })
+            ).unwrap();
+
+            toast.success(res.message);
+            (res.warnings || []).forEach((w: string) => toast(w, { icon: '⚠️', duration: 7000 }));
+            setForm({ ...EMPTY_FORM });
+            setLines([]);
+            setQuery('');
+            setShowBespoke(false);
+            setBespoke({ name: '', amount: '', qty: '1', weight: '', description: '' });
+            dispatch(fetchOfflineOrders());
+        } catch (err: unknown) {
+            toast.error(typeof err === 'string' ? err : 'Failed to record this order.');
+        }
+    };
+
+    const recordLaterPayment = useCallback(
+        async (orderId: string) => {
+            if (!settleForm.method.trim()) {
+                toast.error('Select how the payment was received.');
+                return;
+            }
+            setSaving(true);
+            try {
+                const res = await dispatch(
+                    markOrderPaid({
+                        id: orderId,
+                        method: settleForm.method.trim(),
+                        reference: settleForm.reference.trim() || undefined,
+                        note: settleForm.note.trim() || undefined,
+                    })
+                ).unwrap();
+                toast.success(res.message || 'Payment recorded');
+                setSettling(null);
+                setSettleForm({ method: PAYMENT_METHODS[0], reference: '', note: '' });
+            } catch (err: unknown) {
+                toast.error(typeof err === 'string' ? err : 'Could not record this payment.');
+                // The backend refuses a double confirmation — resync so the row stops offering it.
+                dispatch(fetchOfflineOrders());
+                setSettling(null);
+            } finally {
+                setSaving(false);
+            }
+        },
+        [dispatch, settleForm]
+    );
+
+    return (
+        <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
+            <div className="flex items-center gap-4 border-b border-zinc-200 pb-5">
+                <button
+                    type="button"
+                    onClick={() => router.push('/admin/orders')}
+                    className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500 transition-colors"
+                    aria-label="Back to orders"
+                >
+                    <ArrowLeft size={18} />
+                </button>
+                <div>
+                    <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Offline Order Entry</h1>
+                    <p className="text-xs text-zinc-500 font-medium">
+                        Log an order taken over the phone or WhatsApp. Cash, UPI, bank transfer and cheques are
+                        recorded here — no payment link is generated.
+                    </p>
+                </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-7">
+                <section className="space-y-4">
+                    <SectionLabel icon={<Package size={12} />}>Products</SectionLabel>
+
+                    <div className="relative" ref={searchRef}>
+                        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                        <input
+                            value={query}
+                            onChange={(e) => {
+                                setQuery(e.target.value);
+                                setSearchOpen(true);
+                            }}
+                            onFocus={() => setSearchOpen(true)}
+                            placeholder="Search products by name, category or occasion…"
+                            className={`${inputClass} pl-10`}
+                        />
+                        {searching && (
+                            <Loader2 size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 animate-spin" />
+                        )}
+
+                        {searchOpen && query.trim().length >= 2 && (
+                            <div className="absolute z-20 left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden max-h-80 overflow-y-auto">
+                                {!searching && hits.length === 0 && (
+                                    <p className="px-4 py-4 text-[11px] text-zinc-400 flex items-center gap-2">
+                                        <SearchX size={13} /> No products match “{query.trim()}”.
+                                    </p>
+                                )}
+                                {hits.map((hit) => (
+                                    <button
+                                        key={hit._id}
+                                        type="button"
+                                        onClick={() => addLine(hit)}
+                                        className="w-full text-left px-4 py-3 hover:bg-zinc-50 transition-colors flex items-center gap-3 border-b border-zinc-100 last:border-b-0"
+                                    >
+                                        {hit.images?.[0] ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={hit.images[0]} alt="" className="w-10 h-10 rounded-lg object-cover bg-zinc-100 shrink-0" />
+                                        ) : (
+                                            <span className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center shrink-0">
+                                                <Package size={15} className="text-zinc-400" />
+                                            </span>
+                                        )}
+                                        <span className="flex-1 min-w-0">
+                                            <span className="block text-xs font-bold text-zinc-900 truncate">{hit.name}</span>
+                                            <span className="block text-[10px] text-zinc-400">
+                                                {hit.stockStatus === 'out-of-stock' ? 'Out of stock' : hit.stockStatus === 'in-stock' ? 'In stock' : 'Made to order'}
+                                            </span>
+                                        </span>
+                                        <span className="text-xs font-bold text-zinc-900 tabular-nums shrink-0">{rupee(hit.price)}</span>
+                                        <Plus size={14} className="text-zinc-400 shrink-0" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {lines.length === 0 ? (
+                        <p className="text-[11px] text-zinc-400 py-2">No products added yet.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {lines.map((line) => (
+                                <div key={line.key} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 space-y-3">
+                                    <div className="flex items-start gap-3">
+                                        {line.image ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={line.image} alt="" className="w-11 h-11 rounded-lg object-cover bg-white shrink-0" />
+                                        ) : (
+                                            <span className="w-11 h-11 rounded-lg bg-white flex items-center justify-center shrink-0">
+                                                <Package size={15} className="text-zinc-400" />
+                                            </span>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-zinc-900 leading-snug">{line.name}</p>
+                                            <p className="text-[11px] text-zinc-500 mt-0.5 tabular-nums">
+                                                {rupee(line.price)} each
+                                                {line.stockStatus === 'out-of-stock' && <span className="ml-1.5 text-rose-500">· out of stock</span>}
+                                            </p>
+                                        </div>
+                                        <span className="text-sm font-bold text-zinc-900 tabular-nums shrink-0">
+                                            {rupee(line.price * line.qty)}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeLine(line.key)}
+                                            className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-200 hover:text-rose-600 transition-colors shrink-0"
+                                            aria-label={`Remove ${line.name}`}
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-end gap-3 pt-1">
+                                        <div>
+                                            <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Count</label>
+                                            <div className="flex items-center border border-zinc-200 bg-white rounded-lg overflow-hidden">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setQty(line.key, line.qty - 1)}
+                                                    disabled={line.qty <= 1}
+                                                    className="px-2.5 py-2 text-zinc-500 hover:text-zinc-900 disabled:opacity-30 transition-colors"
+                                                    aria-label="Decrease quantity"
+                                                >
+                                                    −
+                                                </button>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={MAX_QTY}
+                                                    value={line.qty}
+                                                    onChange={(e) => setQty(line.key, parseInt(e.target.value, 10) || 1)}
+                                                    className="w-11 text-center text-xs font-bold text-zinc-900 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setQty(line.key, line.qty + 1)}
+                                                    disabled={line.qty >= MAX_QTY}
+                                                    className="px-2.5 py-2 text-zinc-500 hover:text-zinc-900 disabled:opacity-30 transition-colors"
+                                                    aria-label="Increase quantity"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {line.variantOptions.length > 0 && (
+                                            <div>
+                                                <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Option</label>
+                                                <select
+                                                    value={line.selectedVariant}
+                                                    onChange={(e) =>
+                                                        setLines((prev) =>
+                                                            prev.map((l) => (l.key === line.key ? { ...l, selectedVariant: e.target.value } : l))
+                                                        )
+                                                    }
+                                                    className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium focus:border-zinc-900 outline-none"
+                                                >
+                                                    {line.variantOptions.map((o) => (
+                                                        <option key={o} value={o}>
+                                                            {o}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        {line.colorOptions.length > 0 && (
+                                            <div>
+                                                <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Colour</label>
+                                                <select
+                                                    value={line.selectedColor}
+                                                    onChange={(e) =>
+                                                        setLines((prev) =>
+                                                            prev.map((l) => (l.key === line.key ? { ...l, selectedColor: e.target.value } : l))
+                                                        )
+                                                    }
+                                                    className="bg-white border border-zinc-200 rounded-lg px-3 py-2 text-xs font-medium focus:border-zinc-900 outline-none"
+                                                >
+                                                    {line.colorOptions.map((o) => (
+                                                        <option key={o} value={o}>
+                                                            {o}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Escape hatch for a one-off piece that is not in the catalogue. */}
+                    {showBespoke ? (
+                        <div className="rounded-xl border border-dashed border-zinc-300 p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Custom item (not in catalogue)</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowBespoke(false);
+                                        setBespoke({ name: '', amount: '', qty: '1', weight: '', description: '' });
+                                    }}
+                                    className="p-1 rounded-lg text-zinc-400 hover:bg-zinc-200 transition-colors"
+                                    aria-label="Remove custom item"
+                                >
+                                    <X size={13} />
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <input
+                                    value={bespoke.name}
+                                    onChange={(e) => setBespoke((p) => ({ ...p, name: e.target.value }))}
+                                    placeholder="Item name *"
+                                    className={`${inputClass} sm:col-span-2`}
+                                />
+                                <input
+                                    type="number"
+                                    min="1"
+                                    step="0.01"
+                                    value={bespoke.amount}
+                                    onChange={(e) => setBespoke((p) => ({ ...p, amount: e.target.value }))}
+                                    placeholder="Unit price *"
+                                    className={inputClass}
+                                />
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={bespoke.qty}
+                                    onChange={(e) => setBespoke((p) => ({ ...p, qty: e.target.value }))}
+                                    placeholder="Count"
+                                    className={inputClass}
+                                />
+                            </div>
+                            <input
+                                type="number"
+                                min="0"
+                                value={bespoke.weight}
+                                onChange={(e) => setBespoke((p) => ({ ...p, weight: e.target.value }))}
+                                placeholder="Weight in grams (optional)"
+                                className={inputClass}
+                            />
+                            <textarea
+                                rows={2}
+                                value={bespoke.description}
+                                onChange={(e) => setBespoke((p) => ({ ...p, description: e.target.value }))}
+                                placeholder="Notes for the workshop (optional)"
+                                className={`${inputClass} resize-none`}
+                            />
+                            {bespokeTotal > 0 && (
+                                <p className="text-[11px] text-zinc-500 tabular-nums">
+                                    {bespokeQty} × {rupee(parseFloat(bespoke.amount) || 0)} = <strong>{rupee(bespokeTotal)}</strong>
+                                </p>
+                            )}
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setShowBespoke(true)}
+                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors"
+                        >
+                            <Plus size={12} /> Add a custom item
+                        </button>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Order total</span>
+                        <span className="text-lg font-bold text-zinc-900 tabular-nums">{rupee(grandTotal)}</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 -mt-4">
+                        Shipping is added by the server on save, using the same free-shipping rule as checkout.
+                    </p>
+                </section>
+
+                <section className="space-y-4">
+                    <SectionLabel icon={<User size={12} />}>Customer Details</SectionLabel>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input
+                            name="customerName"
+                            value={form.customerName}
+                            onChange={onChange}
+                            placeholder="Customer Name *"
+                            className={inputClass}
+                            required
+                        />
+                        <div className="relative">
+                            <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                name="customerPhone"
+                                value={form.customerPhone}
+                                onChange={onChange}
+                                placeholder="Phone Number *"
+                                className={`${inputClass} pl-10`}
+                                required
+                            />
+                        </div>
+                        <div className="relative md:col-span-2">
+                            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                            <input
+                                name="customerEmail"
+                                type="email"
+                                value={form.customerEmail}
+                                onChange={onChange}
+                                placeholder="Email (optional — enables payment confirmation + account linking)"
+                                className={`${inputClass} pl-10`}
+                            />
+                        </div>
+                    </div>
+                </section>
+
+                <section className="space-y-4">
+                    <SectionLabel icon={<MapPin size={12} />}>Shipping Address (optional)</SectionLabel>
+                    <input
+                        name="customerStreet"
+                        value={form.customerStreet}
+                        onChange={onChange}
+                        placeholder="Street address"
+                        className={inputClass}
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <input name="customerCity" value={form.customerCity} onChange={onChange} placeholder="City" className={inputClass} />
+                        <input name="customerState" value={form.customerState} onChange={onChange} placeholder="State" className={inputClass} />
+                        <input name="customerZip" value={form.customerZip} onChange={onChange} placeholder="PIN code" className={inputClass} />
+                    </div>
+                </section>
+
+                <section className="space-y-4">
+                    <SectionLabel icon={<Banknote size={12} />}>Payment</SectionLabel>
+
+                    <label className="flex items-start gap-3 p-4 rounded-xl border border-zinc-200 bg-zinc-50 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={paymentReceived}
+                            onChange={(e) => setPaymentReceived(e.target.checked)}
+                            className="mt-0.5 w-4 h-4 accent-emerald-600"
+                        />
+                        <span className="text-xs font-medium text-zinc-700 leading-relaxed">
+                            Payment already received
+                            <span className="block text-[10px] text-zinc-500 font-normal mt-0.5">
+                                Uncheck if the customer will pay later — the order is saved as awaiting payment and
+                                you can record the money from this page once it lands.
+                            </span>
+                        </span>
+                    </label>
+
+                    {paymentReceived && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="space-y-4 overflow-hidden"
+                        >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <select
+                                    name="method"
+                                    value={form.method}
+                                    onChange={onChange}
+                                    className={`${inputClass} appearance-none`}
+                                    required
+                                >
+                                    {PAYMENT_METHODS.map((m) => (
+                                        <option key={m} value={m}>
+                                            {m}
+                                        </option>
+                                    ))}
+                                </select>
+                                <input
+                                    name="reference"
+                                    value={form.reference}
+                                    onChange={onChange}
+                                    placeholder="UTR / cheque / transaction no. (optional)"
+                                    className={inputClass}
+                                />
+                            </div>
+                            <textarea
+                                name="note"
+                                rows={2}
+                                value={form.note}
+                                onChange={onChange}
+                                placeholder="Payment note (optional) — e.g. confirmed over the phone"
+                                className={`${inputClass} resize-none`}
+                            />
+                        </motion.div>
+                    )}
+                </section>
+
+                <div>
+                    <button
+                        type="submit"
+                        disabled={offlineLoading}
+                        className="w-full sm:w-auto px-8 py-3.5 bg-zinc-900 text-white rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                        {offlineLoading ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} />}
+                        {paymentReceived ? 'Record Order as Paid' : 'Record Order'}
+                    </button>
+                </div>
+            </form>
+
+            {/* Offline orders logged so far — this is where a later payment is recorded. */}
+            <section className="space-y-3 border-t border-zinc-100 pt-6">
+                <h2 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                    <History size={12} /> Recent offline orders ({offlineOrders.length})
+                </h2>
+
+                {offlineOrders.length === 0 && (
+                    <p className="text-[11px] text-zinc-400 py-2">Nothing recorded yet.</p>
+                )}
+
+                {offlineOrders.map((order: any) => (
+                    <div
+                        key={order._id}
+                        className={`rounded-xl border p-4 space-y-3 ${
+                            order.isPaid ? 'bg-emerald-50 border-emerald-200' : 'bg-zinc-50 border-zinc-200'
+                        }`}
+                    >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                                <span className="font-mono font-bold text-sm text-zinc-900">#{order.orderCode}</span>
+                                {order.isPaid ? (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase border bg-emerald-100 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                                        <CheckCircle2 size={11} /> Paid
+                                    </span>
+                                ) : (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1.5">
+                                        <Hourglass size={11} /> Awaiting payment
+                                    </span>
+                                )}
+                            </div>
+                            <span className="text-sm font-bold text-zinc-900 tabular-nums">{rupee(order.totalPrice)}</span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-500">
+                            <span className="flex items-center gap-1.5">
+                                <User size={11} /> {order.customerName}
+                            </span>
+                            {order.customerPhone && <span className="font-mono">{order.customerPhone}</span>}
+                            <span className="text-zinc-300">|</span>
+                            <span className="truncate max-w-[240px]">{order.title}</span>
+                            <span className="text-zinc-300">|</span>
+                            <span>{formatTimestamp(order.createdAt)}</span>
+                        </div>
+
+                        {order.isPaid ? (
+                            <p className="text-[11px] text-emerald-700">
+                                {order.paymentMethod || 'Manual'} recorded
+                                {order.paymentReference ? ` — ref ${order.paymentReference}` : ''}
+                                {order.markedPaidByName ? ` by ${order.markedPaidByName}` : ''}
+                            </p>
+                        ) : settling === order._id ? (
+                            <div className="space-y-2 pt-1">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <select
+                                        value={settleForm.method}
+                                        onChange={(e) => setSettleForm((p) => ({ ...p, method: e.target.value }))}
+                                        className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2.5 text-xs font-medium focus:border-zinc-900 outline-none"
+                                    >
+                                        {PAYMENT_METHODS.map((m) => (
+                                            <option key={m} value={m}>
+                                                {m}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        value={settleForm.reference}
+                                        onChange={(e) => setSettleForm((p) => ({ ...p, reference: e.target.value }))}
+                                        placeholder="UTR / cheque no. (optional)"
+                                        className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2.5 text-xs font-mono focus:border-zinc-900 outline-none"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => recordLaterPayment(order._id)}
+                                        disabled={saving}
+                                        className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                                    >
+                                        {saving && <Loader2 size={12} className="animate-spin" />}
+                                        Confirm payment
+                                    </button>
+                                    <button
+                                        onClick={() => setSettling(null)}
+                                        disabled={saving}
+                                        className="px-4 py-2 text-zinc-500 text-[10px] font-bold uppercase tracking-wider hover:text-zinc-900 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => {
+                                    setSettling(order._id);
+                                    setSettleForm({ method: PAYMENT_METHODS[0], reference: '', note: '' });
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-emerald-50 transition-all"
+                            >
+                                <Banknote size={12} /> Record payment received
+                            </button>
+                        )}
+                    </div>
+                ))}
+
+                <p className="pt-1">
+                    <Link
+                        href="/admin/orders"
+                        className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-900 transition-colors"
+                    >
+                        View all orders
+                    </Link>
+                </p>
+            </section>
+        </div>
+    );
+};
+
+export default OfflineOrderPage;
+
+```
+
 ## File: `frontend/src/app/admin/orders/page.tsx`
 
 ```typescript
@@ -7370,14 +9540,13 @@ import {
     Calendar,
     User,
     Package,
-    ShieldCheck,
-    Hammer,
+        Hammer,
     X,
     MapPin,
     Copy,
     Hash,
     Download,
-    CircleDollarSign,
+    Banknote,
     Zap,
     Truck,
     Clock,
@@ -7407,8 +9576,13 @@ const OrderManagement = () => {
     const [pendingAction, setPendingAction] = useState<{id: string, status: string, tracking?: string, deliveryNote?: string} | null>(null);
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
+    // Payment filter
+    const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+
     useEffect(() => {
-        dispatch(fetchOrders({ includeUnpaid: false }));
+        // Unpaid orders must be listed: they are exactly the ones an admin may need to
+        // confirm by hand, and they are also what proves a payment is still outstanding.
+        dispatch(fetchOrders({ includeUnpaid: true }));
     }, [dispatch]);
 
     useEffect(() => {
@@ -7467,19 +9641,26 @@ const OrderManagement = () => {
 
     const filteredOrders = useMemo(() => {
         let result = userId ? orders.filter((o: any) => o.user === userId || o.user?._id === userId) : orders;
-        result = result.filter((o: any) => o.isPaid); // Only show paid orders
+
+        if (paymentFilter === 'paid') result = result.filter((o: any) => o.isPaid);
+        if (paymentFilter === 'unpaid') result = result.filter((o: any) => !o.isPaid);
 
         if (searchTerm) {
             const lowTerm = searchTerm.toLowerCase();
-            result = result.filter((o: any) => 
+            result = result.filter((o: any) =>
                 o._id.toLowerCase().includes(lowTerm) ||
                 o.razorpayOrderId?.toLowerCase().includes(lowTerm) ||
+                o.paymentReference?.toLowerCase().includes(lowTerm) ||
                 o.shippingAddress?.name?.toLowerCase().includes(lowTerm) ||
-                o.shippingAddress?.email?.toLowerCase().includes(lowTerm)
+                o.shippingAddress?.email?.toLowerCase().includes(lowTerm) ||
+                o.shippingAddress?.phone?.toLowerCase().includes(lowTerm)
             );
         }
         return result;
-    }, [orders, userId, searchTerm]);
+    }, [orders, userId, searchTerm, paymentFilter]);
+
+    const paidCount = orders.filter((o: any) => o.isPaid).length;
+    const unpaidCount = orders.length - paidCount;
 
     return (
         <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6 bg-white min-h-screen rounded-2xl border border-zinc-200">
@@ -7497,12 +9678,29 @@ const OrderManagement = () => {
                         <Plus size={14} />
                         <span>Create Custom</span>
                     </Link>
+                    <Link
+                        href="/admin/orders/offline"
+                        className="flex items-center gap-1.5 sm:gap-2 bg-white text-zinc-900 border border-zinc-200 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-50 transition-all"
+                    >
+                        <Banknote size={14} />
+                        <span>Offline Order</span>
+                    </Link>
                     <button onClick={exportToExcel} className="flex items-center gap-1.5 sm:gap-2 bg-zinc-100 text-zinc-900 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-zinc-200 transition-all border border-zinc-200">
                         <Download size={14} />
                         <span>Export</span>
                     </button>
                     <div className="flex bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-                        <button className="bg-zinc-900 text-white shadow-sm px-3 sm:px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all">Paid Only</button>
+                        {([['all', `All ${orders.length}`], ['paid', `Paid ${paidCount}`], ['unpaid', `Unpaid ${unpaidCount}`]] as const).map(([key, label]) => (
+                            <button
+                                key={key}
+                                onClick={() => setPaymentFilter(key)}
+                                className={`px-3 sm:px-4 py-1.5 rounded-md text-[9px] font-bold uppercase transition-all ${
+                                    paymentFilter === key ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -7656,6 +9854,40 @@ const OrderManagement = () => {
                                                 <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase border ${inspectedOrder.isPaid ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>{inspectedOrder.isPaid ? 'Paid' : 'Unpaid'}</span>
                                             </div>
                                             <div className="text-2xl font-bold">₹{inspectedOrder.totalPrice.toLocaleString()}</div>
+                                            {inspectedOrder.isPaid && (
+                                                <div className="space-y-1.5 pt-3 border-t border-white/10 text-[10px]">
+                                                    <div className="flex justify-between gap-3">
+                                                        <span className="text-zinc-500 font-bold uppercase">Paid on</span>
+                                                        <span className="font-bold text-zinc-200 text-right">{inspectedOrder.paidAt ? new Date(inspectedOrder.paidAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-3">
+                                                        <span className="text-zinc-500 font-bold uppercase">Via</span>
+                                                        <span className="font-bold text-zinc-200 text-right">
+                                                            {inspectedOrder.paymentChannel === 'manual'
+                                                                ? `Manual — ${inspectedOrder.paymentMethod || 'unspecified'}`
+                                                                : `Razorpay (${inspectedOrder.paymentChannel || 'gateway'})`}
+                                                        </span>
+                                                    </div>
+                                                    {(inspectedOrder.paymentReference || inspectedOrder.razorpayPaymentId) && (
+                                                        <div className="flex justify-between gap-3">
+                                                            <span className="text-zinc-500 font-bold uppercase">Reference</span>
+                                                            <span className="font-mono font-bold text-zinc-200 text-right break-all">{inspectedOrder.paymentReference || inspectedOrder.razorpayPaymentId}</span>
+                                                        </div>
+                                                    )}
+                                                    {inspectedOrder.markedPaidByName && (
+                                                        <div className="flex justify-between gap-3">
+                                                            <span className="text-zinc-500 font-bold uppercase">Recorded by</span>
+                                                            <span className="font-bold text-amber-300/90 text-right">{inspectedOrder.markedPaidByName}</span>
+                                                        </div>
+                                                    )}
+                                                    {inspectedOrder.paymentNote && (
+                                                        <div className="pt-2">
+                                                            <span className="text-zinc-500 font-bold uppercase">Note</span>
+                                                            <p className="mt-1 text-zinc-300 italic leading-relaxed">{inspectedOrder.paymentNote}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                             <div className="pt-4 border-t border-white/10 flex justify-between items-center">
                                                 <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Total Weight</span>
                                                 <span className="text-[11px] font-bold text-zinc-200 tabular-nums">{formatWeight(orderWeight(inspectedOrder)) || "—"}</span>
@@ -8777,6 +11009,7 @@ import { fetchCollections } from "@/redux/slices/collectionSlice";
 import { RootState } from "@/redux/store";
 import { getImageUrl } from "@/utils/getImageUrl";
 import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight, X } from "lucide-react";
+import PausedSectionNotice from "@/components/PausedSectionNotice";
 import { Product } from "@/data/products";
 import { EXCEL_PRODUCTS } from "@/data/excelProducts";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8956,6 +11189,13 @@ function CategoryContent({ slug }: { slug: string }) {
 
   const bgImage = getImageUrl(currentCollection?.image || mainCollection?.image) || excelMeta?.image || '/hero-bg.jpg';
 
+  // A paused section stays browsable; this explains why its products are not listed.
+  const isSectionPaused = slug !== 'all' && !!currentCollection?.isEffectivelyPaused;
+  const sectionPausedBecause =
+    currentCollection?.isPaused || !currentCollection?.pausedBecause
+      ? null
+      : currentCollection.pausedBecause;
+
   return (
     <div className="flex flex-col min-h-screen font-sans bg-[var(--bg)]">
 
@@ -9017,6 +11257,16 @@ function CategoryContent({ slug }: { slug: string }) {
           </motion.div>
         </div>
       </section>
+
+      {isSectionPaused && (
+        <PausedSectionNotice
+          kind="collection"
+          sectionName={currentCollection?.name || pageTitle}
+          pausedBecause={sectionPausedBecause}
+          browseAllHref="/category/all"
+          browseAllLabel="Browse all products"
+        />
+      )}
 
       {/* ── SHOP LAYOUT ── */}
       <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-12 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 lg:gap-16 items-start w-full">
@@ -9370,15 +11620,16 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
 ```typescript
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/utils/api";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { createOrder, resetOrderSuccess } from "@/redux/slices/orderSlice";
+import { createOrder, resetOrderSuccess, setCurrentOrder } from "@/redux/slices/orderSlice";
 import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
+import { fetchProducts } from "@/redux/slices/productSlice";
 import { useCart } from "@/hooks/useCart";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
 import { getImageUrl } from '@/utils/getImageUrl';
@@ -9386,8 +11637,9 @@ import { formatWeight } from '@/utils/formatWeight';
 import { FREE_SHIPPING_THRESHOLD, calculateShipping } from '@/utils/shipping';
 import {
   MapPin, User, Mail, Phone, Home, Package,
-  CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2
+  CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2, Globe
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface ShippingForm {
   label: string;
@@ -9407,6 +11659,31 @@ function validate(f: ShippingForm): FormErrors {
   if (!/^\d{6}$/.test(f.zip)) e.zip = "Enter a valid 6-digit PIN code.";
   return e;
 }
+
+// Survives a reload/tab close mid-payment so the backend can be re-asked about the order.
+const PENDING_PAYMENT_KEY = "mg_pending_payment";
+
+type PendingPayment = { orderId: string; rzpOrderId?: string; startedAt: number };
+
+const readPendingPayment = (): PendingPayment | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_PAYMENT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingPayment;
+    // Ignore ancient markers: Razorpay orders expire, and a week-old one is noise.
+    if (!parsed?.orderId || Date.now() - (parsed.startedAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writePendingPayment = (value: PendingPayment | null) => {
+  if (typeof window === "undefined") return;
+  if (value) window.sessionStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(value));
+  else window.sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+};
 
 const INDIAN_STATES = [
   "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana",
@@ -9432,6 +11709,56 @@ export default function CheckoutPage() {
   });
 
   const [userAddresses, setUserAddresses] = useState<any[]>([]);
+
+  const catalogProducts = useAppSelector(s => s.products?.products || []);
+
+  useEffect(() => {
+    if (catalogProducts.length === 0) {
+      dispatch(fetchProducts({}));
+    }
+  }, [dispatch, catalogProducts.length]);
+
+  const hasNavaratriItems = useMemo(() => {
+    return items.some((item) => {
+      const name = (item.name || "").toLowerCase();
+      // Match on item name
+      const nameMatch =
+        name.includes("navaratri") ||
+        name.includes("navarathri") ||
+        name.includes("golu") ||
+        name.includes("kolu") ||
+        name.includes("thamboolam") ||
+        name.includes("manjal") ||
+        name.includes("kumkum");
+
+      if (nameMatch) return true;
+
+      // Match on catalog product category/occasion
+      const prodId = String(item.product || item._id);
+      const catProd = catalogProducts.find((cp: any) => String(cp._id) === prodId || cp.slug === prodId);
+      if (catProd) {
+        const textFields = [
+          catProd.category,
+          catProd.subcategory,
+          ...(catProd.categories || []),
+          ...(catProd.subcategories || []),
+          catProd.occasion,
+          catProd.occasionSub,
+          ...(catProd.occasions || []),
+          ...(catProd.occasionSubs || []),
+        ].filter((s): s is string => Boolean(s)).map((s) => s.toLowerCase());
+
+        return textFields.some((t) =>
+          t.includes("navaratri") ||
+          t.includes("navarathri") ||
+          t.includes("golu") ||
+          t.includes("kolu") ||
+          t.includes("thamboolam")
+        );
+      }
+      return false;
+    });
+  }, [items, catalogProducts]);
 
   useEffect(() => {
     if (isAuth) {
@@ -9489,6 +11816,38 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!paymentSuccess && !success && items.length === 0) router.replace("/category/all");
   }, [items, paymentSuccess, success, router]);
+
+  // Reload safety net: if the tab died during payment, the Razorpay callback never ran.
+  // Ask the server (which re-checks with Razorpay) whether the money actually landed.
+  useEffect(() => {
+    const pending = readPendingPayment();
+    if (!pending) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: checkRes } = await api.post(`/payments/razorpay/check/${pending.orderId}`);
+        writePendingPayment(null);
+        if (cancelled || !checkRes?.data?.isPaid) return;
+
+        const { data: orderRes } = await api.get(`/orders/${pending.orderId}`);
+        if (cancelled) return;
+
+        dispatch(setCurrentOrder(orderRes.data));
+        setPaymentSuccess(true);
+        dispatch(clearCartThunk());
+        toast.success("Payment received — your order is confirmed.");
+      } catch {
+        // Never created, deleted, or no access: nothing to recover.
+        writePendingPayment(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const touch = (k: keyof ShippingForm) => setTouched(p => ({ ...p, [k]: true }));
 
@@ -9567,6 +11926,10 @@ export default function CheckoutPage() {
       const { data: createData } = await api.post('/payments/razorpay/create', { orderId });
       const { id: rzpOrderId, key } = createData.data;
 
+      // Written BEFORE the popup opens: if the tab dies mid-payment, the server is still
+      // asked to confirm this order when the customer comes back.
+      writePendingPayment({ orderId, rzpOrderId, startedAt: Date.now() });
+
       const options = {
         key: key,
         amount: Math.round(amount * 100),
@@ -9584,6 +11947,7 @@ export default function CheckoutPage() {
             });
 
             if (verifyRes.data.success) {
+              writePendingPayment(null);
               setPaymentSuccess(true);
               setIsProcessingPayment(false);
               if (isAuth) dispatch(clearCartThunk());
@@ -9591,6 +11955,7 @@ export default function CheckoutPage() {
             }
           } catch (error) {
             console.error(error);
+            // The webhook/reconciler may still confirm this payment, so the marker stays.
             setIsProcessingPayment(false);
             alert("Payment verification failed. Please contact support.");
           }
@@ -9612,6 +11977,7 @@ export default function CheckoutPage() {
 
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', function (response: any) {
+        writePendingPayment(null); // No money moved, so nothing to recover.
         setIsProcessingPayment(false);
         alert("Payment failed: " + response.error.description);
       });
@@ -9619,6 +11985,7 @@ export default function CheckoutPage() {
 
     } catch (error: any) {
       console.error(error);
+      writePendingPayment(null);
       setIsProcessingPayment(false);
       const apiMsg = error.response?.data?.error || error.response?.data?.message;
       alert(apiMsg || "Failed to initiate payment. Please try again.");
@@ -9746,6 +12113,16 @@ export default function CheckoutPage() {
                 </div>
                 <h3 className="text-base sm:text-lg text-[var(--text)]">Delivery Address</h3>
               </div>
+
+              {hasNavaratriItems && (
+                <div className="p-3.5 sm:p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3 text-amber-900 text-[12px] leading-relaxed">
+                  <Globe size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-amber-950">Foreign Orders Paused for Navaratri &amp; Golu Items: </span>
+                    <span>Your order contains items from the festive collection. We are currently delivering exclusively to Indian addresses to ensure delivery prior to Navaratri. Please provide an Indian delivery address.</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2 mb-1 sm:mb-2">
                 <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Destination Type</label>
@@ -10279,6 +12656,7 @@ export default function ContactPage() {
   --animate-fade-up: fade-up 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-float-slow: float-slow 4s ease-in-out infinite;
   --animate-blob: blob 10s ease-in-out infinite alternate;
+  --animate-marquee: marquee 32s linear infinite;
 
   @keyframes fade-up {
     0% { opacity: 0; transform: translateY(15px); }
@@ -10294,6 +12672,11 @@ export default function ContactPage() {
     0% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
     50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
     100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  }
+
+  @keyframes marquee {
+    0% { transform: translateX(0%); }
+    100% { transform: translateX(-50%); }
   }
 }
 
@@ -10654,6 +13037,7 @@ import { fetchOccasions } from "@/redux/slices/occasionSlice";
 import { RootState } from "@/redux/store";
 import { getImageUrl } from "@/utils/getImageUrl";
 import { Loader2, Filter, LayoutGrid, List, Leaf, Home, ChevronRight, X } from "lucide-react";
+import PausedSectionNotice from "@/components/PausedSectionNotice";
 import { Product } from "@/data/products";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -10727,6 +13111,13 @@ export default function OccasionPage({ params }: { params: Promise<{ slug: strin
   const pageDesc = currentOccasion?.description || mainOccasion?.description || "Thoughtfully curated miniatures for every celebration — birthdays, weddings, festivals and every special moment worth treasuring.";
   const bgImage = getImageUrl(currentOccasion?.image || mainOccasion?.image) || '/hero-bg.jpg';
 
+  // A paused occasion stays browsable; this explains why its products are not listed.
+  const isSectionPaused = slug !== 'all' && !!currentOccasion?.isEffectivelyPaused;
+  const sectionPausedBecause =
+    currentOccasion?.isPaused || !currentOccasion?.pausedBecause
+      ? null
+      : currentOccasion.pausedBecause;
+
   return (
     <div className="flex flex-col min-h-screen font-sans bg-[var(--bg)]">
 
@@ -10788,6 +13179,16 @@ export default function OccasionPage({ params }: { params: Promise<{ slug: strin
           </motion.div>
         </div>
       </section>
+
+      {isSectionPaused && (
+        <PausedSectionNotice
+          kind="occasion"
+          sectionName={currentOccasion?.name || pageTitle}
+          pausedBecause={sectionPausedBecause}
+          browseAllHref="/category/all"
+          browseAllLabel="Browse all products"
+        />
+      )}
 
       {/* ── SHOP LAYOUT ── */}
       <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-12 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 lg:gap-16 items-start w-full">
@@ -13059,6 +15460,33 @@ const apiErrorMessage = (err: unknown, fallback: string): string => {
     return e?.response?.data?.error || e?.response?.data?.message || fallback;
 };
 
+// Remembers which Razorpay order this tab opened, so a reload/closed tab can be
+// reconciled server-side instead of silently losing a completed payment.
+const PENDING_PAY_KEY = 'mg_pending_pay_order';
+
+type PendingPayOrder = { orderId: string; rzpOrderId: string; startedAt: number };
+
+const readPendingPayOrder = (): PendingPayOrder | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = window.sessionStorage.getItem(PENDING_PAY_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as PendingPayOrder;
+        if (!parsed?.rzpOrderId || Date.now() - (parsed.startedAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+};
+
+const writePendingPayOrder = (value: PendingPayOrder | null) => {
+    if (typeof window === 'undefined') return;
+    if (value) window.sessionStorage.setItem(PENDING_PAY_KEY, JSON.stringify(value));
+    else window.sessionStorage.removeItem(PENDING_PAY_KEY);
+};
+
+const clearPendingPayOrder = () => writePendingPayOrder(null);
+
 const loadRazorpayScript = (): Promise<boolean> =>
     new Promise((resolve) => {
         if (typeof window !== 'undefined' && window.Razorpay) return resolve(true);
@@ -13088,6 +15516,42 @@ const PayOrderContent = () => {
     const [paying, setPaying] = useState(false);
     const [paid, setPaid] = useState(false);
 
+    // Reload safety net. A settled order has its token destroyed, so the token-gated
+    // GET answers 410 — that alone tells us the payment may have gone through. The
+    // server re-asks Razorpay before we claim success, so a live-but-unpaid order
+    // never shows a false confirmation. Resolves true only when Razorpay confirms paid.
+    const recoverSettledPayment = useCallback(async (): Promise<boolean> => {
+        const pending = readPendingPayOrder();
+        if (!pending) return false;
+
+        try {
+            const { data } = await publicApi.post(`/orders/public/pay/${id}/reconcile`, {
+                razorpayOrderId: pending.rzpOrderId,
+            });
+            // The gateway gave a definitive answer, so the marker has done its job.
+            clearPendingPayOrder();
+            if (!data?.data?.isPaid) return false;
+            setOrder((prev) => ({
+                _id: data.data._id,
+                orderCode: data.data.orderCode,
+                title: prev?.title || data.data.title || 'Custom Order',
+                image: prev?.image || '',
+                weight: prev?.weight || 0,
+                totalPrice: data.data.totalPrice,
+                isPaid: true,
+                status: data.data.status,
+                customerName: data.data.customerName || prev?.customerName || '',
+                customerEmail: prev?.customerEmail || '',
+                customerPhone: prev?.customerPhone || '',
+            }));
+            setPaid(true);
+            return true;
+        } catch {
+            clearPendingPayOrder();
+            return false;
+        }
+    }, [id]);
+
     useEffect(() => {
         let active = true;
 
@@ -13103,6 +15567,7 @@ const PayOrderContent = () => {
                 setOrder(data.data);
                 if (data.data.isPaid) setPaid(true);
             } catch (err: unknown) {
+                if (active) await recoverSettledPayment();
                 if (!active) return;
                 setError(apiErrorMessage(err, "We could not open this payment link."));
             } finally {
@@ -13114,7 +15579,7 @@ const PayOrderContent = () => {
         return () => {
             active = false;
         };
-    }, [id, token]);
+    }, [id, token, recoverSettledPayment]);
 
     const handlePay = useCallback(async () => {
         setPaying(true);
@@ -13128,6 +15593,10 @@ const PayOrderContent = () => {
 
             const { data } = await publicApi.post(`/orders/public/pay/${id}/razorpay/create`, { token });
             const { id: rzpOrderId, amount, currency, key } = data.data;
+
+            // Recorded before the popup opens: if this tab dies mid-payment, the
+            // reconcile endpoint can still confirm it with Razorpay.
+            writePendingPayOrder({ orderId: id, rzpOrderId, startedAt: Date.now() });
 
             if (!window.Razorpay) {
                 setError("The payment gateway is unavailable right now. Please refresh to try again.");
@@ -13156,9 +15625,18 @@ const PayOrderContent = () => {
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature: response.razorpay_signature,
                         });
+                        clearPendingPayOrder();
                         setPaid(true);
                     } catch (err: unknown) {
-                        alert(apiErrorMessage(err, "Payment verification failed. If money was deducted, please contact the store."));
+                        // Razorpay's `order.paid` webhook often settles the order — and
+                        // destroys this link's token — before this browser callback
+                        // lands, which makes verify answer 410 (or 400 "already paid").
+                        // That is a SUCCESS, not a failure. Ask the gateway before telling
+                        // the customer their money is at risk.
+                        if (await recoverSettledPayment()) return;
+                        // The webhook or reconciler may still confirm this payment,
+                        // so the marker is deliberately left in place.
+                        alert(apiErrorMessage(err, "Payment verification failed. If money was deducted, it is saved and the store has been notified."));
                     } finally {
                         setPaying(false);
                     }
@@ -13169,6 +15647,7 @@ const PayOrderContent = () => {
             });
 
             rzp.on('payment.failed', (response) => {
+                clearPendingPayOrder(); // Nothing was captured.
                 setPaying(false);
                 alert(response?.error?.description || "Payment failed. Please try again.");
             });
@@ -13178,7 +15657,7 @@ const PayOrderContent = () => {
             setPaying(false);
             setError(apiErrorMessage(err, "We could not start the payment. Please try again."));
         }
-    }, [id, token, order]);
+    }, [id, token, order, recoverSettledPayment]);
 
     if (loading) {
         return (
@@ -13362,8 +15841,10 @@ import { compressImageFile } from '@/utils/compressImage';
 import {
   Loader2, ChevronRight, Truck,
   MessageCircle,
-  Minus, Plus, Leaf, Droplets, Wind, Home, Camera, ImageUp, X
+  Minus, Plus, Leaf, Droplets, Wind, Home, Camera, ImageUp, X,
+  AlertCircle, Globe, PauseCircle
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function ProductStoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -13444,6 +15925,7 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
 
   const savings = p?.mrp ? p.mrp - p.price : 0;
   const savePct = p?.mrp ? Math.round((savings / p.mrp) * 100) : 0;
+
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -13659,6 +16141,25 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
             )}
           </div>
 
+
+          {/* Collection Paused Notice */}
+          {(p as any).isEffectivelyPaused && (
+            <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-start gap-3 text-red-900">
+              <PauseCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
+              <div className="text-[12px] leading-relaxed">
+                <p className="font-semibold text-red-950 flex items-center gap-1.5">
+                  <span>Product Unavailable:</span>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-200 text-red-900">
+                    Paused
+                  </span>
+                </p>
+                <p className="text-red-900/90 mt-0.5">
+                  {(p as any).pauseReason || 'This product is temporarily paused.'} You cannot add it to your cart at this time.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Form / Actions */}
           <div className="space-y-6">
             {/* Variants */}
@@ -13749,21 +16250,38 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
               </div>
 
               <button
-                className="flex-1 h-12 bg-[var(--text)] text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.2em] hover:bg-[var(--accent)] hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 shadow-md disabled:opacity-40 disabled:hover:bg-[var(--text)] disabled:hover:translate-y-0 disabled:hover:shadow-md"
+                className={`flex-1 h-12 text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.2em] transition-all duration-300 flex items-center justify-center gap-2 shadow-md ${(p as any).isEffectivelyPaused ? 'bg-gray-400 cursor-not-allowed opacity-80' : 'bg-[var(--text)] hover:bg-[var(--accent)] hover:shadow-lg hover:-translate-y-0.5'} disabled:opacity-40 disabled:hover:bg-[var(--text)] disabled:hover:translate-y-0 disabled:hover:shadow-md`}
                 disabled={requiresImage && !customerImage}
-                onClick={() => addToCart({
-                  productId: (p as any)._id || String(p.id),
-                  name: p.name,
-                  image: (p as any).images?.[0] || (p as any).image || "",
-                  price: p.price,
-                  weight: p.weight || 0,
-                  quantity: qty,
-                  selectedVariant,
-                  selectedColor,
-                  customerImage,
-                })}
+                onClick={() => {
+                  if ((p as any).isEffectivelyPaused) {
+                    toast.error((p as any).pauseReason || "This product is temporarily paused and cannot be added to cart.", {
+                      duration: 4000,
+                      position: 'top-center',
+                      style: {
+                        background: '#fee2e2',
+                        color: '#991b1b',
+                        fontWeight: 'bold',
+                        padding: '16px',
+                        borderRadius: '12px'
+                      },
+                      icon: <PauseCircle size={20} className="text-red-600" />
+                    });
+                    return;
+                  }
+                  addToCart({
+                    productId: (p as any)._id || String(p.id),
+                    name: p.name,
+                    image: (p as any).images?.[0] || (p as any).image || "",
+                    price: p.price,
+                    weight: p.weight || 0,
+                    quantity: qty,
+                    selectedVariant,
+                    selectedColor,
+                    customerImage,
+                  });
+                }}
               >
-                {requiresImage && !customerImage ? "Upload a photo to continue" : "Add to Cart"}
+                {requiresImage && !customerImage ? "Upload a photo to continue" : ((p as any).isEffectivelyPaused ? "Paused" : "Add to Cart")}
               </button>
             </div>
 
@@ -13815,9 +16333,11 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                   </motion.div>
                 )}
                 {activeTab === 'shipping' && (
-                  <motion.div key="shipping" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }} className="flex gap-4">
-                    <Truck size={18} strokeWidth={1.5} className="text-[var(--accent)] shrink-0 mt-0.5" />
-                    <p>Delivered with care across India. Orders above ₹4,999 qualify for free shipping within India. Please allow 10–14 days for this handcrafted piece to reach your home.</p>
+                  <motion.div key="shipping" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }} className="space-y-3">
+                    <div className="flex gap-4">
+                      <Truck size={18} strokeWidth={1.5} className="text-[var(--accent)] shrink-0 mt-0.5" />
+                      <p>Delivered with care across India and worldwide. Orders above ₹4,999 qualify for free shipping within India. ✨ Crafting time is approximately 10 days for all pieces.</p>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -13873,21 +16393,38 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
           </div>
         </div>
         <button
-          className="flex-1 max-w-[210px] h-11 bg-[var(--text)] text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.15em] hover:bg-[var(--accent)] transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-40"
+          className={`flex-1 max-w-[210px] h-11 text-white rounded-xl font-bold text-[11px] uppercase tracking-[0.15em] transition-all flex items-center justify-center gap-2 shadow-md ${(p as any).isEffectivelyPaused ? 'bg-gray-400 cursor-not-allowed opacity-80' : 'bg-[var(--text)] hover:bg-[var(--accent)]'} disabled:opacity-40`}
           disabled={requiresImage && !customerImage}
-          onClick={() => addToCart({
-            productId: (p as any)._id || String(p.id),
-            name: p.name,
-            image: (p as any).images?.[0] || (p as any).image || "",
-            price: p.price,
-            weight: p.weight || 0,
-            quantity: qty,
-            selectedVariant,
-            selectedColor,
-            customerImage,
-          })}
+          onClick={() => {
+            if ((p as any).isEffectivelyPaused) {
+              toast.error((p as any).pauseReason || "This product is temporarily paused and cannot be added to cart.", {
+                duration: 4000,
+                position: 'top-center',
+                style: {
+                  background: '#fee2e2',
+                  color: '#991b1b',
+                  fontWeight: 'bold',
+                  padding: '16px',
+                  borderRadius: '12px'
+                },
+                icon: <PauseCircle size={20} className="text-red-600" />
+              });
+              return;
+            }
+            addToCart({
+              productId: (p as any)._id || String(p.id),
+              name: p.name,
+              image: (p as any).images?.[0] || (p as any).image || "",
+              price: p.price,
+              weight: p.weight || 0,
+              quantity: qty,
+              selectedVariant,
+              selectedColor,
+              customerImage,
+            });
+          }}
         >
-          {requiresImage && !customerImage ? "Upload Photo" : "Add to Cart"}
+          {requiresImage && !customerImage ? "Upload Photo" : ((p as any).isEffectivelyPaused ? "Paused" : "Add to Cart")}
         </button>
       </div>
     </div>
@@ -14110,6 +16647,111 @@ const EmptyState: React.FC<EmptyStateProps> = ({
 };
 
 export default EmptyState;
+
+```
+
+## File: `frontend/src/components/admin/PauseToggle.tsx`
+
+```typescript
+"use client";
+
+import React, { useState } from 'react';
+import { Pause, Play, Loader2 } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
+
+type PauseKind = 'collection' | 'occasion';
+
+type PauseTarget = {
+    _id: string;
+    name: string;
+    isPaused?: boolean;
+    /** How many nested sections this toggle also affects. */
+    childCount?: number;
+};
+
+type Props = {
+    kind: PauseKind;
+    item: PauseTarget;
+    onToggle: (id: string, nextPaused: boolean) => Promise<unknown> | unknown;
+    /** 'sm' for table rows. */
+    size?: 'sm' | 'md';
+};
+
+/**
+ * Pausing a collection/occasion hides every product inside it (including nested
+ * sub-sections) from the storefront, search, cart and checkout. The section itself stays in
+ * the navigation, so unpausing brings it straight back — nothing is deleted.
+ */
+const PauseToggle: React.FC<Props> = ({ kind, item, onToggle, size = 'sm' }) => {
+    const [pending, setPending] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+
+    const isPaused = !!item.isPaused;
+    const nextPaused = !isPaused;
+
+    const affected = item.childCount && item.childCount > 0
+        ? ` This also affects its ${item.childCount} nested ${item.childCount === 1 ? 'section' : 'sections'}.`
+        : '';
+
+    const run = async () => {
+        setPending(true);
+        try {
+            await onToggle(item._id, nextPaused);
+        } finally {
+            setPending(false);
+        }
+    };
+
+    const base = size === 'sm'
+        ? 'px-2.5 py-1 rounded-full text-[9px] gap-1'
+        : 'px-4 py-2.5 rounded-lg text-[10px] gap-2';
+
+    return (
+        <>
+            <button
+                type="button"
+                disabled={pending}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    // Resuming is safe and expected, so it needs no confirmation.
+                    if (nextPaused) setConfirming(true);
+                    else void run();
+                }}
+                title={
+                    isPaused
+                        ? `${item.name} is paused — click to resume`
+                        : `Pause ${item.name} and hide its products from the storefront`
+                }
+                className={`${base} inline-flex items-center font-bold uppercase tracking-wider border transition-all disabled:opacity-50 disabled:cursor-wait ${
+                    isPaused
+                        ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                        : 'bg-white text-zinc-500 border-zinc-200 hover:text-zinc-900 hover:border-zinc-400'
+                }`}
+            >
+                {pending ? <Loader2 size={11} className="animate-spin" /> : isPaused ? <Pause size={11} /> : <Play size={11} />}
+                <span>{pending ? '...' : isPaused ? 'Paused' : 'Live'}</span>
+            </button>
+
+            <Modal
+                isOpen={confirming}
+                onClose={() => setConfirming(false)}
+                onConfirm={() => { void run(); }}
+                type="confirm"
+                title={`Pause "${item.name}"?`}
+                message={
+                    `Every product in this ${kind} will be hidden from the storefront immediately — ` +
+                    `including search results, product pages, and the cart.` +
+                    affected +
+                    ` The ${kind} itself stays in your navigation and nothing is deleted.`
+                }
+                confirmText="Pause it"
+                cancelText="Keep it live"
+            />
+        </>
+    );
+};
+
+export default PauseToggle;
 
 ```
 
@@ -15239,7 +17881,7 @@ import React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/hooks/useCart";
-import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2 } from "lucide-react";
+import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2, Globe } from "lucide-react";
 import { CartItem } from "@/redux/slices/cartSlice";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { formatWeight } from '@/utils/formatWeight';
@@ -15247,6 +17889,19 @@ import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE, calculateShipping } from '@/util
 
 export default function CartDrawer() {
   const { items, isOpen, close, setQty, remove, totalPrice, totalWeight, totalItems, loading } = useCart();
+
+  const hasNavaratriItems = items.some((item) => {
+    const name = (item.name || "").toLowerCase();
+    return (
+      name.includes("navaratri") ||
+      name.includes("navarathri") ||
+      name.includes("golu") ||
+      name.includes("kolu") ||
+      name.includes("thamboolam") ||
+      name.includes("manjal") ||
+      name.includes("kumkum")
+    );
+  });
 
   return (
     <AnimatePresence>
@@ -15419,7 +18074,12 @@ export default function CartDrawer() {
                     {calculateShipping(totalPrice) === 0 ? <span className="text-[#2e7d32]">Free</span> : `₹${SHIPPING_FEE.toLocaleString()}`}
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--text-faint)]">Shipping & taxes calculated at checkout.</p>
+                {hasNavaratriItems && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2 text-amber-900 text-[11px] leading-snug">
+                    <Globe size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                    <span><strong>Notice:</strong> Foreign deliveries for Navaratri &amp; Golu products are paused. Domestic delivery across India is fully operational.</span>
+                  </div>
+                )}
 
                 <Link
                   href="/checkout"
@@ -15775,6 +18435,8 @@ import {
   X,
   Truck,
   Sparkles,
+  AlertCircle,
+  Globe,
 } from "lucide-react";
 import { useCart } from "@/hooks/useCart";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
@@ -15976,6 +18638,29 @@ export default function Navbar() {
           scrolled ? "shadow-lg" : ""
         }`}
       >
+        {/* ─── MOVING ANNOUNCEMENT BANNER ─── */}
+        <div className="bg-[#24130d] text-amber-200 border-b border-amber-500/20 py-1.5 overflow-hidden select-none">
+          <div className="flex w-max animate-marquee hover:[animation-play-state:paused] text-[11px] sm:text-[12px] font-medium tracking-wide">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-8 shrink-0 px-4">
+                <span className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[9.5px] font-bold tracking-wider uppercase bg-amber-500 text-stone-950">
+                    Important Notice
+                  </span>
+                  <span>
+                    🌍 International Orders Now Open! ✨ 10 Days of Crafting Time for All Products.
+                  </span>
+                </span>
+                <span className="text-amber-500/60">✦</span>
+                <span className="text-amber-100/90">
+                  Domestic orders within India are active &amp; delivering on time.
+                </span>
+                <span className="text-amber-500/60">✦</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* ─── TIER 1: TOP UTILITY BAR ─── */}
         <div className="hidden md:block bg-[#1f1a16] text-white">
           <div className="max-w-[1440px] mx-auto px-6 sm:px-8 flex items-center justify-between h-9 text-[11px]">
@@ -16231,7 +18916,7 @@ export default function Navbar() {
       {/* ══════════════════════════════════════════════════════════
           SPACER (push content below fixed header)
       ═══════════════════════════════════════════════════════════ */}
-      <div className="h-[64px] md:h-[116px]" aria-hidden />
+      <div className="h-[94px] md:h-[146px]" aria-hidden />
 
       {/* ══════════════════════════════════════════════════════════
           MOBILE DRAWER
@@ -16350,6 +19035,82 @@ export default function Navbar() {
 }
 ```
 
+## File: `frontend/src/components/PausedSectionNotice.tsx`
+
+```typescript
+"use client";
+
+import React from 'react';
+import Link from 'next/link';
+import { PauseCircle, ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+type Props = {
+    kind: 'collection' | 'occasion';
+    sectionName: string;
+    /** Set when the section is paused only because an ancestor is paused. */
+    pausedBecause?: string | null;
+    browseAllHref: string;
+    browseAllLabel: string;
+};
+
+/**
+ * Shown on a section page whose products are hidden. The section itself stays browsable and
+ * stays in the navigation — this explains why the grid is empty instead of looking broken.
+ */
+const PausedSectionNotice: React.FC<Props> = ({
+    sectionName,
+    pausedBecause,
+    browseAllHref,
+    browseAllLabel
+}) => {
+    const inherited = !!pausedBecause;
+
+    return (
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-8">
+            <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                role="status"
+                className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 px-5 sm:px-7 py-5 sm:py-6 rounded-2xl bg-amber-50/80 border border-amber-200/80 backdrop-blur-sm"
+            >
+                <div className="w-11 h-11 shrink-0 rounded-full bg-amber-100/80 flex items-center justify-center">
+                    <PauseCircle size={22} className="text-amber-600" />
+                </div>
+
+                <div className="flex-1 space-y-1.5">
+                    <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-amber-700/80">
+                        Temporarily unavailable
+                    </p>
+                    <p className="text-sm sm:text-base font-bold text-zinc-900 leading-snug">
+                        {inherited
+                            ? `“${sectionName}” is unavailable while “${pausedBecause}” is paused.`
+                            : `“${sectionName}” is paused at the moment.`}
+                    </p>
+                    <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed font-medium">
+                        The designs in this {sectionName} are being refreshed and cannot be ordered
+                        right now. They have not been removed — keep browsing the rest of the
+                        collection in the meantime.
+                    </p>
+                </div>
+
+                <Link
+                    href={browseAllHref}
+                    className="inline-flex items-center justify-center gap-2 self-start sm:self-center shrink-0 px-5 py-3 rounded-xl bg-zinc-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-black transition-all active:scale-95 whitespace-nowrap"
+                >
+                    {browseAllLabel}
+                    <ArrowRight size={13} />
+                </Link>
+            </motion.div>
+        </div>
+    );
+};
+
+export default PausedSectionNotice;
+
+```
+
 ## File: `frontend/src/components/ProductCard.tsx`
 
 ```typescript
@@ -16359,8 +19120,9 @@ import Link from "next/link";
 import { CATEGORIES } from "@/data/categories";
 import { type Product } from "@/data/products";
 import { useCart } from "@/hooks/useCart";
-import { ShoppingBag } from "lucide-react";
+import { ShoppingBag, PauseCircle } from "lucide-react";
 import { getImageUrl } from '@/utils/getImageUrl';
+import toast from "react-hot-toast";
 
 interface ProductCardProps {
   product: Product;
@@ -16379,6 +19141,23 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if ((product as any).isEffectivelyPaused) {
+      toast.error((product as any).pauseReason || "This product is temporarily paused.", {
+        duration: 4000,
+        position: 'top-center',
+        style: {
+          background: '#fee2e2',
+          color: '#991b1b',
+          fontWeight: 'bold',
+          padding: '16px',
+          borderRadius: '12px'
+        },
+        icon: <PauseCircle size={20} className="text-red-600" />
+      });
+      return;
+    }
+
     addToCart({
       productId: productId,
       name:      product.name,
@@ -16435,7 +19214,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             onClick={handleAddToCart}
             className="hidden md:flex absolute bottom-2 left-2 right-2 translate-y-[150%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out z-20 items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md text-[#2d2926] py-2 rounded-lg shadow-md font-bold text-[9px] uppercase tracking-wider hover:bg-[#2d2926] hover:text-white"
           >
-            <ShoppingBag size={12} strokeWidth={2} /> Quick Add
+            { (product as any).isEffectivelyPaused ? <><PauseCircle size={12} strokeWidth={2} /> Paused</> : <><ShoppingBag size={12} strokeWidth={2} /> Quick Add</> }
           </button>
         )}
       </div>
@@ -16477,10 +19256,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             ) : (
               <button
                 onClick={handleAddToCart}
-                className="inline-flex items-center gap-1 bg-[var(--accent)] text-white px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider active:scale-95 shadow-sm"
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider active:scale-95 shadow-sm ${(product as any).isEffectivelyPaused ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-[var(--accent)] text-white'}`}
                 aria-label={`Add ${product.name} to cart`}
               >
-                <ShoppingBag size={10} /> Add
+                { (product as any).isEffectivelyPaused ? <PauseCircle size={10} /> : <ShoppingBag size={10} /> }
+                { (product as any).isEffectivelyPaused ? 'Paused' : 'Add' }
               </button>
             )}
           </div>
@@ -18024,6 +20804,8 @@ interface CartState {
     loading: boolean;
     error: string | null;
     isOpen: boolean;
+    /** Items removed on this load because their collection/occasion is paused. */
+    removedPausedItems: { name: string; reason: string }[];
 }
 
 const initialState: CartState = {
@@ -18031,6 +20813,7 @@ const initialState: CartState = {
     loading: false,
     error: null,
     isOpen: false,
+    removedPausedItems: [],
 };
 
 /* ─── Thunks ─────────────────────────────────────────────────── */
@@ -18038,7 +20821,11 @@ const initialState: CartState = {
 export const fetchCart = createAsyncThunk('cart/fetch', async (_, thunkAPI) => {
     try {
         const { data } = await api.get('/cart');
-        return data.data as CartItem[];
+        // The server drops items whose collection/occasion got paused and explains why.
+        return {
+            items: data.data as CartItem[],
+            removed: (data.removed || []) as { name: string; reason: string }[]
+        };
     } catch (err: any) {
         return thunkAPI.rejectWithValue(err.response?.data?.error || err.response?.data?.message || err.message);
     }
@@ -18136,7 +20923,7 @@ const cartSlice = createSlice({
         };
         builder
             .addCase(fetchCart.pending,          (state) => { state.loading = true; })
-            .addCase(fetchCart.fulfilled,         (state, action) => { state.items = action.payload; state.loading = false; })
+            .addCase(fetchCart.fulfilled,         (state, action) => { state.items = action.payload.items; state.removedPausedItems = action.payload.removed; state.loading = false; })
             .addCase(fetchCart.rejected,          (state, action) => { state.loading = false; state.error = action.payload as string; })
             .addCase(addItemToCart.pending,       (state) => { state.loading = true; })
             .addCase(addItemToCart.fulfilled,     setItems)
@@ -18167,6 +20954,13 @@ export interface CollectionItem {
     image?: string;
     parent?: string | { _id: string; name: string; slug: string } | null;
     isActive?: boolean;
+    /** Paused collections stay in the nav, but their products are hidden from the storefront. */
+    isPaused?: boolean;
+    pausedAt?: string;
+    /** True when this section is unsellable because it, or an ancestor, is paused. */
+    isEffectivelyPaused?: boolean;
+    /** Name of the section that carries the pause when it is an ancestor. */
+    pausedBecause?: string | null;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -18187,10 +20981,30 @@ const initialState: CollectionState = {
 
 export const fetchCollections = createAsyncThunk(
     'collections/fetchAll',
-    async (_, thunkAPI) => {
+    async (options: { all?: boolean } | undefined, thunkAPI) => {
         try {
-            const { data } = await api.get('/collections');
+            // ?all=true is honoured server-side only for admins; it also returns deactivated
+            // collections so the admin screen can bring them back.
+            const { data } = await api.get('/collections', {
+                params: options?.all ? { all: 'true' } : undefined
+            });
             return data.data as CollectionItem[];
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+/**
+ * Pause / resume a collection. Pausing hides every product in that collection (and in its
+ * sub-collections) from the storefront, cart and checkout.
+ */
+export const setCollectionPause = createAsyncThunk(
+    'collections/setPause',
+    async ({ id, isPaused }: { id: string; isPaused: boolean }, thunkAPI) => {
+        try {
+            const { data } = await api.put(`/collections/${id}/pause`, { isPaused });
+            return { item: data.data as CollectionItem, message: data.message as string };
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
@@ -18265,6 +21079,13 @@ const collectionSlice = createSlice({
             })
             .addCase(deleteCollection.fulfilled, (state, action) => {
                 state.collections = state.collections.filter(c => c._id !== action.payload && !(typeof c.parent === 'object' && c.parent && c.parent._id === action.payload));
+            })
+            // No `success`/`error` flag here on purpose: the page reports the outcome itself so
+            // pausing does not close the add/edit modal.
+            .addCase(setCollectionPause.fulfilled, (state, action) => {
+                state.collections = state.collections.map(c =>
+                    c._id === action.payload.item._id ? action.payload.item : c
+                );
             });
     }
 });
@@ -18571,6 +21392,13 @@ export interface OccasionItem {
     image?: string;
     parent?: string | { _id: string; name: string; slug: string } | null;
     isActive?: boolean;
+    /** Paused occasions stay in the nav, but their products are hidden from the storefront. */
+    isPaused?: boolean;
+    pausedAt?: string;
+    /** True when this occasion is unsellable because it, or an ancestor, is paused. */
+    isEffectivelyPaused?: boolean;
+    /** Name of the occasion that carries the pause when it is an ancestor. */
+    pausedBecause?: string | null;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -18591,10 +21419,30 @@ const initialState: OccasionState = {
 
 export const fetchOccasions = createAsyncThunk(
     'occasions/fetchAll',
-    async (_, thunkAPI) => {
+    async (options: { all?: boolean } | undefined, thunkAPI) => {
         try {
-            const { data } = await api.get('/occasions');
+            // ?all=true is honoured server-side only for admins; it also returns deactivated
+            // occasions so the admin screen can bring them back.
+            const { data } = await api.get('/occasions', {
+                params: options?.all ? { all: 'true' } : undefined
+            });
             return data.data as OccasionItem[];
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+/**
+ * Pause / resume an occasion. Pausing hides every product in that occasion (and in its
+ * sub-occasions) from the storefront, cart and checkout.
+ */
+export const setOccasionPause = createAsyncThunk(
+    'occasions/setPause',
+    async ({ id, isPaused }: { id: string; isPaused: boolean }, thunkAPI) => {
+        try {
+            const { data } = await api.put(`/occasions/${id}/pause`, { isPaused });
+            return { item: data.data as OccasionItem, message: data.message as string };
         } catch (error: any) {
             return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
         }
@@ -18669,6 +21517,13 @@ const occasionSlice = createSlice({
             })
             .addCase(deleteOccasion.fulfilled, (state, action) => {
                 state.occasions = state.occasions.filter(o => o._id !== action.payload && !(typeof o.parent === 'object' && o.parent && o.parent._id === action.payload));
+            })
+            // No `success`/`error` flag here on purpose: the page reports the outcome itself so
+            // pausing does not close the add/edit modal.
+            .addCase(setOccasionPause.fulfilled, (state, action) => {
+                state.occasions = state.occasions.map(o =>
+                    o._id === action.payload.item._id ? action.payload.item : o
+                );
             });
     }
 });
@@ -18680,13 +21535,16 @@ export default occasionSlice.reducer;
 ## File: `frontend/src/redux/slices/orderSlice.ts`
 
 ```typescript
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import api from '../../utils/api';
 
 interface OrderState {
     orders: any[];
     currentOrder: any | null;
     customOrder: any | null;
+    /** Offline intake keeps its own slice of state so it never fights the order table for `loading`. */
+    offlineOrders: any[];
+    offlineLoading: boolean;
     loading: boolean;
     error: string | null;
     success: boolean;
@@ -18696,6 +21554,8 @@ const initialState: OrderState = {
     orders: [],
     currentOrder: null,
     customOrder: null,
+    offlineOrders: [],
+    offlineLoading: false,
     loading: false,
     error: null,
     success: false,
@@ -18751,6 +21611,22 @@ export const updateOrderStatus = createAsyncThunk(
     }
 );
 
+/**
+ * Record a payment the gateway never saw (bank transfer, cash, UPI done offline).
+ * The backend refuses an already-paid order, so this can never double-confirm.
+ */
+export const markOrderPaid = createAsyncThunk(
+    'orders/markPaid',
+    async ({ id, method, reference, note }: { id: string; method: string; reference?: string; note?: string }, thunkAPI) => {
+        try {
+            const { data } = await api.put(`/orders/${id}/paid`, { method, reference, note });
+            return { order: data.data, message: data.message as string };
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
 export interface AdminCustomOrderPayload {
     customerName: string;
     customerEmail?: string;
@@ -18778,10 +21654,73 @@ export const createAdminCustomOrder = createAsyncThunk(
     }
 );
 
+export interface OfflineLineItem {
+    /** Product ObjectId — the server re-derives name/price/weight from this. */
+    product: string;
+    qty: number;
+    selectedVariant?: string;
+    selectedColor?: string;
+}
+
+export interface OfflineCustomItem {
+    name: string;
+    amount: number;
+    qty?: number;
+    weight?: number;
+    image?: string;
+    description?: string;
+}
+
+export interface AdminOfflineOrderPayload {
+    customerName: string;
+    customerEmail?: string;
+    customerPhone: string;
+    customerStreet?: string;
+    customerCity?: string;
+    customerState?: string;
+    customerZip?: string;
+    items: OfflineLineItem[];
+    /** One-off piece that is not in the catalogue (bespoke sets, repairs). */
+    customItem?: OfflineCustomItem;
+    /** Money already in hand (cash, UPI, bank transfer) — recorded through the same audited path. */
+    paymentReceived?: boolean;
+    method?: string;
+    reference?: string;
+    note?: string;
+}
+
+export const createOfflineOrder = createAsyncThunk(
+    'orders/createOffline',
+    async (payload: AdminOfflineOrderPayload, thunkAPI) => {
+        try {
+            const { data } = await api.post('/orders/admin/offline', payload);
+            return { order: data.data, message: data.message as string, warnings: (data.warnings || []) as string[] };
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
+export const fetchOfflineOrders = createAsyncThunk(
+    'orders/fetchOffline',
+    async (_, thunkAPI) => {
+        try {
+            const { data } = await api.get('/orders/admin/offline');
+            return data.data;
+        } catch (error: any) {
+            return thunkAPI.rejectWithValue(error.response?.data?.error || error.response?.data?.message || error.message);
+        }
+    }
+);
+
 const orderSlice = createSlice({
     name: 'orders',
     initialState,
     reducers: {
+        setCurrentOrder: (state, action: PayloadAction<Record<string, unknown>>) => {
+            state.currentOrder = action.payload;
+            state.success = true;
+        },
         resetOrderSuccess: (state) => {
             state.success = false;
             state.currentOrder = null;
@@ -18816,6 +21755,21 @@ const orderSlice = createSlice({
                 state.error = action.payload as string;
                 state.success = false;
             })
+            .addCase(markOrderPaid.rejected, (state, action) => {
+                state.error = null;
+                state.success = false;
+            })
+            .addCase(markOrderPaid.fulfilled, (state, action) => {
+                // Deliberately no `success` flag: the page reports the outcome itself so it can
+                // say "marked as paid" instead of the generic "Order Updated".
+                state.orders = state.orders.map(o => o._id === action.payload.order._id ? action.payload.order : o);
+                state.offlineOrders = state.offlineOrders.map(o => o._id === action.payload.order._id
+                    ? { ...o, ...action.payload.order }
+                    : o);
+                state.currentOrder = state.currentOrder?._id === action.payload.order._id
+                    ? action.payload.order
+                    : state.currentOrder;
+            })
             .addCase(createAdminCustomOrder.pending, (state) => {
                 state.loading = true;
                 state.error = null;
@@ -18830,11 +21784,31 @@ const orderSlice = createSlice({
                 state.loading = false;
                 state.error = action.payload as string;
                 state.success = false;
+            })
+            .addCase(createOfflineOrder.pending, (state) => {
+                state.offlineLoading = true;
+                state.error = null;
+            })
+            .addCase(createOfflineOrder.fulfilled, (state) => {
+                state.offlineLoading = false;
+            })
+            .addCase(createOfflineOrder.rejected, (state, action) => {
+                state.offlineLoading = false;
+                state.error = action.payload as string;
+            })
+            .addCase(fetchOfflineOrders.pending, (state) => { state.offlineLoading = true; })
+            .addCase(fetchOfflineOrders.fulfilled, (state, action) => {
+                state.offlineOrders = action.payload;
+                state.offlineLoading = false;
+            })
+            .addCase(fetchOfflineOrders.rejected, (state, action) => {
+                state.offlineLoading = false;
+                state.error = action.payload as string;
             });
     }
 });
 
-export const { resetOrderSuccess, clearCustomOrder } = orderSlice.actions;
+export const { setCurrentOrder, resetOrderSuccess, clearCustomOrder } = orderSlice.actions;
 export default orderSlice.reducer;
 
 ```
@@ -19251,11 +22225,5 @@ export const calculateShipping = (itemsPrice: number): number =>
   "exclude": ["node_modules"]
 }
 
-```
-
-## File: `frontend/tsconfig.tsbuildinfo`
-
-```
-{"fileNames":["./node_modules/typescript/lib/lib.es5.d.ts","./node_modules/typescript/lib/lib.es2015.d.ts","./node_modules/typescript/lib/lib.es2016.d.ts","./node_modules/typescript/lib/lib.es2017.d.ts","./node_modules/typescript/lib/lib.es2018.d.ts","./node_modules/typescript/lib/lib.es2019.d.ts","./node_modules/typescript/lib/lib.es2020.d.ts","./node_modules/typescript/lib/lib.es2021.d.ts","./node_modules/typescript/lib/lib.es2022.d.ts","./node_modules/typescript/lib/lib.es2023.d.ts","./node_modules/typescript/lib/lib.es2024.d.ts","./node_modules/typescript/lib/lib.esnext.d.ts","./node_modules/typescript/lib/lib.dom.d.ts","./node_modules/typescript/lib/lib.dom.iterable.d.ts","./node_modules/typescript/lib/lib.es2015.core.d.ts","./node_modules/typescript/lib/lib.es2015.collection.d.ts","./node_modules/typescript/lib/lib.es2015.generator.d.ts","./node_modules/typescript/lib/lib.es2015.iterable.d.ts","./node_modules/typescript/lib/lib.es2015.promise.d.ts","./node_modules/typescript/lib/lib.es2015.proxy.d.ts","./node_modules/typescript/lib/lib.es2015.reflect.d.ts","./node_modules/typescript/lib/lib.es2015.symbol.d.ts","./node_modules/typescript/lib/lib.es2015.symbol.wellknown.d.ts","./node_modules/typescript/lib/lib.es2016.array.include.d.ts","./node_modules/typescript/lib/lib.es2016.intl.d.ts","./node_modules/typescript/lib/lib.es2017.arraybuffer.d.ts","./node_modules/typescript/lib/lib.es2017.date.d.ts","./node_modules/typescript/lib/lib.es2017.object.d.ts","./node_modules/typescript/lib/lib.es2017.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2017.string.d.ts","./node_modules/typescript/lib/lib.es2017.intl.d.ts","./node_modules/typescript/lib/lib.es2017.typedarrays.d.ts","./node_modules/typescript/lib/lib.es2018.asyncgenerator.d.ts","./node_modules/typescript/lib/lib.es2018.asynciterable.d.ts","./node_modules/typescript/lib/lib.es2018.intl.d.ts","./node_modules/typescript/lib/lib.es2018.promise.d.ts","./node_modules/typescript/lib/lib.es2018.regexp.d.ts","./node_modules/typescript/lib/lib.es2019.array.d.ts","./node_modules/typescript/lib/lib.es2019.object.d.ts","./node_modules/typescript/lib/lib.es2019.string.d.ts","./node_modules/typescript/lib/lib.es2019.symbol.d.ts","./node_modules/typescript/lib/lib.es2019.intl.d.ts","./node_modules/typescript/lib/lib.es2020.bigint.d.ts","./node_modules/typescript/lib/lib.es2020.date.d.ts","./node_modules/typescript/lib/lib.es2020.promise.d.ts","./node_modules/typescript/lib/lib.es2020.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2020.string.d.ts","./node_modules/typescript/lib/lib.es2020.symbol.wellknown.d.ts","./node_modules/typescript/lib/lib.es2020.intl.d.ts","./node_modules/typescript/lib/lib.es2020.number.d.ts","./node_modules/typescript/lib/lib.es2021.promise.d.ts","./node_modules/typescript/lib/lib.es2021.string.d.ts","./node_modules/typescript/lib/lib.es2021.weakref.d.ts","./node_modules/typescript/lib/lib.es2021.intl.d.ts","./node_modules/typescript/lib/lib.es2022.array.d.ts","./node_modules/typescript/lib/lib.es2022.error.d.ts","./node_modules/typescript/lib/lib.es2022.intl.d.ts","./node_modules/typescript/lib/lib.es2022.object.d.ts","./node_modules/typescript/lib/lib.es2022.string.d.ts","./node_modules/typescript/lib/lib.es2022.regexp.d.ts","./node_modules/typescript/lib/lib.es2023.array.d.ts","./node_modules/typescript/lib/lib.es2023.collection.d.ts","./node_modules/typescript/lib/lib.es2023.intl.d.ts","./node_modules/typescript/lib/lib.es2024.arraybuffer.d.ts","./node_modules/typescript/lib/lib.es2024.collection.d.ts","./node_modules/typescript/lib/lib.es2024.object.d.ts","./node_modules/typescript/lib/lib.es2024.promise.d.ts","./node_modules/typescript/lib/lib.es2024.regexp.d.ts","./node_modules/typescript/lib/lib.es2024.sharedmemory.d.ts","./node_modules/typescript/lib/lib.es2024.string.d.ts","./node_modules/typescript/lib/lib.esnext.array.d.ts","./node_modules/typescript/lib/lib.esnext.collection.d.ts","./node_modules/typescript/lib/lib.esnext.intl.d.ts","./node_modules/typescript/lib/lib.esnext.disposable.d.ts","./node_modules/typescript/lib/lib.esnext.promise.d.ts","./node_modules/typescript/lib/lib.esnext.decorators.d.ts","./node_modules/typescript/lib/lib.esnext.iterator.d.ts","./node_modules/typescript/lib/lib.esnext.float16.d.ts","./node_modules/typescript/lib/lib.esnext.error.d.ts","./node_modules/typescript/lib/lib.esnext.sharedmemory.d.ts","./node_modules/typescript/lib/lib.decorators.d.ts","./node_modules/typescript/lib/lib.decorators.legacy.d.ts","./node_modules/@types/react/global.d.ts","./node_modules/csstype/index.d.ts","./node_modules/@types/react/index.d.ts","./node_modules/next/dist/styled-jsx/types/css.d.ts","./node_modules/next/dist/styled-jsx/types/macro.d.ts","./node_modules/next/dist/styled-jsx/types/style.d.ts","./node_modules/next/dist/styled-jsx/types/global.d.ts","./node_modules/next/dist/styled-jsx/types/index.d.ts","./node_modules/next/dist/server/get-page-files.d.ts","./node_modules/@types/node/compatibility/disposable.d.ts","./node_modules/@types/node/compatibility/indexable.d.ts","./node_modules/@types/node/compatibility/iterators.d.ts","./node_modules/@types/node/compatibility/index.d.ts","./node_modules/@types/node/globals.typedarray.d.ts","./node_modules/@types/node/buffer.buffer.d.ts","./node_modules/@types/node/globals.d.ts","./node_modules/@types/node/web-globals/abortcontroller.d.ts","./node_modules/@types/node/web-globals/domexception.d.ts","./node_modules/@types/node/web-globals/events.d.ts","./node_modules/undici-types/header.d.ts","./node_modules/undici-types/readable.d.ts","./node_modules/undici-types/file.d.ts","./node_modules/undici-types/fetch.d.ts","./node_modules/undici-types/formdata.d.ts","./node_modules/undici-types/connector.d.ts","./node_modules/undici-types/client.d.ts","./node_modules/undici-types/errors.d.ts","./node_modules/undici-types/dispatcher.d.ts","./node_modules/undici-types/global-dispatcher.d.ts","./node_modules/undici-types/global-origin.d.ts","./node_modules/undici-types/pool-stats.d.ts","./node_modules/undici-types/pool.d.ts","./node_modules/undici-types/handlers.d.ts","./node_modules/undici-types/balanced-pool.d.ts","./node_modules/undici-types/agent.d.ts","./node_modules/undici-types/mock-interceptor.d.ts","./node_modules/undici-types/mock-agent.d.ts","./node_modules/undici-types/mock-client.d.ts","./node_modules/undici-types/mock-pool.d.ts","./node_modules/undici-types/mock-errors.d.ts","./node_modules/undici-types/proxy-agent.d.ts","./node_modules/undici-types/env-http-proxy-agent.d.ts","./node_modules/undici-types/retry-handler.d.ts","./node_modules/undici-types/retry-agent.d.ts","./node_modules/undici-types/api.d.ts","./node_modules/undici-types/interceptors.d.ts","./node_modules/undici-types/util.d.ts","./node_modules/undici-types/cookies.d.ts","./node_modules/undici-types/patch.d.ts","./node_modules/undici-types/websocket.d.ts","./node_modules/undici-types/eventsource.d.ts","./node_modules/undici-types/filereader.d.ts","./node_modules/undici-types/diagnostics-channel.d.ts","./node_modules/undici-types/content-type.d.ts","./node_modules/undici-types/cache.d.ts","./node_modules/undici-types/index.d.ts","./node_modules/@types/node/web-globals/fetch.d.ts","./node_modules/@types/node/assert.d.ts","./node_modules/@types/node/assert/strict.d.ts","./node_modules/@types/node/async_hooks.d.ts","./node_modules/@types/node/buffer.d.ts","./node_modules/@types/node/child_process.d.ts","./node_modules/@types/node/cluster.d.ts","./node_modules/@types/node/console.d.ts","./node_modules/@types/node/constants.d.ts","./node_modules/@types/node/crypto.d.ts","./node_modules/@types/node/dgram.d.ts","./node_modules/@types/node/diagnostics_channel.d.ts","./node_modules/@types/node/dns.d.ts","./node_modules/@types/node/dns/promises.d.ts","./node_modules/@types/node/domain.d.ts","./node_modules/@types/node/events.d.ts","./node_modules/@types/node/fs.d.ts","./node_modules/@types/node/fs/promises.d.ts","./node_modules/@types/node/http.d.ts","./node_modules/@types/node/http2.d.ts","./node_modules/@types/node/https.d.ts","./node_modules/@types/node/inspector.generated.d.ts","./node_modules/@types/node/module.d.ts","./node_modules/@types/node/net.d.ts","./node_modules/@types/node/os.d.ts","./node_modules/@types/node/path.d.ts","./node_modules/@types/node/perf_hooks.d.ts","./node_modules/@types/node/process.d.ts","./node_modules/@types/node/punycode.d.ts","./node_modules/@types/node/querystring.d.ts","./node_modules/@types/node/readline.d.ts","./node_modules/@types/node/readline/promises.d.ts","./node_modules/@types/node/repl.d.ts","./node_modules/@types/node/sea.d.ts","./node_modules/@types/node/stream.d.ts","./node_modules/@types/node/stream/promises.d.ts","./node_modules/@types/node/stream/consumers.d.ts","./node_modules/@types/node/stream/web.d.ts","./node_modules/@types/node/string_decoder.d.ts","./node_modules/@types/node/test.d.ts","./node_modules/@types/node/timers.d.ts","./node_modules/@types/node/timers/promises.d.ts","./node_modules/@types/node/tls.d.ts","./node_modules/@types/node/trace_events.d.ts","./node_modules/@types/node/tty.d.ts","./node_modules/@types/node/url.d.ts","./node_modules/@types/node/util.d.ts","./node_modules/@types/node/v8.d.ts","./node_modules/@types/node/vm.d.ts","./node_modules/@types/node/wasi.d.ts","./node_modules/@types/node/worker_threads.d.ts","./node_modules/@types/node/zlib.d.ts","./node_modules/@types/node/index.d.ts","./node_modules/@types/react/canary.d.ts","./node_modules/@types/react/experimental.d.ts","./node_modules/@types/react-dom/index.d.ts","./node_modules/@types/react-dom/canary.d.ts","./node_modules/@types/react-dom/experimental.d.ts","./node_modules/next/dist/lib/fallback.d.ts","./node_modules/next/dist/compiled/webpack/webpack.d.ts","./node_modules/next/dist/shared/lib/modern-browserslist-target.d.ts","./node_modules/next/dist/shared/lib/entry-constants.d.ts","./node_modules/next/dist/shared/lib/constants.d.ts","./node_modules/next/dist/lib/bundler.d.ts","./node_modules/next/dist/server/config.d.ts","./node_modules/next/dist/lib/load-custom-routes.d.ts","./node_modules/next/dist/shared/lib/image-config.d.ts","./node_modules/next/dist/build/webpack/plugins/subresource-integrity-plugin.d.ts","./node_modules/next/dist/server/body-streams.d.ts","./node_modules/next/dist/server/request/search-params.d.ts","./node_modules/next/dist/shared/lib/segment-cache/vary-params-decoding.d.ts","./node_modules/next/dist/server/app-render/vary-params.d.ts","./node_modules/next/dist/server/request/params.d.ts","./node_modules/next/dist/server/route-kind.d.ts","./node_modules/next/dist/server/route-definitions/route-definition.d.ts","./node_modules/next/dist/server/route-matches/route-match.d.ts","./node_modules/next/dist/client/components/app-router-headers.d.ts","./node_modules/next/dist/server/lib/cache-control.d.ts","./node_modules/next/dist/shared/lib/app-router-types.d.ts","./node_modules/next/dist/server/lib/cache-handlers/types.d.ts","./node_modules/next/dist/server/use-cache/use-cache-wrapper.d.ts","./node_modules/next/dist/server/resume-data-cache/cache-store.d.ts","./node_modules/next/dist/server/resume-data-cache/resume-data-cache.d.ts","./node_modules/next/dist/lib/constants.d.ts","./node_modules/next/dist/server/render-result.d.ts","./node_modules/next/dist/server/response-cache/types.d.ts","./node_modules/next/dist/server/response-cache/index.d.ts","./node_modules/@types/react/jsx-runtime.d.ts","./node_modules/next/dist/next-devtools/userspace/pages/pages-dev-overlay-setup.d.ts","./node_modules/next/dist/build/static-paths/types.d.ts","./node_modules/next/dist/server/route-definitions/app-page-route-definition.d.ts","./node_modules/next/dist/build/adapter/setup-node-env.external.d.ts","./node_modules/next/dist/server/instrumentation/types.d.ts","./node_modules/next/dist/lib/setup-exception-listeners.d.ts","./node_modules/next/dist/lib/worker.d.ts","./node_modules/next/dist/server/lib/experimental/ppr.d.ts","./node_modules/next/dist/lib/page-types.d.ts","./node_modules/next/dist/build/segment-config/app/app-segment-config.d.ts","./node_modules/next/dist/build/segment-config/pages/pages-segment-config.d.ts","./node_modules/next/dist/build/analysis/get-page-static-info.d.ts","./node_modules/next/dist/build/webpack/loaders/get-module-build-info.d.ts","./node_modules/next/dist/build/webpack/plugins/middleware-plugin.d.ts","./node_modules/next/dist/server/require-hook.d.ts","./node_modules/next/dist/server/node-polyfill-crypto.d.ts","./node_modules/next/dist/server/node-environment-baseline.d.ts","./node_modules/next/dist/server/node-environment-extensions/error-inspect.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-file.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-exit.d.ts","./node_modules/next/dist/server/node-environment-extensions/console-dim.external.d.ts","./node_modules/next/dist/server/node-environment-extensions/unhandled-rejection.external.d.ts","./node_modules/next/dist/server/node-environment-extensions/random.d.ts","./node_modules/next/dist/server/node-environment-extensions/date.d.ts","./node_modules/next/dist/server/node-environment-extensions/web-crypto.d.ts","./node_modules/next/dist/server/node-environment-extensions/node-crypto.d.ts","./node_modules/next/dist/server/node-environment-extensions/fast-set-immediate.external.d.ts","./node_modules/next/dist/server/node-environment.d.ts","./node_modules/next/dist/build/page-extensions-type.d.ts","./node_modules/next/dist/server/route-modules/app-page/module.compiled.d.ts","./node_modules/next/dist/server/route-definitions/app-route-route-definition.d.ts","./node_modules/next/dist/server/lib/i18n-provider.d.ts","./node_modules/next/dist/server/web/next-url.d.ts","./node_modules/next/dist/compiled/@edge-runtime/cookies/index.d.ts","./node_modules/next/dist/server/web/spec-extension/cookies.d.ts","./node_modules/next/dist/server/web/spec-extension/request.d.ts","./node_modules/next/dist/shared/lib/deep-readonly.d.ts","./node_modules/next/dist/server/lib/incremental-cache/index.d.ts","./node_modules/next/dist/shared/lib/router/utils/middleware-route-matcher.d.ts","./node_modules/next/dist/build/webpack/plugins/flight-manifest-plugin.d.ts","./node_modules/next/dist/build/webpack/plugins/next-font-manifest-plugin.d.ts","./node_modules/next/dist/server/route-definitions/locale-route-definition.d.ts","./node_modules/next/dist/server/route-definitions/pages-route-definition.d.ts","./node_modules/next/dist/shared/lib/mitt.d.ts","./node_modules/next/dist/client/with-router.d.ts","./node_modules/next/dist/client/router.d.ts","./node_modules/next/dist/client/route-loader.d.ts","./node_modules/next/dist/client/page-loader.d.ts","./node_modules/next/dist/shared/lib/bloom-filter.d.ts","./node_modules/next/dist/shared/lib/router/router.d.ts","./node_modules/next/dist/shared/lib/router-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/loadable-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/loadable.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/image-config-context.shared-runtime.d.ts","./node_modules/next/dist/client/components/readonly-url-search-params.d.ts","./node_modules/next/dist/shared/lib/hooks-client-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/head-manager-context.shared-runtime.d.ts","./node_modules/next/dist/client/flight-data-helpers.d.ts","./node_modules/next/dist/client/components/segment-cache/cache-key.d.ts","./node_modules/next/dist/client/components/router-reducer/fetch-server-response.d.ts","./node_modules/next/dist/client/components/segment-cache/types.d.ts","./node_modules/next/dist/shared/lib/segment-cache/segment-value-encoding.d.ts","./node_modules/next/dist/client/components/segment-cache/scheduler.d.ts","./node_modules/next/dist/client/components/segment-cache/cache-map.d.ts","./node_modules/next/dist/client/components/segment-cache/vary-path.d.ts","./node_modules/next/dist/client/components/segment-cache/cache.d.ts","./node_modules/next/dist/client/components/router-reducer/ppr-navigations.d.ts","./node_modules/next/dist/client/components/segment-cache/navigation.d.ts","./node_modules/next/dist/client/components/router-reducer/router-reducer-types.d.ts","./node_modules/next/dist/shared/lib/app-router-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/server-inserted-html.shared-runtime.d.ts","./node_modules/next/dist/server/route-modules/pages/vendored/contexts/entrypoints.d.ts","./node_modules/next/dist/server/route-modules/pages/module.compiled.d.ts","./node_modules/next/dist/build/templates/pages.d.ts","./node_modules/next/dist/server/route-modules/pages/module.d.ts","./node_modules/next/dist/server/render.d.ts","./node_modules/next/dist/build/webpack/plugins/pages-manifest-plugin.d.ts","./node_modules/next/dist/server/route-definitions/pages-api-route-definition.d.ts","./node_modules/next/dist/server/route-matches/pages-api-route-match.d.ts","./node_modules/next/dist/server/route-matchers/route-matcher.d.ts","./node_modules/next/dist/server/route-matcher-providers/route-matcher-provider.d.ts","./node_modules/next/dist/server/route-matcher-managers/route-matcher-manager.d.ts","./node_modules/next/dist/server/normalizers/normalizer.d.ts","./node_modules/next/dist/server/normalizers/locale-route-normalizer.d.ts","./node_modules/next/dist/server/normalizers/request/pathname-normalizer.d.ts","./node_modules/next/dist/server/normalizers/request/suffix.d.ts","./node_modules/next/dist/server/normalizers/request/rsc.d.ts","./node_modules/next/dist/server/normalizers/request/next-data.d.ts","./node_modules/next/dist/server/after/builtin-request-context.d.ts","./node_modules/next/dist/server/normalizers/request/segment-prefix-rsc.d.ts","./node_modules/next/dist/server/route-modules/pages/builtin/_error.d.ts","./node_modules/next/dist/server/load-default-error-components.d.ts","./node_modules/next/dist/server/base-server.d.ts","./node_modules/next/dist/server/after/after.d.ts","./node_modules/next/dist/server/after/after-context.d.ts","./node_modules/next/dist/server/use-cache/cache-life.d.ts","./node_modules/next/dist/server/app-render/work-async-storage-instance.d.ts","./node_modules/next/dist/server/lib/lazy-result.d.ts","./node_modules/next/dist/server/app-render/create-error-handler.d.ts","./node_modules/next/dist/shared/lib/action-revalidation-kind.d.ts","./node_modules/next/dist/server/app-render/work-async-storage.external.d.ts","./node_modules/next/dist/server/async-storage/work-store.d.ts","./node_modules/next/dist/server/web/http.d.ts","./node_modules/next/dist/client/components/hooks-server-context.d.ts","./node_modules/next/dist/server/route-modules/app-route/shared-modules.d.ts","./node_modules/next/dist/client/components/redirect-status-code.d.ts","./node_modules/next/dist/client/components/redirect-error.d.ts","./node_modules/next/dist/server/web/spec-extension/adapters/request-cookies.d.ts","./node_modules/next/dist/server/async-storage/draft-mode-provider.d.ts","./node_modules/next/dist/server/web/spec-extension/adapters/headers.d.ts","./node_modules/next/dist/server/app-render/cache-signal.d.ts","./node_modules/next/dist/server/app-render/instant-validation/boundary-tracking.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-validation-error.d.ts","./node_modules/next/dist/shared/lib/router/utils/parse-relative-url.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-samples.d.ts","./node_modules/next/dist/server/app-render/dynamic-rendering.d.ts","./node_modules/next/dist/server/app-render/work-unit-async-storage-instance.d.ts","./node_modules/next/dist/server/lib/implicit-tags.d.ts","./node_modules/next/dist/server/app-render/staged-rendering.d.ts","./node_modules/next/dist/server/app-render/work-unit-async-storage.external.d.ts","./node_modules/next/dist/build/templates/app-route.d.ts","./node_modules/next/dist/server/app-render/action-async-storage-instance.d.ts","./node_modules/next/dist/server/app-render/action-async-storage.external.d.ts","./node_modules/next/dist/server/route-modules/app-route/module.d.ts","./node_modules/next/dist/server/route-modules/app-route/module.compiled.d.ts","./node_modules/next/dist/build/segment-config/app/app-segments.d.ts","./node_modules/next/dist/build/get-supported-browsers.d.ts","./node_modules/next/dist/build/utils.d.ts","./node_modules/next/dist/build/rendering-mode.d.ts","./node_modules/next/dist/server/lib/router-utils/build-prefetch-segment-data-route.d.ts","./node_modules/next/dist/server/lib/cpu-profile.d.ts","./node_modules/next/dist/build/turborepo-access-trace/types.d.ts","./node_modules/next/dist/build/turborepo-access-trace/result.d.ts","./node_modules/next/dist/build/turborepo-access-trace/helpers.d.ts","./node_modules/next/dist/build/turborepo-access-trace/index.d.ts","./node_modules/next/dist/export/routes/types.d.ts","./node_modules/next/dist/export/types.d.ts","./node_modules/next/dist/export/worker.d.ts","./node_modules/next/dist/build/worker.d.ts","./node_modules/next/dist/build/index.d.ts","./node_modules/next/dist/lib/coalesced-function.d.ts","./node_modules/next/dist/server/lib/router-utils/types.d.ts","./node_modules/next/dist/trace/types.d.ts","./node_modules/next/dist/trace/trace.d.ts","./node_modules/next/dist/trace/shared.d.ts","./node_modules/next/dist/trace/index.d.ts","./node_modules/next/dist/build/load-jsconfig.d.ts","./node_modules/@next/env/dist/index.d.ts","./node_modules/next/dist/build/webpack/plugins/telemetry-plugin/use-cache-tracker-utils.d.ts","./node_modules/next/dist/build/webpack/plugins/telemetry-plugin/telemetry-plugin.d.ts","./node_modules/next/dist/telemetry/storage.d.ts","./node_modules/next/dist/build/build-context.d.ts","./node_modules/next/dist/build/webpack-config.d.ts","./node_modules/next/dist/build/swc/generated-native.d.ts","./node_modules/next/dist/build/define-env.d.ts","./node_modules/next/dist/build/swc/index.d.ts","./node_modules/next/dist/build/swc/types.d.ts","./node_modules/next/dist/server/dev/parse-version-info.d.ts","./node_modules/next/dist/next-devtools/shared/types.d.ts","./node_modules/next/dist/server/dev/dev-indicator-server-state.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/cache-indicator.d.ts","./node_modules/next/dist/server/lib/parse-stack.d.ts","./node_modules/next/dist/next-devtools/server/shared.d.ts","./node_modules/next/dist/next-devtools/shared/stack-frame.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/utils/get-error-by-type.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/container/runtime-error/render-error.d.ts","./node_modules/next/dist/next-devtools/dev-overlay/shared.d.ts","./node_modules/next/dist/server/dev/debug-channel.d.ts","./node_modules/next/dist/server/dev/hot-reloader-types.d.ts","./node_modules/next/dist/server/web/spec-extension/fetch-event.d.ts","./node_modules/next/dist/server/web/spec-extension/response.d.ts","./node_modules/next/dist/build/segment-config/middleware/middleware-config.d.ts","./node_modules/next/dist/server/web/types.d.ts","./node_modules/next/dist/shared/lib/router/utils/parse-url.d.ts","./node_modules/next/dist/server/base-http/node.d.ts","./node_modules/next/dist/server/lib/async-callback-set.d.ts","./node_modules/next/dist/shared/lib/router/utils/route-regex.d.ts","./node_modules/next/dist/shared/lib/router/utils/route-matcher.d.ts","./node_modules/sharp/lib/index.d.ts","./node_modules/next/dist/server/image-optimizer.d.ts","./node_modules/next/dist/server/next-server.d.ts","./node_modules/next/dist/server/lib/types.d.ts","./node_modules/next/dist/server/lib/lru-cache.d.ts","./node_modules/next/dist/server/lib/dev-bundler-service.d.ts","./node_modules/next/dist/server/dev/static-paths-worker.d.ts","./node_modules/next/dist/server/dev/next-dev-server.d.ts","./node_modules/next/dist/server/next.d.ts","./node_modules/next/dist/server/lib/render-server.d.ts","./node_modules/next/dist/server/lib/router-server.d.ts","./node_modules/next/dist/shared/lib/router/utils/path-match.d.ts","./node_modules/next/dist/server/lib/router-utils/filesystem.d.ts","./node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.d.ts","./node_modules/next/dist/server/lib/router-utils/router-server-context.d.ts","./node_modules/next/dist/server/route-modules/route-module.d.ts","./node_modules/next/dist/server/load-components.d.ts","./node_modules/next/dist/server/web/adapter.d.ts","./node_modules/next/dist/server/app-render/types.d.ts","./node_modules/next/dist/build/webpack/loaders/metadata/types.d.ts","./node_modules/next/dist/build/webpack/loaders/next-app-loader/index.d.ts","./node_modules/next/dist/server/lib/app-dir-module.d.ts","./node_modules/next/dist/server/app-render/app-render.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/contexts/entrypoints.d.ts","./node_modules/next/dist/client/components/error-boundary.d.ts","./node_modules/next/dist/client/components/layout-router.d.ts","./node_modules/next/dist/client/components/render-from-template-context.d.ts","./node_modules/next/dist/client/components/client-page.d.ts","./node_modules/next/dist/client/components/client-segment.d.ts","./node_modules/next/dist/client/components/http-access-fallback/error-boundary.d.ts","./node_modules/next/dist/lib/metadata/types/alternative-urls-types.d.ts","./node_modules/next/dist/lib/metadata/types/extra-types.d.ts","./node_modules/next/dist/lib/metadata/types/metadata-types.d.ts","./node_modules/next/dist/lib/metadata/types/manifest-types.d.ts","./node_modules/next/dist/lib/metadata/types/opengraph-types.d.ts","./node_modules/next/dist/lib/metadata/types/twitter-types.d.ts","./node_modules/next/dist/lib/metadata/types/metadata-interface.d.ts","./node_modules/next/dist/lib/metadata/types/resolvers.d.ts","./node_modules/next/dist/lib/metadata/types/icons.d.ts","./node_modules/next/dist/lib/metadata/resolve-metadata.d.ts","./node_modules/next/dist/lib/metadata/metadata.d.ts","./node_modules/next/dist/lib/framework/boundary-components.d.ts","./node_modules/next/dist/server/app-render/rsc/preloads.d.ts","./node_modules/next/dist/server/app-render/rsc/postpone.d.ts","./node_modules/next/dist/server/app-render/rsc/taint.d.ts","./node_modules/next/dist/server/app-render/collect-segment-data.d.ts","./node_modules/next/dist/server/app-render/instant-validation/instant-validation.d.ts","./node_modules/next/dist/next-devtools/userspace/app/segment-explorer-node.d.ts","./node_modules/next/dist/server/app-render/entry-base.d.ts","./node_modules/next/dist/build/templates/app-page.d.ts","./node_modules/next/dist/server/route-modules/app-page/helpers/prerender-manifest-matcher.d.ts","./node_modules/@types/react/jsx-dev-runtime.d.ts","./node_modules/@types/react/compiler-runtime.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/rsc/entrypoints.d.ts","./node_modules/@types/react-dom/client.d.ts","./node_modules/@types/react-dom/static.d.ts","./node_modules/@types/react-dom/server.d.ts","./node_modules/next/dist/server/route-modules/app-page/vendored/ssr/entrypoints.d.ts","./node_modules/next/dist/server/route-modules/app-page/module.d.ts","./node_modules/next/dist/server/request/fallback-params.d.ts","./node_modules/next/dist/server/web/spec-extension/image-response.d.ts","./node_modules/next/dist/server/web/spec-extension/user-agent.d.ts","./node_modules/next/dist/server/web/spec-extension/url-pattern.d.ts","./node_modules/next/dist/server/after/index.d.ts","./node_modules/next/dist/server/request/connection.d.ts","./node_modules/next/dist/server/web/exports/index.d.ts","./node_modules/next/dist/server/request-meta.d.ts","./node_modules/next/dist/cli/next-test.d.ts","./node_modules/next/dist/shared/lib/size-limit.d.ts","./node_modules/next/dist/server/config-shared.d.ts","./node_modules/next/dist/server/base-http/index.d.ts","./node_modules/next/dist/server/api-utils/index.d.ts","./node_modules/next/dist/build/adapter/build-complete.d.ts","./node_modules/next/dist/types.d.ts","./node_modules/next/dist/shared/lib/html-context.shared-runtime.d.ts","./node_modules/next/dist/shared/lib/utils.d.ts","./node_modules/next/dist/pages/_app.d.ts","./node_modules/next/app.d.ts","./node_modules/next/dist/server/web/spec-extension/unstable-cache.d.ts","./node_modules/next/dist/server/web/spec-extension/revalidate.d.ts","./node_modules/next/dist/server/web/spec-extension/unstable-no-store.d.ts","./node_modules/next/dist/server/use-cache/cache-tag.d.ts","./node_modules/next/cache.d.ts","./node_modules/next/dist/pages/_document.d.ts","./node_modules/next/document.d.ts","./node_modules/next/dist/shared/lib/dynamic.d.ts","./node_modules/next/dynamic.d.ts","./node_modules/next/dist/pages/_error.d.ts","./node_modules/next/dist/client/components/catch-error.d.ts","./node_modules/next/dist/api/error.d.ts","./node_modules/next/error.d.ts","./node_modules/next/dist/shared/lib/head.d.ts","./node_modules/next/head.d.ts","./node_modules/next/dist/server/request/cookies.d.ts","./node_modules/next/dist/server/request/headers.d.ts","./node_modules/next/dist/server/request/draft-mode.d.ts","./node_modules/next/headers.d.ts","./node_modules/next/dist/shared/lib/get-img-props.d.ts","./node_modules/next/dist/client/image-component.d.ts","./node_modules/next/dist/shared/lib/image-external.d.ts","./node_modules/next/image.d.ts","./node_modules/next/dist/client/link.d.ts","./node_modules/next/link.d.ts","./node_modules/next/dist/client/components/unrecognized-action-error.d.ts","./node_modules/next/dist/client/components/redirect.d.ts","./node_modules/next/dist/client/components/not-found.d.ts","./node_modules/next/dist/client/components/forbidden.d.ts","./node_modules/next/dist/client/components/unauthorized.d.ts","./node_modules/next/dist/client/components/unstable-rethrow.server.d.ts","./node_modules/next/dist/client/components/unstable-rethrow.d.ts","./node_modules/next/dist/client/components/navigation.react-server.d.ts","./node_modules/next/dist/client/components/navigation.d.ts","./node_modules/next/navigation.d.ts","./node_modules/next/router.d.ts","./node_modules/next/dist/client/script.d.ts","./node_modules/next/script.d.ts","./node_modules/next/dist/compiled/@edge-runtime/primitives/url.d.ts","./node_modules/next/dist/compiled/@vercel/og/satori/index.d.ts","./node_modules/next/dist/compiled/@vercel/og/types.d.ts","./node_modules/next/server.d.ts","./node_modules/next/types/global.d.ts","./node_modules/next/types/compiled.d.ts","./node_modules/next/types.d.ts","./node_modules/next/index.d.ts","./node_modules/next/image-types/global.d.ts","./.next/types/routes.d.ts","./next-env.d.ts","./next.config.ts","./src/data/categories.ts","./src/data/excelproducts.ts","./src/data/products.ts","./node_modules/redux/dist/redux.d.ts","./node_modules/react-redux/dist/react-redux.d.ts","./node_modules/immer/dist/immer.d.ts","./node_modules/reselect/dist/reselect.d.ts","./node_modules/redux-thunk/dist/redux-thunk.d.ts","./node_modules/@reduxjs/toolkit/dist/uncheckedindexed.ts","./node_modules/@reduxjs/toolkit/dist/index.d.mts","./node_modules/axios/index.d.ts","./src/utils/api.ts","./src/redux/slices/authslice.ts","./src/redux/slices/productslice.ts","./src/redux/slices/orderslice.ts","./src/redux/slices/inquiryslice.ts","./src/redux/slices/userslice.ts","./src/redux/slices/collectionslice.ts","./src/redux/slices/occasionslice.ts","./src/redux/slices/homepagesettingsslice.ts","./src/redux/slices/cartslice.ts","./src/redux/store.ts","./src/redux/hooks.ts","./src/hooks/usecart.ts","./src/utils/compressimage.ts","./src/utils/formatweight.ts","./src/utils/getimageurl.ts","./src/utils/shipping.ts","./node_modules/next/dist/compiled/@next/font/dist/types.d.ts","./node_modules/next/dist/compiled/@next/font/dist/google/index.d.ts","./node_modules/next/font/google/index.d.ts","./node_modules/lucide-react/dist/lucide-react.d.ts","./src/components/navbar.tsx","./src/components/footer.tsx","./src/components/announcementbar.tsx","./node_modules/motion-utils/dist/index.d.ts","./node_modules/motion-dom/dist/index.d.ts","./node_modules/framer-motion/dist/types.d-docc-kzb.d.ts","./node_modules/framer-motion/dist/types/index.d.ts","./src/components/cartdrawer.tsx","./src/components/reduxprovider.tsx","./node_modules/goober/goober.d.ts","./node_modules/react-hot-toast/dist/index.d.ts","./src/app/layout.tsx","./node_modules/embla-carousel/esm/components/alignment.d.ts","./node_modules/embla-carousel/esm/components/noderects.d.ts","./node_modules/embla-carousel/esm/components/axis.d.ts","./node_modules/embla-carousel/esm/components/slidestoscroll.d.ts","./node_modules/embla-carousel/esm/components/limit.d.ts","./node_modules/embla-carousel/esm/components/scrollcontain.d.ts","./node_modules/embla-carousel/esm/components/dragtracker.d.ts","./node_modules/embla-carousel/esm/components/utils.d.ts","./node_modules/embla-carousel/esm/components/animations.d.ts","./node_modules/embla-carousel/esm/components/counter.d.ts","./node_modules/embla-carousel/esm/components/eventhandler.d.ts","./node_modules/embla-carousel/esm/components/eventstore.d.ts","./node_modules/embla-carousel/esm/components/percentofview.d.ts","./node_modules/embla-carousel/esm/components/resizehandler.d.ts","./node_modules/embla-carousel/esm/components/vector1d.d.ts","./node_modules/embla-carousel/esm/components/scrollbody.d.ts","./node_modules/embla-carousel/esm/components/scrollbounds.d.ts","./node_modules/embla-carousel/esm/components/scrolllooper.d.ts","./node_modules/embla-carousel/esm/components/scrollprogress.d.ts","./node_modules/embla-carousel/esm/components/slideregistry.d.ts","./node_modules/embla-carousel/esm/components/scrolltarget.d.ts","./node_modules/embla-carousel/esm/components/scrollto.d.ts","./node_modules/embla-carousel/esm/components/slidefocus.d.ts","./node_modules/embla-carousel/esm/components/translate.d.ts","./node_modules/embla-carousel/esm/components/slidelooper.d.ts","./node_modules/embla-carousel/esm/components/slideshandler.d.ts","./node_modules/embla-carousel/esm/components/slidesinview.d.ts","./node_modules/embla-carousel/esm/components/engine.d.ts","./node_modules/embla-carousel/esm/components/optionshandler.d.ts","./node_modules/embla-carousel/esm/components/plugins.d.ts","./node_modules/embla-carousel/esm/components/emblacarousel.d.ts","./node_modules/embla-carousel/esm/components/draghandler.d.ts","./node_modules/embla-carousel/esm/components/options.d.ts","./node_modules/embla-carousel/esm/index.d.ts","./node_modules/embla-carousel-react/esm/components/useemblacarousel.d.ts","./node_modules/embla-carousel-react/esm/index.d.ts","./node_modules/embla-carousel-autoplay/esm/components/options.d.ts","./node_modules/embla-carousel-autoplay/esm/components/autoplay.d.ts","./node_modules/embla-carousel-autoplay/esm/index.d.ts","./src/app/page.tsx","./src/components/breadcrumbhero.tsx","./src/app/account/page.tsx","./src/components/breadcrumb.tsx","./src/app/account/orders/page.tsx","./src/app/account/orders/[id]/page.tsx","./src/app/account/profile/page.tsx","./src/components/admin/adminsidebar.tsx","./src/app/admin/layout.tsx","./src/app/admin/page.tsx","./node_modules/react-hook-form/dist/constants.d.ts","./node_modules/react-hook-form/dist/utils/createsubject.d.ts","./node_modules/react-hook-form/dist/types/events.d.ts","./node_modules/react-hook-form/dist/types/path/common.d.ts","./node_modules/react-hook-form/dist/types/path/eager.d.ts","./node_modules/react-hook-form/dist/types/path/index.d.ts","./node_modules/react-hook-form/dist/types/fieldarray.d.ts","./node_modules/react-hook-form/dist/types/resolvers.d.ts","./node_modules/react-hook-form/dist/types/form.d.ts","./node_modules/react-hook-form/dist/types/utils.d.ts","./node_modules/react-hook-form/dist/types/fields.d.ts","./node_modules/react-hook-form/dist/types/errors.d.ts","./node_modules/react-hook-form/dist/types/validator.d.ts","./node_modules/react-hook-form/dist/types/controller.d.ts","./node_modules/react-hook-form/dist/types/watch.d.ts","./node_modules/react-hook-form/dist/types/index.d.ts","./node_modules/react-hook-form/dist/controller.d.ts","./node_modules/react-hook-form/dist/form.d.ts","./node_modules/react-hook-form/dist/formstatesubscribe.d.ts","./node_modules/react-hook-form/dist/logic/appenderrors.d.ts","./node_modules/react-hook-form/dist/logic/createformcontrol.d.ts","./node_modules/react-hook-form/dist/logic/index.d.ts","./node_modules/react-hook-form/dist/usecontroller.d.ts","./node_modules/react-hook-form/dist/usefieldarray.d.ts","./node_modules/react-hook-form/dist/useform.d.ts","./node_modules/react-hook-form/dist/useformcontext.d.ts","./node_modules/react-hook-form/dist/useformstate.d.ts","./node_modules/react-hook-form/dist/usewatch.d.ts","./node_modules/react-hook-form/dist/utils/get.d.ts","./node_modules/react-hook-form/dist/utils/set.d.ts","./node_modules/react-hook-form/dist/utils/index.d.ts","./node_modules/react-hook-form/dist/watch.d.ts","./node_modules/react-hook-form/dist/index.d.ts","./node_modules/zod/v3/helpers/typealiases.d.cts","./node_modules/zod/v3/helpers/util.d.cts","./node_modules/zod/v3/zoderror.d.cts","./node_modules/zod/v3/locales/en.d.cts","./node_modules/zod/v3/errors.d.cts","./node_modules/zod/v3/helpers/parseutil.d.cts","./node_modules/zod/v3/helpers/enumutil.d.cts","./node_modules/zod/v3/helpers/errorutil.d.cts","./node_modules/zod/v3/helpers/partialutil.d.cts","./node_modules/zod/v3/standard-schema.d.cts","./node_modules/zod/v3/types.d.cts","./node_modules/zod/v3/external.d.cts","./node_modules/zod/v3/index.d.cts","./node_modules/zod/v4/core/json-schema.d.cts","./node_modules/zod/v4/core/standard-schema.d.cts","./node_modules/zod/v4/core/registries.d.cts","./node_modules/zod/v4/core/to-json-schema.d.cts","./node_modules/zod/v4/core/util.d.cts","./node_modules/zod/v4/core/versions.d.cts","./node_modules/zod/v4/core/schemas.d.cts","./node_modules/zod/v4/core/checks.d.cts","./node_modules/zod/v4/core/errors.d.cts","./node_modules/zod/v4/core/core.d.cts","./node_modules/zod/v4/core/parse.d.cts","./node_modules/zod/v4/core/regexes.d.cts","./node_modules/zod/v4/locales/ar.d.cts","./node_modules/zod/v4/locales/az.d.cts","./node_modules/zod/v4/locales/be.d.cts","./node_modules/zod/v4/locales/bg.d.cts","./node_modules/zod/v4/locales/ca.d.cts","./node_modules/zod/v4/locales/cs.d.cts","./node_modules/zod/v4/locales/da.d.cts","./node_modules/zod/v4/locales/de.d.cts","./node_modules/zod/v4/locales/en.d.cts","./node_modules/zod/v4/locales/eo.d.cts","./node_modules/zod/v4/locales/es.d.cts","./node_modules/zod/v4/locales/fa.d.cts","./node_modules/zod/v4/locales/fi.d.cts","./node_modules/zod/v4/locales/fr.d.cts","./node_modules/zod/v4/locales/fr-ca.d.cts","./node_modules/zod/v4/locales/he.d.cts","./node_modules/zod/v4/locales/hu.d.cts","./node_modules/zod/v4/locales/hy.d.cts","./node_modules/zod/v4/locales/id.d.cts","./node_modules/zod/v4/locales/is.d.cts","./node_modules/zod/v4/locales/it.d.cts","./node_modules/zod/v4/locales/ja.d.cts","./node_modules/zod/v4/locales/ka.d.cts","./node_modules/zod/v4/locales/kh.d.cts","./node_modules/zod/v4/locales/km.d.cts","./node_modules/zod/v4/locales/ko.d.cts","./node_modules/zod/v4/locales/lt.d.cts","./node_modules/zod/v4/locales/mk.d.cts","./node_modules/zod/v4/locales/ms.d.cts","./node_modules/zod/v4/locales/nl.d.cts","./node_modules/zod/v4/locales/no.d.cts","./node_modules/zod/v4/locales/ota.d.cts","./node_modules/zod/v4/locales/ps.d.cts","./node_modules/zod/v4/locales/pl.d.cts","./node_modules/zod/v4/locales/pt.d.cts","./node_modules/zod/v4/locales/ru.d.cts","./node_modules/zod/v4/locales/sl.d.cts","./node_modules/zod/v4/locales/sv.d.cts","./node_modules/zod/v4/locales/ta.d.cts","./node_modules/zod/v4/locales/th.d.cts","./node_modules/zod/v4/locales/tr.d.cts","./node_modules/zod/v4/locales/ua.d.cts","./node_modules/zod/v4/locales/uk.d.cts","./node_modules/zod/v4/locales/ur.d.cts","./node_modules/zod/v4/locales/uz.d.cts","./node_modules/zod/v4/locales/vi.d.cts","./node_modules/zod/v4/locales/zh-cn.d.cts","./node_modules/zod/v4/locales/zh-tw.d.cts","./node_modules/zod/v4/locales/yo.d.cts","./node_modules/zod/v4/locales/index.d.cts","./node_modules/zod/v4/core/doc.d.cts","./node_modules/zod/v4/core/api.d.cts","./node_modules/zod/v4/core/json-schema-processors.d.cts","./node_modules/zod/v4/core/json-schema-generator.d.cts","./node_modules/zod/v4/core/index.d.cts","./node_modules/@hookform/resolvers/zod/dist/zod.d.ts","./node_modules/@hookform/resolvers/zod/dist/index.d.ts","./node_modules/zod/v4/classic/errors.d.cts","./node_modules/zod/v4/classic/parse.d.cts","./node_modules/zod/v4/classic/schemas.d.cts","./node_modules/zod/v4/classic/checks.d.cts","./node_modules/zod/v4/classic/compat.d.cts","./node_modules/zod/v4/classic/from-json-schema.d.cts","./node_modules/zod/v4/classic/iso.d.cts","./node_modules/zod/v4/classic/coerce.d.cts","./node_modules/zod/v4/classic/external.d.cts","./node_modules/zod/index.d.cts","./src/components/ui/modal.tsx","./src/app/admin/collections/page.tsx","./src/components/admin/emptystate.tsx","./src/app/admin/customers/page.tsx","./src/app/admin/inquiries/page.tsx","./src/app/admin/login/page.tsx","./src/app/admin/occasions/page.tsx","./src/app/admin/orders/page.tsx","./src/app/admin/orders/create-custom/page.tsx","./src/components/admin/productmodal.tsx","./src/app/admin/products/page.tsx","./src/app/admin/settings/page.tsx","./src/app/admin/users/page.tsx","./src/components/productcard.tsx","./src/app/category/[slug]/page.tsx","./src/app/checkout/page.tsx","./src/app/contact/page.tsx","./src/app/login/page.tsx","./src/app/occasion/[slug]/page.tsx","./src/app/pay/[id]/page.tsx","./src/app/product/[slug]/page.tsx","./src/components/hero.tsx","./src/components/sectionheader.tsx","./src/context/cartcontext.tsx","./.next/types/cache-life.d.ts","./.next/types/validator.ts","./.next/dev/types/cache-life.d.ts","./.next/dev/types/routes.d.ts","./.next/dev/types/validator.ts","./node_modules/@types/estree/index.d.ts","./node_modules/@types/json-schema/index.d.ts","./node_modules/@types/json5/index.d.ts","./node_modules/@types/use-sync-external-store/index.d.ts"],"fileIdsList":[[97,143,483,484,485,486,775],[97,143,775,777],[97,143,226,527,576,616,618,620,621,622,624,625,752,754,755,756,757,758,759,761,762,763,765,766,767,768,769,770,771,775,777,778],[97,143,483,484,485,486,777],[97,143,226,527,530,576,616,618,620,621,622,624,625,752,754,755,756,757,758,759,761,762,763,765,766,767,768,769,770,771,775,777],[97,143,528,529,530,775,777],[97,143,226,528,775,777],[97,143,739,775,777],[97,143,658,671,738,775,777],[97,143,536,538,539,540,541,775,777],[97,143,226,775,777],[97,140,143,775,777],[97,142,143,775,777],[143,775,777],[97,143,148,176,775,777],[97,143,144,149,154,162,173,184,775,777],[97,143,144,145,154,162,775,777],[92,93,94,97,143,775,777],[97,143,146,185,775,777],[97,143,147,148,155,163,775,777],[97,143,148,173,181,775,777],[97,143,149,151,154,162,775,777],[97,142,143,150,775,777],[97,143,151,152,775,777],[97,143,153,154,775,777],[97,142,143,154,775,777],[97,143,154,155,156,173,184,775,777],[97,143,154,155,156,169,173,176,775,777],[97,143,151,154,157,162,173,184,775,777],[97,143,154,155,157,158,162,173,181,184,775,777],[97,143,157,159,173,181,184,775,777],[95,96,97,98,99,100,101,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,775,777],[97,143,154,160,775,777],[97,143,161,184,189,775,777],[97,143,151,154,162,173,775,777],[97,143,163,775,777],[97,143,164,775,777],[97,142,143,165,775,777],[97,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,775,777],[97,143,167,775,777],[97,143,168,775,777],[97,143,154,169,170,775,777],[97,143,169,171,185,187,775,777],[97,143,154,173,174,176,775,777],[97,143,175,176,775,777],[97,143,173,174,775,777],[97,143,176,775,777],[97,143,177,775,777],[97,140,143,173,178,775,777],[97,143,154,179,180,775,777],[97,143,179,180,775,777],[97,143,148,162,173,181,775,777],[97,143,182,775,777],[97,143,162,183,775,777],[97,143,157,168,184,775,777],[97,143,148,185,775,777],[97,143,173,186,775,777],[97,143,161,187,775,777],[97,143,188,775,777],[97,138,143,775,777],[97,138,143,154,156,165,173,176,184,187,189,775,777],[97,143,173,190,775,777],[85,89,97,143,192,193,194,196,478,523,775,777],[85,97,143,775,777],[85,89,97,143,192,193,194,195,459,478,523,775,777],[85,89,97,143,192,193,195,196,478,523,775,777],[85,97,143,196,459,460,775,777],[85,97,143,196,459,775,777],[85,89,97,143,193,194,195,196,478,523,775,777],[85,89,97,143,192,194,195,196,478,523,775,777],[83,84,97,143,775,777],[97,143,610,613,614,775,777],[97,143,610,614,775,777],[97,143,614,775,777],[97,143,611,775,777],[97,143,584,604,775,777],[97,143,578,775,777],[97,143,579,583,584,585,586,587,589,591,592,597,598,607,775,777],[97,143,579,584,775,777],[97,143,587,604,606,609,775,777],[97,143,578,579,580,581,584,585,586,587,588,589,590,591,592,593,594,595,596,597,598,599,600,601,602,603,608,609,775,777],[97,143,607,775,777],[97,143,577,579,580,582,590,599,602,603,608,775,777],[97,143,584,609,775,777],[97,143,605,607,609,775,777],[97,143,578,579,584,587,607,775,777],[97,143,591,775,777],[97,143,581,589,591,592,775,777],[97,143,581,775,777],[97,143,581,591,775,777],[97,143,585,586,587,591,592,597,775,777],[97,143,587,588,592,596,598,607,775,777],[97,143,579,591,600,775,777],[97,143,580,581,582,775,777],[97,143,587,607,775,777],[97,143,587,775,777],[97,143,578,579,775,777],[97,143,579,775,777],[97,143,583,775,777],[97,143,587,592,604,605,606,607,609,775,777],[85,97,143,569,775,777],[85,97,143,226,568,569,570,775,777],[84,97,143,775,777],[97,143,568,775,777],[97,143,481,775,777],[97,143,483,484,485,486,775,777],[97,143,429,492,493,775,777],[97,143,201,202,204,216,240,355,366,474,775,777],[97,143,204,235,236,237,239,474,775,777],[97,143,204,372,374,376,377,379,474,476,775,777],[97,143,204,238,275,474,775,777],[97,143,202,204,215,216,222,228,233,354,355,356,365,474,476,775,777],[97,143,474,775,777],[97,143,211,217,236,256,351,775,777],[97,143,204,775,777],[97,143,197,211,217,775,777],[97,143,383,775,777],[97,143,380,381,383,775,777],[97,143,380,382,474,775,777],[97,143,157,256,453,471,775,777],[97,143,157,327,330,346,351,471,775,777],[97,143,157,299,471,775,777],[97,143,359,775,777],[97,143,358,359,360,775,777],[97,143,358,775,777],[91,97,143,157,197,204,216,222,228,234,236,240,241,254,255,322,352,353,366,474,478,775,777],[97,143,201,204,238,275,372,373,378,474,526,775,777],[97,143,238,526,775,777],[97,143,201,255,424,474,526,775,777],[97,143,526,775,777],[97,143,204,238,239,526,775,777],[97,143,375,526,775,777],[97,143,241,354,357,364,775,777],[85,97,143,429,775,777],[97,143,168,211,226,775,777],[97,143,211,226,775,777],[85,97,143,296,775,777],[85,97,143,226,775,777],[85,97,143,217,226,429,775,777],[97,143,211,282,296,297,508,515,775,777],[97,143,281,509,510,511,512,514,775,777],[97,143,332,775,777],[97,143,332,333,775,777],[97,143,215,217,284,285,775,777],[97,143,217,291,292,775,777],[97,143,217,286,294,775,777],[97,143,291,775,777],[97,143,209,217,284,285,286,287,288,289,290,291,294,775,777],[97,143,217,284,291,292,293,295,775,777],[97,143,217,285,287,288,775,777],[97,143,285,287,290,292,775,777],[97,143,513,775,777],[97,143,217,775,777],[85,97,143,205,502,775,777],[85,97,143,184,775,777],[85,97,143,238,273,775,777],[85,97,143,238,366,775,777],[97,143,271,276,775,777],[85,97,143,272,480,775,777],[97,143,561,775,777],[85,89,97,143,157,192,193,194,195,196,478,522,775,777],[97,143,157,217,775,777],[97,143,157,216,221,302,319,361,362,366,421,423,474,475,775,777],[97,143,254,363,775,777],[97,143,478,775,777],[97,143,203,775,777],[85,97,143,208,211,426,442,444,775,777],[97,143,168,211,426,441,442,443,525,775,777],[97,143,435,436,437,438,439,440,775,777],[97,143,437,775,777],[97,143,441,775,777],[97,143,226,390,391,393,775,777],[85,97,143,217,384,385,386,387,392,775,777],[97,143,390,392,775,777],[97,143,388,775,777],[97,143,389,775,777],[85,97,143,226,272,480,775,777],[85,97,143,226,479,480,775,777],[85,97,143,226,480,775,777],[97,143,319,320,775,777],[97,143,320,775,777],[97,143,157,475,480,775,777],[97,143,349,775,777],[97,142,143,348,775,777],[97,143,211,217,223,225,327,340,344,346,423,426,463,464,471,475,775,777],[97,143,217,266,288,775,777],[97,143,327,338,341,346,775,777],[85,97,143,208,211,327,330,346,349,383,430,431,432,433,434,445,446,447,448,449,450,451,452,526,775,777],[97,143,208,211,236,327,334,335,336,339,340,775,777],[97,143,173,217,236,338,345,426,427,471,775,777],[97,143,342,775,777],[97,143,157,168,205,217,221,231,263,264,267,319,322,387,421,422,463,474,475,476,478,526,775,777],[97,143,208,209,211,775,777],[97,143,327,775,777],[97,142,143,236,263,264,321,322,323,324,325,326,475,775,777],[97,143,346,775,777],[97,142,143,210,211,221,225,261,327,334,335,336,337,338,341,342,343,344,345,464,775,777],[97,143,157,261,262,334,475,476,775,777],[97,143,236,264,319,322,327,423,475,775,777],[97,143,157,474,476,775,777],[97,143,157,173,471,475,476,775,777],[97,143,157,168,197,211,216,223,225,228,231,238,258,263,264,265,266,267,302,303,305,308,310,313,314,315,316,318,366,421,423,471,474,475,476,775,777],[97,143,157,173,775,777],[97,143,204,205,206,234,471,472,473,478,480,526,775,777],[97,143,201,202,474,775,777],[97,143,395,775,777],[97,143,157,173,184,213,379,383,384,385,386,387,393,394,526,775,777],[97,143,168,184,197,211,213,225,228,264,303,308,318,319,372,399,400,401,407,410,411,421,423,471,474,775,777],[97,143,228,234,241,254,264,322,474,775,777],[97,143,157,184,205,216,225,264,405,471,474,775,777],[97,143,425,775,777],[97,143,157,395,408,409,418,775,777],[97,143,471,474,775,777],[97,143,324,464,775,777],[97,143,225,263,366,480,775,777],[97,143,157,168,203,308,368,372,401,407,410,413,471,775,777],[97,143,157,241,254,372,414,775,777],[97,143,204,265,366,416,474,476,775,777],[97,143,157,184,387,474,775,777],[97,143,157,238,265,366,367,368,377,395,415,417,474,775,777],[91,97,143,157,263,420,478,480,775,777],[97,143,317,421,775,777],[97,143,157,168,211,214,216,217,223,225,231,240,241,254,264,267,303,305,315,318,319,366,399,400,401,402,404,406,421,423,471,480,775,777],[97,143,157,173,241,407,412,418,471,775,777],[97,143,244,245,246,247,248,249,250,251,252,253,775,777],[97,143,258,309,775,777],[97,143,311,775,777],[97,143,309,775,777],[97,143,311,312,775,777],[97,143,157,215,216,217,221,222,475,775,777],[97,143,157,168,203,205,223,227,263,266,267,301,421,471,476,478,480,775,777],[97,143,157,168,184,207,214,215,225,227,264,419,464,470,475,775,777],[97,143,334,775,777],[97,143,335,775,777],[97,143,217,228,463,775,777],[97,143,336,775,777],[97,143,210,775,777],[97,143,212,224,775,777],[97,143,157,212,216,223,775,777],[97,143,219,224,775,777],[97,143,220,775,777],[97,143,212,213,775,777],[97,143,212,268,775,777],[97,143,212,775,777],[97,143,214,258,307,775,777],[97,143,306,775,777],[97,143,211,213,214,775,777],[97,143,214,304,775,777],[97,143,211,213,775,777],[97,143,263,366,775,777],[97,143,463,775,777],[97,143,157,184,223,225,229,263,366,420,423,426,427,428,454,455,458,462,464,471,475,775,777],[97,143,277,280,282,283,296,297,775,777],[85,97,143,194,196,226,456,457,775,777],[85,97,143,194,196,226,456,457,461,775,777],[97,143,350,775,777],[97,143,236,257,262,263,327,328,329,330,331,333,346,347,349,352,420,423,474,476,775,777],[97,143,296,775,777],[97,143,157,301,471,775,777],[97,143,301,775,777],[97,143,157,223,269,298,300,302,420,471,478,480,775,777],[97,143,277,278,279,280,282,283,296,297,479,775,777],[91,97,143,157,168,184,212,213,225,231,263,264,267,366,418,419,421,471,474,475,478,775,777],[97,143,208,211,218,775,777],[97,143,262,264,396,399,775,777],[97,143,262,397,465,466,467,468,469,775,777],[97,143,157,258,474,775,777],[97,143,157,775,777],[97,143,261,346,775,777],[97,143,260,775,777],[97,143,262,315,775,777],[97,143,259,261,474,775,777],[97,143,157,207,262,396,397,398,471,474,475,775,777],[85,97,143,211,217,295,775,777],[85,97,143,209,775,777],[97,143,199,200,775,777],[85,97,143,205,775,777],[85,97,143,211,281,775,777],[85,91,97,143,263,267,478,480,775,777],[97,143,205,502,503,775,777],[85,97,143,276,775,777],[85,97,143,168,184,203,270,272,274,275,480,775,777],[97,143,211,238,475,775,777],[97,143,211,403,775,777],[85,97,143,155,157,168,201,203,276,374,478,479,775,777],[85,97,143,192,193,194,195,196,478,523,775,777],[85,86,87,88,89,97,143,775,777],[97,143,148,775,777],[97,143,369,370,371,775,777],[97,143,369,775,777],[85,89,97,143,157,159,168,191,192,193,194,195,196,197,203,231,236,413,441,476,477,480,523,775,777],[97,143,488,775,777],[97,143,490,775,777],[97,143,494,775,777],[97,143,562,775,777],[97,143,496,775,777],[97,143,498,499,500,775,777],[97,143,504,775,777],[90,97,143,482,487,489,491,495,497,501,505,507,517,518,520,524,525,526,527,775,777],[97,143,506,775,777],[97,143,516,775,777],[97,143,272,775,777],[97,143,519,775,777],[97,142,143,262,396,397,399,465,466,468,469,521,523,775,777],[97,143,191,775,777],[85,97,143,641,775,777],[97,143,641,642,643,644,647,648,649,650,651,652,653,656,657,775,777],[97,143,641,775,777],[97,143,645,646,775,777],[85,97,143,638,641,775,777],[97,143,635,636,638,775,777],[97,143,631,634,636,638,775,777],[97,143,635,638,775,777],[85,97,143,626,627,628,631,632,633,635,636,637,638,775,777],[97,143,628,631,632,633,634,635,636,637,638,639,640,775,777],[97,143,635,775,777],[97,143,629,635,636,775,777],[97,143,629,630,775,777],[97,143,634,636,637,775,777],[97,143,634,775,777],[97,143,626,631,634,636,637,775,777],[85,97,143,631,634,635,636,775,777],[97,143,654,655,775,777],[85,97,143,574,775,777],[85,97,143,536,775,777],[97,143,536,775,777],[97,143,173,191,775,777],[97,110,114,143,184,775,777],[97,110,143,173,184,775,777],[97,105,143,775,777],[97,107,110,143,181,184,775,777],[97,143,162,181,775,777],[97,105,143,191,775,777],[97,107,110,143,162,184,775,777],[97,102,103,106,109,143,154,173,184,775,777],[97,110,117,143,775,777],[97,102,108,143,775,777],[97,110,131,132,143,775,777],[97,106,110,143,176,184,191,775,777],[97,131,143,191,775,777],[97,104,105,143,191,775,777],[97,110,143,775,777],[97,104,105,106,107,108,109,110,111,112,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,132,133,134,135,136,137,143,775,777],[97,110,125,143,775,777],[97,110,117,118,143,775,777],[97,108,110,118,119,143,775,777],[97,109,143,775,777],[97,102,105,110,143,775,777],[97,110,114,118,119,143,775,777],[97,114,143,775,777],[97,108,110,113,143,184,775,777],[97,102,107,110,117,143,775,777],[97,143,173,775,777],[97,105,110,131,143,189,191,775,777],[97,143,749,775,777],[97,143,661,662,775,777],[97,143,659,660,661,663,664,669,775,777],[97,143,660,661,775,777],[97,143,669,775,777],[97,143,670,775,777],[97,143,661,775,777],[97,143,659,660,661,664,665,666,667,668,775,777],[97,143,659,660,671,775,777],[97,143,738,775,777],[97,143,738,743,775,777],[97,143,733,736,738,741,742,743,744,745,746,747,748,775,777],[97,143,672,674,743,775,777],[97,143,738,741,775,777],[97,143,673,738,742,775,777],[97,143,674,676,678,679,680,681,775,777],[97,143,676,678,680,681,775,777],[97,143,676,678,680,775,777],[97,143,673,676,678,679,681,775,777],[97,143,672,674,675,676,677,678,679,680,681,682,683,733,734,735,736,737,775,777],[97,143,672,674,675,678,775,777],[97,143,674,675,678,775,777],[97,143,678,681,775,777],[97,143,672,673,675,676,677,679,680,681,775,777],[97,143,672,673,674,678,738,775,777],[97,143,678,679,680,681,775,777],[97,143,680,775,777],[97,143,684,685,686,687,688,689,690,691,692,693,694,695,696,697,698,699,700,701,702,703,704,705,706,707,708,709,710,711,712,713,714,715,716,717,718,719,720,721,722,723,724,725,726,727,728,729,730,731,732,775,777],[85,97,143,226,507,517,544,555,559,564,571,619,775,777],[85,97,143,226,507,517,547,555,559,564,571,619,775,777],[85,97,143,226,507,517,545,553,555,564,571,617,775,777],[85,97,143,226,517,544,545,555,564,571,619,775,777],[85,97,143,226,550,554,555,559,564,571,575,658,740,750,751,775,777],[85,97,143,226,549,554,555,564,571,575,753,775,777],[85,97,143,226,548,554,555,559,564,571,575,753,775,777],[85,97,143,226,505,507,517,555,564,571,623,775,777],[85,97,143,226,507,517,545,555,564,571,658,740,750,775,777],[85,97,143,226,551,554,555,559,564,571,575,658,740,750,751,775,777],[85,97,143,226,507,517,544,547,554,555,564,571,575,775,777],[85,97,143,226,507,517,547,554,555,558,559,564,571,575,751,775,777],[85,97,143,226,507,546,547,555,564,775,777],[85,97,143,226,546,554,555,559,564,571,575,751,753,760,775,777],[85,97,143,226,550,551,552,555,564,575,775,777],[85,97,143,226,507,549,554,555,564,575,753,775,777],[85,97,143,226,507,517,534,535,546,550,554,555,559,564,571,764,775,777],[85,97,143,226,507,517,520,544,547,553,555,556,558,559,560,564,571,617,775,777],[85,97,143,226,507,548,555,564,571,775,777],[85,97,143,226,517,525,563,565,566,567,572,573,575,775,777],[85,97,143,226,505,507,517,545,555,564,571,658,740,750,775,777],[85,97,143,226,507,535,546,551,554,555,559,564,571,764,775,777],[85,97,143,226,505,507,546,550,551,552,554,555,556,559,564,571,575,612,615,775,777],[85,97,143,226,507,517,543,558,559,564,571,775,777],[85,97,143,226,507,534,535,546,555,556,557,559,564,571,764,775,777],[85,97,143,226,505,507,517,545,555,564,571,775,777],[85,97,143,226,564,571,775,777],[85,97,143,226,550,551,554,555,559,564,571,575,658,740,750,775,777],[85,97,143,226,507,564,571,775,777],[85,97,143,226,507,553,556,558,559,560,564,571,775,777],[97,143,226,505,507,554,555,564,775,777],[85,97,143,226,571,775,777],[85,97,143,226,505,507,517,550,551,554,555,556,564,775,777],[97,143,226,507,533,535,556,559,564,775,777],[97,143,226,537,554,775,777],[97,143,226,507,775,777],[85,97,143,226,535,775,777],[97,143,226,553,555,775,777],[97,143,226,542,544,775,777],[97,143,226,542,545,546,547,548,549,550,551,552,553,775,777],[97,143,226,543,775,777]],"fileInfos":[{"version":"c430d44666289dae81f30fa7b2edebf186ecc91a2d4c71266ea6ae76388792e1","affectsGlobalScope":true,"impliedFormat":1},{"version":"45b7ab580deca34ae9729e97c13cfd999df04416a79116c3bfb483804f85ded4","impliedFormat":1},{"version":"3facaf05f0c5fc569c5649dd359892c98a85557e3e0c847964caeb67076f4d75","impliedFormat":1},{"version":"e44bb8bbac7f10ecc786703fe0a6a4b952189f908707980ba8f3c8975a760962","impliedFormat":1},{"version":"5e1c4c362065a6b95ff952c0eab010f04dcd2c3494e813b493ecfd4fcb9fc0d8","impliedFormat":1},{"version":"68d73b4a11549f9c0b7d352d10e91e5dca8faa3322bfb77b661839c42b1ddec7","impliedFormat":1},{"version":"5efce4fc3c29ea84e8928f97adec086e3dc876365e0982cc8479a07954a3efd4","impliedFormat":1},{"version":"feecb1be483ed332fad555aff858affd90a48ab19ba7272ee084704eb7167569","impliedFormat":1},{"version":"ee7bad0c15b58988daa84371e0b89d313b762ab83cb5b31b8a2d1162e8eb41c2","impliedFormat":1},{"version":"27bdc30a0e32783366a5abeda841bc22757c1797de8681bbe81fbc735eeb1c10","impliedFormat":1},{"version":"8fd575e12870e9944c7e1d62e1f5a73fcf23dd8d3a321f2a2c74c20d022283fe","impliedFormat":1},{"version":"2ab096661c711e4a81cc464fa1e6feb929a54f5340b46b0a07ac6bbf857471f0","impliedFormat":1},{"version":"080941d9f9ff9307f7e27a83bcd888b7c8270716c39af943532438932ec1d0b9","affectsGlobalScope":true,"impliedFormat":1},{"version":"2e80ee7a49e8ac312cc11b77f1475804bee36b3b2bc896bead8b6e1266befb43","affectsGlobalScope":true,"impliedFormat":1},{"version":"c57796738e7f83dbc4b8e65132f11a377649c00dd3eee333f672b8f0a6bea671","affectsGlobalScope":true,"impliedFormat":1},{"version":"dc2df20b1bcdc8c2d34af4926e2c3ab15ffe1160a63e58b7e09833f616efff44","affectsGlobalScope":true,"impliedFormat":1},{"version":"515d0b7b9bea2e31ea4ec968e9edd2c39d3eebf4a2d5cbd04e88639819ae3b71","affectsGlobalScope":true,"impliedFormat":1},{"version":"0559b1f683ac7505ae451f9a96ce4c3c92bdc71411651ca6ddb0e88baaaad6a3","affectsGlobalScope":true,"impliedFormat":1},{"version":"0dc1e7ceda9b8b9b455c3a2d67b0412feab00bd2f66656cd8850e8831b08b537","affectsGlobalScope":true,"impliedFormat":1},{"version":"ce691fb9e5c64efb9547083e4a34091bcbe5bdb41027e310ebba8f7d96a98671","affectsGlobalScope":true,"impliedFormat":1},{"version":"8d697a2a929a5fcb38b7a65594020fcef05ec1630804a33748829c5ff53640d0","affectsGlobalScope":true,"impliedFormat":1},{"version":"4ff2a353abf8a80ee399af572debb8faab2d33ad38c4b4474cff7f26e7653b8d","affectsGlobalScope":true,"impliedFormat":1},{"version":"fb0f136d372979348d59b3f5020b4cdb81b5504192b1cacff5d1fbba29378aa1","affectsGlobalScope":true,"impliedFormat":1},{"version":"d15bea3d62cbbdb9797079416b8ac375ae99162a7fba5de2c6c505446486ac0a","affectsGlobalScope":true,"impliedFormat":1},{"version":"68d18b664c9d32a7336a70235958b8997ebc1c3b8505f4f1ae2b7e7753b87618","affectsGlobalScope":true,"impliedFormat":1},{"version":"eb3d66c8327153d8fa7dd03f9c58d351107fe824c79e9b56b462935176cdf12a","affectsGlobalScope":true,"impliedFormat":1},{"version":"38f0219c9e23c915ef9790ab1d680440d95419ad264816fa15009a8851e79119","affectsGlobalScope":true,"impliedFormat":1},{"version":"69ab18c3b76cd9b1be3d188eaf8bba06112ebbe2f47f6c322b5105a6fbc45a2e","affectsGlobalScope":true,"impliedFormat":1},{"version":"a680117f487a4d2f30ea46f1b4b7f58bef1480456e18ba53ee85c2746eeca012","affectsGlobalScope":true,"impliedFormat":1},{"version":"2f11ff796926e0832f9ae148008138ad583bd181899ab7dd768a2666700b1893","affectsGlobalScope":true,"impliedFormat":1},{"version":"4de680d5bb41c17f7f68e0419412ca23c98d5749dcaaea1896172f06435891fc","affectsGlobalScope":true,"impliedFormat":1},{"version":"954296b30da6d508a104a3a0b5d96b76495c709785c1d11610908e63481ee667","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac9538681b19688c8eae65811b329d3744af679e0bdfa5d842d0e32524c73e1c","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a969edff4bd52585473d24995c5ef223f6652d6ef46193309b3921d65dd4376","affectsGlobalScope":true,"impliedFormat":1},{"version":"9e9fbd7030c440b33d021da145d3232984c8bb7916f277e8ffd3dc2e3eae2bdb","affectsGlobalScope":true,"impliedFormat":1},{"version":"811ec78f7fefcabbda4bfa93b3eb67d9ae166ef95f9bff989d964061cbf81a0c","affectsGlobalScope":true,"impliedFormat":1},{"version":"717937616a17072082152a2ef351cb51f98802fb4b2fdabd32399843875974ca","affectsGlobalScope":true,"impliedFormat":1},{"version":"d7e7d9b7b50e5f22c915b525acc5a49a7a6584cf8f62d0569e557c5cfc4b2ac2","affectsGlobalScope":true,"impliedFormat":1},{"version":"71c37f4c9543f31dfced6c7840e068c5a5aacb7b89111a4364b1d5276b852557","affectsGlobalScope":true,"impliedFormat":1},{"version":"576711e016cf4f1804676043e6a0a5414252560eb57de9faceee34d79798c850","affectsGlobalScope":true,"impliedFormat":1},{"version":"89c1b1281ba7b8a96efc676b11b264de7a8374c5ea1e6617f11880a13fc56dc6","affectsGlobalScope":true,"impliedFormat":1},{"version":"74f7fa2d027d5b33eb0471c8e82a6c87216223181ec31247c357a3e8e2fddc5b","affectsGlobalScope":true,"impliedFormat":1},{"version":"d6d7ae4d1f1f3772e2a3cde568ed08991a8ae34a080ff1151af28b7f798e22ca","affectsGlobalScope":true,"impliedFormat":1},{"version":"063600664504610fe3e99b717a1223f8b1900087fab0b4cad1496a114744f8df","affectsGlobalScope":true,"impliedFormat":1},{"version":"934019d7e3c81950f9a8426d093458b65d5aff2c7c1511233c0fd5b941e608ab","affectsGlobalScope":true,"impliedFormat":1},{"version":"52ada8e0b6e0482b728070b7639ee42e83a9b1c22d205992756fe020fd9f4a47","affectsGlobalScope":true,"impliedFormat":1},{"version":"3bdefe1bfd4d6dee0e26f928f93ccc128f1b64d5d501ff4a8cf3c6371200e5e6","affectsGlobalScope":true,"impliedFormat":1},{"version":"59fb2c069260b4ba00b5643b907ef5d5341b167e7d1dbf58dfd895658bda2867","affectsGlobalScope":true,"impliedFormat":1},{"version":"639e512c0dfc3fad96a84caad71b8834d66329a1f28dc95e3946c9b58176c73a","affectsGlobalScope":true,"impliedFormat":1},{"version":"368af93f74c9c932edd84c58883e736c9e3d53cec1fe24c0b0ff451f529ceab1","affectsGlobalScope":true,"impliedFormat":1},{"version":"af3dd424cf267428f30ccfc376f47a2c0114546b55c44d8c0f1d57d841e28d74","affectsGlobalScope":true,"impliedFormat":1},{"version":"995c005ab91a498455ea8dfb63aa9f83fa2ea793c3d8aa344be4a1678d06d399","affectsGlobalScope":true,"impliedFormat":1},{"version":"959d36cddf5e7d572a65045b876f2956c973a586da58e5d26cde519184fd9b8a","affectsGlobalScope":true,"impliedFormat":1},{"version":"965f36eae237dd74e6cca203a43e9ca801ce38824ead814728a2807b1910117d","affectsGlobalScope":true,"impliedFormat":1},{"version":"3925a6c820dcb1a06506c90b1577db1fdbf7705d65b62b99dce4be75c637e26b","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a3d63ef2b853447ec4f749d3f368ce642264246e02911fcb1590d8c161b8005","affectsGlobalScope":true,"impliedFormat":1},{"version":"8cdf8847677ac7d20486e54dd3fcf09eda95812ac8ace44b4418da1bbbab6eb8","affectsGlobalScope":true,"impliedFormat":1},{"version":"8444af78980e3b20b49324f4a16ba35024fef3ee069a0eb67616ea6ca821c47a","affectsGlobalScope":true,"impliedFormat":1},{"version":"3287d9d085fbd618c3971944b65b4be57859f5415f495b33a6adc994edd2f004","affectsGlobalScope":true,"impliedFormat":1},{"version":"b4b67b1a91182421f5df999988c690f14d813b9850b40acd06ed44691f6727ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"df83c2a6c73228b625b0beb6669c7ee2a09c914637e2d35170723ad49c0f5cd4","affectsGlobalScope":true,"impliedFormat":1},{"version":"436aaf437562f276ec2ddbee2f2cdedac7664c1e4c1d2c36839ddd582eeb3d0a","affectsGlobalScope":true,"impliedFormat":1},{"version":"8e3c06ea092138bf9fa5e874a1fdbc9d54805d074bee1de31b99a11e2fec239d","affectsGlobalScope":true,"impliedFormat":1},{"version":"87dc0f382502f5bbce5129bdc0aea21e19a3abbc19259e0b43ae038a9fc4e326","affectsGlobalScope":true,"impliedFormat":1},{"version":"b1cb28af0c891c8c96b2d6b7be76bd394fddcfdb4709a20ba05a7c1605eea0f9","affectsGlobalScope":true,"impliedFormat":1},{"version":"2fef54945a13095fdb9b84f705f2b5994597640c46afeb2ce78352fab4cb3279","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac77cb3e8c6d3565793eb90a8373ee8033146315a3dbead3bde8db5eaf5e5ec6","affectsGlobalScope":true,"impliedFormat":1},{"version":"56e4ed5aab5f5920980066a9409bfaf53e6d21d3f8d020c17e4de584d29600ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"4ece9f17b3866cc077099c73f4983bddbcb1dc7ddb943227f1ec070f529dedd1","affectsGlobalScope":true,"impliedFormat":1},{"version":"0a6282c8827e4b9a95f4bf4f5c205673ada31b982f50572d27103df8ceb8013c","affectsGlobalScope":true,"impliedFormat":1},{"version":"1c9319a09485199c1f7b0498f2988d6d2249793ef67edda49d1e584746be9032","affectsGlobalScope":true,"impliedFormat":1},{"version":"e3a2a0cee0f03ffdde24d89660eba2685bfbdeae955a6c67e8c4c9fd28928eeb","affectsGlobalScope":true,"impliedFormat":1},{"version":"811c71eee4aa0ac5f7adf713323a5c41b0cf6c4e17367a34fbce379e12bbf0a4","affectsGlobalScope":true,"impliedFormat":1},{"version":"51ad4c928303041605b4d7ae32e0c1ee387d43a24cd6f1ebf4a2699e1076d4fa","affectsGlobalScope":true,"impliedFormat":1},{"version":"60037901da1a425516449b9a20073aa03386cce92f7a1fd902d7602be3a7c2e9","affectsGlobalScope":true,"impliedFormat":1},{"version":"d4b1d2c51d058fc21ec2629fff7a76249dec2e36e12960ea056e3ef89174080f","affectsGlobalScope":true,"impliedFormat":1},{"version":"22adec94ef7047a6c9d1af3cb96be87a335908bf9ef386ae9fd50eeb37f44c47","affectsGlobalScope":true,"impliedFormat":1},{"version":"196cb558a13d4533a5163286f30b0509ce0210e4b316c56c38d4c0fd2fb38405","affectsGlobalScope":true,"impliedFormat":1},{"version":"73f78680d4c08509933daf80947902f6ff41b6230f94dd002ae372620adb0f60","affectsGlobalScope":true,"impliedFormat":1},{"version":"c5239f5c01bcfa9cd32f37c496cf19c61d69d37e48be9de612b541aac915805b","affectsGlobalScope":true,"impliedFormat":1},{"version":"8e7f8264d0fb4c5339605a15daadb037bf238c10b654bb3eee14208f860a32ea","affectsGlobalScope":true,"impliedFormat":1},{"version":"782dec38049b92d4e85c1585fbea5474a219c6984a35b004963b00beb1aab538","affectsGlobalScope":true,"impliedFormat":1},{"version":"7e29f41b158de217f94cb9676bf9cbd0cd9b5a46e1985141ed36e075c52bf6ad","affectsGlobalScope":true,"impliedFormat":1},{"version":"ac51dd7d31333793807a6abaa5ae168512b6131bd41d9c5b98477fc3b7800f9f","impliedFormat":1},{"version":"dc0a7f107690ee5cd8afc8dbf05c4df78085471ce16bdd9881642ec738bc81fe","impliedFormat":1},{"version":"acd8fd5090ac73902278889c38336ff3f48af6ba03aa665eb34a75e7ba1dccc4","impliedFormat":1},{"version":"d6258883868fb2680d2ca96bc8b1352cab69874581493e6d52680c5ffecdb6cc","impliedFormat":1},{"version":"1b61d259de5350f8b1e5db06290d31eaebebc6baafd5f79d314b5af9256d7153","impliedFormat":1},{"version":"f258e3960f324a956fc76a3d3d9e964fff2244ff5859dcc6ce5951e5413ca826","impliedFormat":1},{"version":"643f7232d07bf75e15bd8f658f664d6183a0efaca5eb84b48201c7671a266979","impliedFormat":1},{"version":"21da358700a3893281ce0c517a7a30cbd46be020d9f0c3f2834d0a8ad1f5fc75","impliedFormat":1},{"version":"70521b6ab0dcba37539e5303104f29b721bfb2940b2776da4cc818c07e1fefc1","affectsGlobalScope":true,"impliedFormat":1},{"version":"ab41ef1f2cdafb8df48be20cd969d875602483859dc194e9c97c8a576892c052","affectsGlobalScope":true,"impliedFormat":1},{"version":"d153a11543fd884b596587ccd97aebbeed950b26933ee000f94009f1ab142848","affectsGlobalScope":true,"impliedFormat":1},{"version":"21d819c173c0cf7cc3ce57c3276e77fd9a8a01d35a06ad87158781515c9a438a","impliedFormat":1},{"version":"98cffbf06d6bab333473c70a893770dbe990783904002c4f1a960447b4b53dca","affectsGlobalScope":true,"impliedFormat":1},{"version":"ba481bca06f37d3f2c137ce343c7d5937029b2468f8e26111f3c9d9963d6568d","affectsGlobalScope":true,"impliedFormat":1},{"version":"6d9ef24f9a22a88e3e9b3b3d8c40ab1ddb0853f1bfbd5c843c37800138437b61","affectsGlobalScope":true,"impliedFormat":1},{"version":"1db0b7dca579049ca4193d034d835f6bfe73096c73663e5ef9a0b5779939f3d0","affectsGlobalScope":true,"impliedFormat":1},{"version":"9798340ffb0d067d69b1ae5b32faa17ab31b82466a3fc00d8f2f2df0c8554aaa","affectsGlobalScope":true,"impliedFormat":1},{"version":"f26b11d8d8e4b8028f1c7d618b22274c892e4b0ef5b3678a8ccbad85419aef43","affectsGlobalScope":true,"impliedFormat":1},{"version":"5929864ce17fba74232584d90cb721a89b7ad277220627cc97054ba15a98ea8f","impliedFormat":1},{"version":"763fe0f42b3d79b440a9b6e51e9ba3f3f91352469c1e4b3b67bfa4ff6352f3f4","impliedFormat":1},{"version":"25c8056edf4314820382a5fdb4bb7816999acdcb929c8f75e3f39473b87e85bc","impliedFormat":1},{"version":"c464d66b20788266e5353b48dc4aa6bc0dc4a707276df1e7152ab0c9ae21fad8","impliedFormat":1},{"version":"78d0d27c130d35c60b5e5566c9f1e5be77caf39804636bc1a40133919a949f21","impliedFormat":1},{"version":"c6fd2c5a395f2432786c9cb8deb870b9b0e8ff7e22c029954fabdd692bff6195","impliedFormat":1},{"version":"1d6e127068ea8e104a912e42fc0a110e2aa5a66a356a917a163e8cf9a65e4a75","impliedFormat":1},{"version":"5ded6427296cdf3b9542de4471d2aa8d3983671d4cac0f4bf9c637208d1ced43","impliedFormat":1},{"version":"7f182617db458e98fc18dfb272d40aa2fff3a353c44a89b2c0ccb3937709bfb5","impliedFormat":1},{"version":"cadc8aced301244057c4e7e73fbcae534b0f5b12a37b150d80e5a45aa4bebcbd","impliedFormat":1},{"version":"385aab901643aa54e1c36f5ef3107913b10d1b5bb8cbcd933d4263b80a0d7f20","impliedFormat":1},{"version":"9670d44354bab9d9982eca21945686b5c24a3f893db73c0dae0fd74217a4c219","impliedFormat":1},{"version":"0b8a9268adaf4da35e7fa830c8981cfa22adbbe5b3f6f5ab91f6658899e657a7","impliedFormat":1},{"version":"11396ed8a44c02ab9798b7dca436009f866e8dae3c9c25e8c1fbc396880bf1bb","impliedFormat":1},{"version":"ba7bc87d01492633cb5a0e5da8a4a42a1c86270e7b3d2dea5d156828a84e4882","impliedFormat":1},{"version":"4893a895ea92c85345017a04ed427cbd6a1710453338df26881a6019432febdd","impliedFormat":1},{"version":"c21dc52e277bcfc75fac0436ccb75c204f9e1b3fa5e12729670910639f27343e","impliedFormat":1},{"version":"13f6f39e12b1518c6650bbb220c8985999020fe0f21d818e28f512b7771d00f9","impliedFormat":1},{"version":"9b5369969f6e7175740bf51223112ff209f94ba43ecd3bb09eefff9fd675624a","impliedFormat":1},{"version":"4fe9e626e7164748e8769bbf74b538e09607f07ed17c2f20af8d680ee49fc1da","impliedFormat":1},{"version":"24515859bc0b836719105bb6cc3d68255042a9f02a6022b3187948b204946bd2","impliedFormat":1},{"version":"ea0148f897b45a76544ae179784c95af1bd6721b8610af9ffa467a518a086a43","impliedFormat":1},{"version":"24c6a117721e606c9984335f71711877293a9651e44f59f3d21c1ea0856f9cc9","impliedFormat":1},{"version":"dd3273ead9fbde62a72949c97dbec2247ea08e0c6952e701a483d74ef92d6a17","impliedFormat":1},{"version":"405822be75ad3e4d162e07439bac80c6bcc6dbae1929e179cf467ec0b9ee4e2e","impliedFormat":1},{"version":"0db18c6e78ea846316c012478888f33c11ffadab9efd1cc8bcc12daded7a60b6","impliedFormat":1},{"version":"e61be3f894b41b7baa1fbd6a66893f2579bfad01d208b4ff61daef21493ef0a8","impliedFormat":1},{"version":"bd0532fd6556073727d28da0edfd1736417a3f9f394877b6d5ef6ad88fba1d1a","impliedFormat":1},{"version":"89167d696a849fce5ca508032aabfe901c0868f833a8625d5a9c6e861ef935d2","impliedFormat":1},{"version":"615ba88d0128ed16bf83ef8ccbb6aff05c3ee2db1cc0f89ab50a4939bfc1943f","impliedFormat":1},{"version":"a4d551dbf8746780194d550c88f26cf937caf8d56f102969a110cfaed4b06656","impliedFormat":1},{"version":"8bd86b8e8f6a6aa6c49b71e14c4ffe1211a0e97c80f08d2c8cc98838006e4b88","impliedFormat":1},{"version":"317e63deeb21ac07f3992f5b50cdca8338f10acd4fbb7257ebf56735bf52ab00","impliedFormat":1},{"version":"4732aec92b20fb28c5fe9ad99521fb59974289ed1e45aecb282616202184064f","impliedFormat":1},{"version":"2e85db9e6fd73cfa3d7f28e0ab6b55417ea18931423bd47b409a96e4a169e8e6","impliedFormat":1},{"version":"c46e079fe54c76f95c67fb89081b3e399da2c7d109e7dca8e4b58d83e332e605","impliedFormat":1},{"version":"bf67d53d168abc1298888693338cb82854bdb2e69ef83f8a0092093c2d562107","impliedFormat":1},{"version":"b52476feb4a0cbcb25e5931b930fc73cb6643fb1a5060bf8a3dda0eeae5b4b68","affectsGlobalScope":true,"impliedFormat":1},{"version":"e2677634fe27e87348825bb041651e22d50a613e2fdf6a4a3ade971d71bac37e","impliedFormat":1},{"version":"7394959e5a741b185456e1ef5d64599c36c60a323207450991e7a42e08911419","impliedFormat":1},{"version":"8c0bcd6c6b67b4b503c11e91a1fb91522ed585900eab2ab1f61bba7d7caa9d6f","impliedFormat":1},{"version":"8cd19276b6590b3ebbeeb030ac271871b9ed0afc3074ac88a94ed2449174b776","affectsGlobalScope":true,"impliedFormat":1},{"version":"696eb8d28f5949b87d894b26dc97318ef944c794a9a4e4f62360cd1d1958014b","impliedFormat":1},{"version":"3f8fa3061bd7402970b399300880d55257953ee6d3cd408722cb9ac20126460c","impliedFormat":1},{"version":"35ec8b6760fd7138bbf5809b84551e31028fb2ba7b6dc91d95d098bf212ca8b4","affectsGlobalScope":true,"impliedFormat":1},{"version":"5524481e56c48ff486f42926778c0a3cce1cc85dc46683b92b1271865bcf015a","impliedFormat":1},{"version":"68bd56c92c2bd7d2339457eb84d63e7de3bd56a69b25f3576e1568d21a162398","affectsGlobalScope":true,"impliedFormat":1},{"version":"3e93b123f7c2944969d291b35fed2af79a6e9e27fdd5faa99748a51c07c02d28","impliedFormat":1},{"version":"9d19808c8c291a9010a6c788e8532a2da70f811adb431c97520803e0ec649991","impliedFormat":1},{"version":"87aad3dd9752067dc875cfaa466fc44246451c0c560b820796bdd528e29bef40","impliedFormat":1},{"version":"4aacb0dd020eeaef65426153686cc639a78ec2885dc72ad220be1d25f1a439df","impliedFormat":1},{"version":"f0bd7e6d931657b59605c44112eaf8b980ba7f957a5051ed21cb93d978cf2f45","impliedFormat":1},{"version":"8db0ae9cb14d9955b14c214f34dae1b9ef2baee2fe4ce794a4cd3ac2531e3255","affectsGlobalScope":true,"impliedFormat":1},{"version":"15fc6f7512c86810273af28f224251a5a879e4261b4d4c7e532abfbfc3983134","impliedFormat":1},{"version":"58adba1a8ab2d10b54dc1dced4e41f4e7c9772cbbac40939c0dc8ce2cdb1d442","impliedFormat":1},{"version":"641942a78f9063caa5d6b777c99304b7d1dc7328076038c6d94d8a0b81fc95c1","impliedFormat":1},{"version":"714435130b9015fae551788df2a88038471a5a11eb471f27c4ede86552842bc9","impliedFormat":1},{"version":"855cd5f7eb396f5f1ab1bc0f8580339bff77b68a770f84c6b254e319bbfd1ac7","impliedFormat":1},{"version":"5650cf3dace09e7c25d384e3e6b818b938f68f4e8de96f52d9c5a1b3db068e86","impliedFormat":1},{"version":"1354ca5c38bd3fd3836a68e0f7c9f91f172582ba30ab15bb8c075891b91502b7","affectsGlobalScope":true,"impliedFormat":1},{"version":"27fdb0da0daf3b337c5530c5f266efe046a6ceb606e395b346974e4360c36419","impliedFormat":1},{"version":"2d2fcaab481b31a5882065c7951255703ddbe1c0e507af56ea42d79ac3911201","impliedFormat":1},{"version":"a192fe8ec33f75edbc8d8f3ed79f768dfae11ff5735e7fe52bfa69956e46d78d","impliedFormat":1},{"version":"ca867399f7db82df981d6915bcbb2d81131d7d1ef683bc782b59f71dda59bc85","affectsGlobalScope":true,"impliedFormat":1},{"version":"372413016d17d804e1d139418aca0c68e47a83fb6669490857f4b318de8cccb3","affectsGlobalScope":true,"impliedFormat":1},{"version":"9e043a1bc8fbf2a255bccf9bf27e0f1caf916c3b0518ea34aa72357c0afd42ec","impliedFormat":1},{"version":"b4f70ec656a11d570e1a9edce07d118cd58d9760239e2ece99306ee9dfe61d02","impliedFormat":1},{"version":"3bc2f1e2c95c04048212c569ed38e338873f6a8593930cf5a7ef24ffb38fc3b6","impliedFormat":1},{"version":"6e70e9570e98aae2b825b533aa6292b6abd542e8d9f6e9475e88e1d7ba17c866","impliedFormat":1},{"version":"f9d9d753d430ed050dc1bf2667a1bab711ccbb1c1507183d794cc195a5b085cc","impliedFormat":1},{"version":"9eece5e586312581ccd106d4853e861aaaa1a39f8e3ea672b8c3847eedd12f6e","impliedFormat":1},{"version":"47ab634529c5955b6ad793474ae188fce3e6163e3a3fb5edd7e0e48f14435333","impliedFormat":1},{"version":"37ba7b45141a45ce6e80e66f2a96c8a5ab1bcef0fc2d0f56bb58df96ec67e972","impliedFormat":1},{"version":"45650f47bfb376c8a8ed39d4bcda5902ab899a3150029684ee4c10676d9fbaee","impliedFormat":1},{"version":"fad4e3c207fe23922d0b2d06b01acbfb9714c4f2685cf80fd384c8a100c82fd0","affectsGlobalScope":true,"impliedFormat":1},{"version":"74cf591a0f63db318651e0e04cb55f8791385f86e987a67fd4d2eaab8191f730","impliedFormat":1},{"version":"5eab9b3dc9b34f185417342436ec3f106898da5f4801992d8ff38ab3aff346b5","impliedFormat":1},{"version":"12ed4559eba17cd977aa0db658d25c4047067444b51acfdcbf38470630642b23","affectsGlobalScope":true,"impliedFormat":1},{"version":"f3ffabc95802521e1e4bcba4c88d8615176dc6e09111d920c7a213bdda6e1d65","impliedFormat":1},{"version":"809821b8a065e3234a55b3a9d7846231ed18d66dd749f2494c66288d890daf7f","impliedFormat":1},{"version":"ae56f65caf3be91108707bd8dfbccc2a57a91feb5daabf7165a06a945545ed26","impliedFormat":1},{"version":"a136d5de521da20f31631a0a96bf712370779d1c05b7015d7019a9b2a0446ca9","impliedFormat":1},{"version":"c3b41e74b9a84b88b1dca61ec39eee25c0dbc8e7d519ba11bb070918cfacf656","affectsGlobalScope":true,"impliedFormat":1},{"version":"4737a9dc24d0e68b734e6cfbcea0c15a2cfafeb493485e27905f7856988c6b29","affectsGlobalScope":true,"impliedFormat":1},{"version":"36d8d3e7506b631c9582c251a2c0b8a28855af3f76719b12b534c6edf952748d","impliedFormat":1},{"version":"1ca69210cc42729e7ca97d3a9ad48f2e9cb0042bada4075b588ae5387debd318","impliedFormat":1},{"version":"f5ebe66baaf7c552cfa59d75f2bfba679f329204847db3cec385acda245e574e","impliedFormat":1},{"version":"ed59add13139f84da271cafd32e2171876b0a0af2f798d0c663e8eeb867732cf","affectsGlobalScope":true,"impliedFormat":1},{"version":"b7c5e2ea4a9749097c347454805e933844ed207b6eefec6b7cfd418b5f5f7b28","impliedFormat":1},{"version":"b1810689b76fd473bd12cc9ee219f8e62f54a7d08019a235d07424afbf074d25","impliedFormat":1},{"version":"2beff543f6e9a9701df88daeee3cdd70a34b4a1c11cb4c734472195a5cb2af54","impliedFormat":1},{"version":"2e07abf27aa06353d46f4448c0bbac73431f6065eef7113128a5cd804d0c384d","impliedFormat":1},{"version":"be1cc4d94ea60cbe567bc29ed479d42587bf1e6cba490f123d329976b0fe4ee5","impliedFormat":1},{"version":"42bc0e1a903408137c3df2b06dfd7e402cdab5bbfa5fcfb871b22ebfdb30bd0b","impliedFormat":1},{"version":"9894dafe342b976d251aac58e616ac6df8db91fb9d98934ff9dd103e9e82578f","impliedFormat":1},{"version":"413df52d4ea14472c2fa5bee62f7a40abd1eb49be0b9722ee01ee4e52e63beb2","impliedFormat":1},{"version":"db6d2d9daad8a6d83f281af12ce4355a20b9a3e71b82b9f57cddcca0a8964a96","impliedFormat":1},{"version":"446a50749b24d14deac6f8843e057a6355dd6437d1fac4f9e5ce4a5071f34bff","impliedFormat":1},{"version":"182e9fcbe08ac7c012e0a6e2b5798b4352470be29a64fdc114d23c2bab7d5106","impliedFormat":1},{"version":"2f4e6b4d39426a1b85ecf4bdeb9dddbf4d9b3397d95d8555d46f925c9519ec7d","impliedFormat":1},{"version":"78a2869ad0cbf3f9045dda08c0d4562b7e1b2bfe07b19e0db072f5c3c56e9584","impliedFormat":1},{"version":"89d5d28d4f57e000b836ac273079be1b75710e28ce14750d081fb420d37e2ca5","impliedFormat":1},{"version":"fd4e24ccff3966390600d7f5d6aa1fed5a512e92ada735ea5fbc933d313ad3d3","impliedFormat":1},{"version":"b7cddfe1aa6b86b5fad3c9ccb30d05b3ccb165aebbf112f48d2d8a5f69dd98b1","impliedFormat":1},{"version":"a86f82d646a739041d6702101afa82dcb935c416dd93cbca7fd754fd0282ce1f","impliedFormat":1},{"version":"ad0d1d75d129b1c80f911be438d6b61bfa8703930a8ff2be2f0e1f8a91841c64","impliedFormat":1},{"version":"bd2c7ada3dee03653d3f601011d30072194bc3970cd93208f9588fbdc0c69347","impliedFormat":1},{"version":"e480da45d32313e7174b265674da504f075f59ef326852f0c5a5d863b438ae85","impliedFormat":1},{"version":"ad54850f61fcf5d014e11be80d2f46fea9265cfa7e77456da876f7833ef81769","impliedFormat":1},{"version":"6f7c9e8bd2b5b6a080b07080065f94900bd3c7e5ebbd3047bc33fcce2fab1dd8","impliedFormat":1},{"version":"3e7efde639c6a6c3edb9847b3f61e308bf7a69685b92f665048c45132f51c218","impliedFormat":1},{"version":"df45ca1176e6ac211eae7ddf51336dc075c5314bc5c253651bae639defd5eec5","impliedFormat":1},{"version":"8a0e762ceb20c7e72504feef83d709468a70af4abccb304f32d6b9bac1129b2c","impliedFormat":1},{"version":"da5950ee2a90721df6f3fba45f5d05308f7e4c35835392215dd2cd404505e2de","impliedFormat":1},{"version":"ce75b1aebb33d510ff28af960a9221410a3eaf7f18fc5f21f9404075fba77256","impliedFormat":1},{"version":"f42d5fed19610d485c646a0c430e768115567d078c7fc855c57b0c578b3d6cd3","impliedFormat":1},{"version":"ee8df1cb8d0faaca4013a1b442e99130769ce06f438d18d510fed95890067563","impliedFormat":1},{"version":"d5630f2ad9b4541e5ce891648121022f9412ecdca1820baa1f0104f70fd7eff7","impliedFormat":1},{"version":"4d15375ab13497104bc8fe56fdef2b5fd6853f29255737d23a33fa306ff7fd69","impliedFormat":1},{"version":"2cd3fc1d0d6a1e85baffd2d4f50f5efb192b5446eef567e97c94765402f0aad4","impliedFormat":1},{"version":"e4cbf2f1e89ecccaddd2c045e600ae41b732295953fb06247c7dcbc2d281ed30","impliedFormat":1},{"version":"27bbdb7509a5bb564020321fc5485764d0db3230a10d2336ae5ce2c1d401b0e7","impliedFormat":1},{"version":"8c1697d90c394a6fd955b98eae01238eff628e129b987a68aea10f898a48e7da","impliedFormat":1},{"version":"7580e62139cb2b44a0270c8d01abcbfcba2819a02514a527342447fa69b34ef1","impliedFormat":1},{"version":"42c169fb8c2d42f4f668c624a9a11e719d5d07dacbebb63cbcf7ef365b0a75b3","impliedFormat":1},{"version":"f374cb24e93e7798c4d9e83ff872fa52d2cdb36306392b840a6ddf46cb925cb6","impliedFormat":1},{"version":"d10d63718e1646c2279e3b33831f82c60e31f622b2b7020f1196409ca4c09242","impliedFormat":1},{"version":"106c6025f1d99fd468fd8bf6e5bda724e11e5905a4076c5d29790b6c3745e50c","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"148679c6d0f449210a96e7d2e562d589e56fcde87f843a92808b3ff103f1a774","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"02436d7e9ead85e09a2f8e27d5f47d9464bced31738dec138ca735390815c9f0","impliedFormat":1},{"version":"f8d5ff8eafd37499f2b6a98659dd9b45a321de186b8db6b6142faed0fea3de77","impliedFormat":1},{"version":"c86fe861cf1b4c46a0fb7d74dffe596cf679a2e5e8b1456881313170f092e3fa","impliedFormat":1},{"version":"a22dd55aa4d39906252000ab8e8a1b83b195eef7f4274eb51e457c1f11cf6580","impliedFormat":1},{"version":"540cc83ab772a2c6bc509fe1354f314825b5dba3669efdfbe4693ecd3048e34f","impliedFormat":1},{"version":"121b0696021ab885c570bbeb331be8ad82c6efe2f3b93a6e63874901bebc13e3","impliedFormat":1},{"version":"612d9da66bb046a9c1e2e8d026245ded881fc4b9f98cbfae714415d57ee0ae0b","impliedFormat":1},{"version":"32c2ad9494dad5d11b0564a619fee18f388db6c1e9e2cd3c360b3122549691eb","impliedFormat":1},{"version":"6c301d40aec56a74ec7bd7324e31a728dadf9bfba3e96def02938d3d973534ec","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"aa14cee20aa0db79f8df101fc027d929aec10feb5b8a8da3b9af3895d05b7ba2","impliedFormat":1},{"version":"493c700ac3bd317177b2eb913805c87fe60d4e8af4fb39c41f04ba81fae7e170","impliedFormat":1},{"version":"aeb554d876c6b8c818da2e118d8b11e1e559adbe6bf606cc9a611c1b6c09f670","impliedFormat":1},{"version":"acf5a2ac47b59ca07afa9abbd2b31d001bf7448b041927befae2ea5b1951d9f9","impliedFormat":1},{"version":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881","impliedFormat":1},{"version":"d71291eff1e19d8762a908ba947e891af44749f3a2cbc5bd2ec4b72f72ea795f","impliedFormat":1},{"version":"c0480e03db4b816dff2682b347c95f2177699525c54e7e6f6aa8ded890b76be7","impliedFormat":1},{"version":"25a5f6fd3a2243c859eddc99ab5fba11d970af2fe7a5df9c32b7668f76f97b01","impliedFormat":1},{"version":"8d207e1f9d2c30d6f77dfa693f3827c3fbf0d89240297e10bdfe1041d433df68","impliedFormat":1},{"version":"b620391fe8060cf9bedc176a4d01366e6574d7a71e0ac0ab344a4e76576fcbb8","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"2652448ac55a2010a1f71dd141f828b682298d39728f9871e1cdf8696ef443fd","impliedFormat":1},{"version":"d682336018141807fb602709e2d95a192828fcb8d5ba06dda3833a8ea98f69e3","impliedFormat":1},{"version":"6124e973eab8c52cabf3c07575204efc1784aca6b0a30c79eb85fe240a857efa","impliedFormat":1},{"version":"0d891735a21edc75df51f3eb995e18149e119d1ce22fd40db2b260c5960b914e","impliedFormat":1},{"version":"3b414b99a73171e1c4b7b7714e26b87d6c5cb03d200352da5342ab4088a54c85","impliedFormat":1},{"version":"4fbd3116e00ed3a6410499924b6403cc9367fdca303e34838129b328058ede40","impliedFormat":1},{"version":"9c82171d836c47486074e4ca8e059735bf97b205e70b196535b5efd40cbe1bc5","impliedFormat":1},{"version":"8c70ddc0c22d85e56011d49fddfaae3405eb53d47b59327b9dd589e82df672e7","impliedFormat":1},{"version":"2f9c89cbb29d362290531b48880a4024f258c6033aaeb7e59fbc62db26819650","impliedFormat":1},{"version":"a365c4d3bed3be4e4e20793c999c51f5cd7e6792322f14650949d827fbcd170f","impliedFormat":1},{"version":"c5426dbfc1cf90532f66965a7aa8c1136a78d4d0f96d8180ecbfc11d7722f1a5","impliedFormat":1},{"version":"65a15fc47900787c0bd18b603afb98d33ede930bed1798fc984d5ebb78b26cf9","impliedFormat":1},{"version":"9d202701f6e0744adb6314d03d2eb8fc994798fc83d91b691b75b07626a69801","impliedFormat":1},{"version":"de9d2df7663e64e3a91bf495f315a7577e23ba088f2949d5ce9ec96f44fba37d","impliedFormat":1},{"version":"c7af78a2ea7cb1cd009cfb5bdb48cd0b03dad3b54f6da7aab615c2e9e9d570c5","impliedFormat":1},{"version":"1ee45496b5f8bdee6f7abc233355898e5bf9bd51255db65f5ff7ede617ca0027","impliedFormat":1},{"version":"273782b8454e78f6a8b30d2cfbf6860499c930595095fcc1689637115f0eddda","affectsGlobalScope":true,"impliedFormat":1},{"version":"3fbdd025f9d4d820414417eeb4107ffa0078d454a033b506e22d3a23bc3d9c41","affectsGlobalScope":true,"impliedFormat":1},{"version":"dba114fb6a32b355a9cfc26ca2276834d72fe0e94cd2c3494005547025015369","impliedFormat":1},{"version":"a8f8e6ab2fa07b45251f403548b78eaf2022f3c2254df3dc186cb2671fe4996d","affectsGlobalScope":true,"impliedFormat":1},{"version":"fa6c12a7c0f6b84d512f200690bfc74819e99efae69e4c95c4cd30f6884c526e","impliedFormat":1},{"version":"f1c32f9ce9c497da4dc215c3bc84b722ea02497d35f9134db3bb40a8d918b92b","impliedFormat":1},{"version":"b73c319af2cc3ef8f6421308a250f328836531ea3761823b4cabbd133047aefa","affectsGlobalScope":true,"impliedFormat":1},{"version":"e433b0337b8106909e7953015e8fa3f2d30797cea27141d1c5b135365bb975a6","impliedFormat":1},{"version":"9f9bb6755a8ce32d656ffa4763a8144aa4f274d6b69b59d7c32811031467216e","impliedFormat":1},{"version":"5c32bdfbd2d65e8fffbb9fbda04d7165e9181b08dad61154961852366deb7540","impliedFormat":1},{"version":"ddff7fc6edbdc5163a09e22bf8df7bef75f75369ebd7ecea95ba55c4386e2441","impliedFormat":1},{"version":"0c05e9842ec4f8b7bfebfd3ca61604bb8c914ba8da9b5337c4f25da427a005f2","impliedFormat":1},{"version":"faed7a5153215dbd6ebe76dfdcc0af0cfe760f7362bed43284be544308b114cf","impliedFormat":1},{"version":"7029e566b8df176f703fb59fd437a38670c7a0e02c58b2d66dfb5b2e2b2defdb","impliedFormat":1},{"version":"7f2aa4d4989a82530aaac3f72b3dceca90e9c25bee0b1a327e8a08a1262435ad","impliedFormat":1},{"version":"d96b39301d0ded3f1a27b47759676a33a02f6f5049bfcbde81e533fd10f50dcb","impliedFormat":1},{"version":"e9f147ecca73d9346a4c073432843c159ccbe50bdcb678a78f6da10eae2cecf4","impliedFormat":1},{"version":"de061f7d72bd65c06fc1419f841dfdcb29a8e22fe6fa527d1e6eb20b897d4de0","impliedFormat":1},{"version":"663beafc2446079574570cba86e9b15f986f908ddb1b01274509970126fee945","impliedFormat":1},{"version":"a3102887d5058bf4cb5b37fa6964c09e9527c42053b3b5c642b89878620748de","impliedFormat":1},{"version":"0aaaa1727edd29673d85c9b26d7ca4d54e5407a48586903c51b48b7f7d196f61","impliedFormat":1},{"version":"d35bca0b261bff02635758c48e8ab99c61c420d0dfabbcf467e847171d876b7d","impliedFormat":1},{"version":"3bc12c40d90c342ff88a3d876996c555ed5cbee5fe8c3308a240b321f401ee46","impliedFormat":1},{"version":"ba130768aae855a5477e9e148e5c879548e6e7ccbcc56fd1934c8a18ea5b7569","impliedFormat":1},{"version":"2e4f37ffe8862b14d8e24ae8763daaa8340c0df0b859d9a9733def0eee7562d9","impliedFormat":1},{"version":"d38530db0601215d6d767f280e3a3c54b2a83b709e8d9001acb6f61c67e965fc","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"b499af2054a037a162b3b72cd886f48bbf32a3502c865c6e29fac7d2ab3ce0b5","impliedFormat":1},{"version":"b83cb14474fa60c5f3ec660146b97d122f0735627f80d82dd03e8caa39b4388c","impliedFormat":1},{"version":"d87f90d2df7b638204d81d6c57e1f2a8cc9317c45ca331c691c375649aa9255c","impliedFormat":1},{"version":"7274fbffbd7c9589d8d0ffba68157237afd5cecff1e99881ea3399127e60572f","impliedFormat":1},{"version":"b73cbf0a72c8800cf8f96a9acfe94f3ad32ca71342a8908b8ae484d61113f647","impliedFormat":1},{"version":"bae6dd176832f6423966647382c0d7ba9e63f8c167522f09a982f086cd4e8b23","impliedFormat":1},{"version":"20865ac316b8893c1a0cc383ccfc1801443fbcc2a7255be166cf90d03fac88c9","impliedFormat":1},{"version":"c9958eb32126a3843deedda8c22fb97024aa5d6dd588b90af2d7f2bfac540f23","impliedFormat":1},{"version":"461d0ad8ae5f2ff981778af912ba71b37a8426a33301daa00f21c6ccb27f8156","impliedFormat":1},{"version":"e927c2c13c4eaf0a7f17e6022eee8519eb29ef42c4c13a31e81a611ab8c95577","impliedFormat":1},{"version":"fcafff163ca5e66d3b87126e756e1b6dfa8c526aa9cd2a2b0a9da837d81bbd72","impliedFormat":1},{"version":"70246ad95ad8a22bdfe806cb5d383a26c0c6e58e7207ab9c431f1cb175aca657","impliedFormat":1},{"version":"f00f3aa5d64ff46e600648b55a79dcd1333458f7a10da2ed594d9f0a44b76d0b","impliedFormat":1},{"version":"772d8d5eb158b6c92412c03228bd9902ccb1457d7a705b8129814a5d1a6308fc","impliedFormat":1},{"version":"802e797bcab5663b2c9f63f51bdf67eff7c41bc64c0fd65e6da3e7941359e2f7","impliedFormat":1},{"version":"b01bd582a6e41457bc56e6f0f9de4cb17f33f5f3843a7cf8210ac9c18472fb0f","impliedFormat":1},{"version":"8b4327413e5af38cd8cb97c59f48c3c866015d5d642f28518e3a891c469f240e","impliedFormat":1},{"version":"4cceef18d7f088e797a463e90b7a9dad10c6bc667724b7686e3e740ae00122be","impliedFormat":1},{"version":"7ee86fbb3754388e004de0ef9e6505485ddfb3be7640783d6d015711c03d302d","impliedFormat":1},{"version":"cc1954b539604b1e562319119ac7e888172208b32ca873f9a357a92c826bd046","impliedFormat":1},{"version":"a67b87d0281c97dfc1197ef28dfe397fc2c865ccd41f7e32b53f647184cc7307","impliedFormat":1},{"version":"771ffb773f1ddd562492a6b9aaca648192ac3f056f0e1d997678ff97dbb6bf9b","impliedFormat":1},{"version":"43e96a3d5d1411ab40ba2f61d6a3192e58177bcf3b133a80ad2a16591611726d","impliedFormat":1},{"version":"232f70c0cf2b432f3a6e56a8dc3417103eb162292a9fd376d51a3a9ea5fbbf6f","impliedFormat":1},{"version":"bb8f2dbc03533abca2066ce4655c119bff353dd4514375beb93c08590c03e023","impliedFormat":1},{"version":"706dd95827e7ebaabda91d5db2b755233e0952d98570e9c032b0f066a15c1177","affectsGlobalScope":true,"impliedFormat":1},{"version":"0b103e9abfe82d14c0ad06a55d9f91d6747154ef7cacc73cf27ecad2bfb3afcf","impliedFormat":1},{"version":"990b8fad2327b77e6920cc792af320e8867e68f02ce849b12c0a6ab9a1aebb09","impliedFormat":1},{"version":"5eb8cd1cb0c9143d74a8190b577c522720878c31aef67d866fcd29973f83e955","impliedFormat":1},{"version":"120599fd965257b1f4d0ff794bc696162832d9d8467224f4665f713a3119078b","impliedFormat":1},{"version":"43ba4f2fa8c698f5c304d21a3ef596741e8e85a810b7c1f9b692653791d8d97a","impliedFormat":1},{"version":"5433f33b0a20300cca35d2f229a7fc20b0e8477c44be2affeb21cb464af60c76","impliedFormat":1},{"version":"db036c56f79186da50af66511d37d9fe77fa6793381927292d17f81f787bb195","impliedFormat":1},{"version":"a6805fcafed712aea7759f8bc731014f9d22738c1d6ef9d43b8091d1d48346d5","impliedFormat":1},{"version":"c49469a5349b3cc1965710b5b0f98ed6c028686aa8450bcb3796728873eb923e","impliedFormat":1},{"version":"4a889f2c763edb4d55cb624257272ac10d04a1cad2ed2948b10ed4a7fda2a428","impliedFormat":1},{"version":"7bb79aa2fead87d9d56294ef71e056487e848d7b550c9a367523ee5416c44cfa","impliedFormat":1},{"version":"d88ea80a6447d7391f52352ec97e56b52ebec934a4a4af6e2464cfd8b39c3ba8","impliedFormat":1},{"version":"142617b3cdf902b69c6464c9fbd942b60ab3e733ca18c032b19e0f7e2adbefe8","impliedFormat":1},{"version":"0b603555f1881f87256ffd6344d3e3ed6d466c2e701eabf381f28be8c2125892","impliedFormat":1},{"version":"897e4f7662488e3ecc79e743bdd3b78f13bdb69a97851afa5b440c4211e32ea9","impliedFormat":1},{"version":"e2e1c6d3b2d93add5200bd7bc1a8cccb4e446836b2111ece45db8683a2c765de","impliedFormat":1},{"version":"251b03d5cd243854ce870d9a9a39f491faf69898c5d6b5eee28cc7649c57417b","impliedFormat":1},{"version":"27ff4196654e6373c9af16b6165120e2dd2169f9ad6abb5c935af5abd8c7938c","impliedFormat":1},{"version":"2c4de79f406d137390608e8c0a44fba2ff8e00bacfcae7c9d1781fef10e9440d","impliedFormat":1},{"version":"07ba23a10465791be5d22deaf5ef7de7658774ddff53721e5ea17fedea1bc721","impliedFormat":1},{"version":"dca8c645c5afeb03b1ecedbf16323f33e7d0afaa6256c8e047e6e38087a97f53","impliedFormat":1},{"version":"775f181bd4a533d6f8b5e55ec1d9f1624559720ae8a70e9432258da26b38d27c","impliedFormat":1},{"version":"796273b2edc72e78a04e86d7c58ae94d370ab93a0ddf40b1aa85a37a1c29ecd7","impliedFormat":1},{"version":"5df15a69187d737d6d8d066e189ae4f97e41f4d53712a46b2710ff9f8563ec9f","impliedFormat":1},{"version":"9109a1291dd4b9f1541bea81ee11c247a2ca9e1ea89f87f13aa1811c3c069616","impliedFormat":1},{"version":"6ac6715916fa75a1f7ebdfeacac09513b4d904b667d827b7535e84ff59679aff","impliedFormat":1},{"version":"622694a8522b46f6310c2a9b5d2530dde1e2854cb5829354e6d1ff8f371cf469","impliedFormat":1},{"version":"cd8ce8d68567f62dd580b3c3c37777ac3f5b81944c7417f5ea83030eab533385","impliedFormat":1},{"version":"e374d1eaa05b7dc38580062942ac8351ce79cbe11f6dbce4946a582a5680582d","impliedFormat":1},{"version":"9e2739b32f741859263fdba0244c194ca8e96da49b430377930b8f721d77c000","impliedFormat":1},{"version":"a9e6c0ff3f8186fccd05752cf75fc94e147c02645087ac6de5cc16403323d870","impliedFormat":1},{"version":"49af4b52f0d4d2304c5f2c6fe5fab3e153e0acc38830d0202821b877c097dd02","impliedFormat":1},{"version":"49c346823ba6d4b12278c12c977fb3a31c06b9ca719015978cb145eb86da1c61","impliedFormat":1},{"version":"bfac6e50eaa7e73bb66b7e052c38fdc8ccfc8dbde2777648642af33cf349f7f1","impliedFormat":1},{"version":"92f7c1a4da7fbfd67a2228d1687d5c2e1faa0ba865a94d3550a3941d7527a45d","impliedFormat":1},{"version":"f53b120213a9289d9a26f5af90c4c686dd71d91487a0aa5451a38366c70dc64b","impliedFormat":1},{"version":"e68b8e5a1df7c1be2bc105141456ecba70215806e1c28bfbc5c12bfce4be6e68","impliedFormat":1},{"version":"511c8f02329808d47d00b859c532ae9115590048b17325a946c74dac48428650","impliedFormat":1},{"version":"57d67b72e06059adc5e9454de26bbfe567d412b962a501d263c75c2db430f40e","impliedFormat":1},{"version":"b5f9e66625783eefcbe3d2da074b2e7ba2066d61ce3fc6ef4f22805ad946cab4","impliedFormat":1},{"version":"e37115962d284b9f7a37c2bdd2add50f88365dde41f5e0ff591ffc48a8ec7575","impliedFormat":1},{"version":"6459054aabb306821a043e02b89d54da508e3a6966601a41e71c166e4ea1474f","impliedFormat":1},{"version":"bb37588926aba35c9283fe8d46ebf4e79ffe976343105f5c6d45f282793352b2","impliedFormat":1},{"version":"f89488602bec98a142072fae7ea5ba99431a569ff580c64b7be39896474799d8","impliedFormat":1},{"version":"bbbc47961f39a57df103cf4ca3bb8f8732b4b6678a18225a0aa76d59c466956c","impliedFormat":1},{"version":"2e6114a7dd6feeef85b2c80120fdbfb59a5529c0dcc5bfa8447b6996c97a69f5","impliedFormat":1},{"version":"2ffb043dc5163458e473b7010859f86e01dc4edffcae0a93d885d028b426a546","impliedFormat":1},{"version":"c8f004e6036aa1c764ad4ec543cf89a5c1893a9535c80ef3f2b653e370de45e6","impliedFormat":1},{"version":"dd80b1e600d00f5c6a6ba23f455b84a7db121219e68f89f10552c54ba46e4dc9","impliedFormat":1},{"version":"b064c36f35de7387d71c599bfcf28875849a1dbc733e82bd26cae3d1cd060521","impliedFormat":1},{"version":"05c7280d72f3ed26f346cbe7cbbbb002fb7f15739197cbbee6ab3fd1a6cb9347","impliedFormat":1},{"version":"8de9fe97fa9e00ec00666fa77ab6e91b35d25af8ca75dabcb01e14ad3299b150","impliedFormat":1},{"version":"04b7b2e0832dfd3c31e81df3975e8d8fda28e7ff999b0aa2932608a8f6661d5c","impliedFormat":1},{"version":"ca2d34c6ed5cbd3070b8b6f32f42ae54adcc6499c1e4b99f0a5798b3f27cc653","impliedFormat":1},{"version":"9ec68995e66dd6b9dac834bf5ae85fde802714ea2e82151a5d1d53ef01b463ef","impliedFormat":1},{"version":"5c4d626b4902f2ef8a1cc146d761d276cef988016dc674e3b98fbad70e64bc9f","impliedFormat":1},{"version":"fdfaa0aad899524962e2955287b5b991ffe3be50f64e02eb60c933ca44644a94","impliedFormat":1},{"version":"53c972a0f9bc3a4ec70fff7314123ea8cfcf75b3703046f767d2dc1eea87b2fb","impliedFormat":1},{"version":"f974e4a06953682a2c15d5bd5114c0284d5abf8bc0fe4da25cb9159427b70072","impliedFormat":1},{"version":"50256e9c31318487f3752b7ac12ff365c8949953e04568009c8705db802776fb","impliedFormat":1},{"version":"7d73b24e7bf31dfb8a931ca6c4245f6bb0814dfae17e4b60c9e194a631fe5f7b","impliedFormat":1},{"version":"d130c5f73768de51402351d5dc7d1b36eaec980ca697846e53156e4ea9911476","impliedFormat":1},{"version":"413586add0cfe7369b64979d4ec2ed56c3f771c0667fbde1bf1f10063ede0b08","impliedFormat":1},{"version":"06472528e998d152375ad3bd8ebcb69ff4694fd8d2effaf60a9d9f25a37a097a","impliedFormat":1},{"version":"7303b45138d2511035056a5901a1490ebdcbf055cbb1276f8629c5121cbe733e","impliedFormat":1},{"version":"27f874cd5327507eeff699a74567f60c1215b94509f4308633a7b01922471ed2","impliedFormat":1},{"version":"a401617604fa1f6ce437b81689563dfdc377069e4c58465dbd8d16069aede0a5","impliedFormat":1},{"version":"2c6cf04bc525caf6546e859e8ef10bfb9573837ec0bc5ec7b53a7b1b8ca72781","impliedFormat":1},{"version":"8695dec09ad439b0ceef3776ea68a232e381135b516878f0901ed2ea114fd0fe","impliedFormat":1},{"version":"304b44b1e97dd4c94697c3313df89a578dca4930a104454c99863f1784a54357","impliedFormat":1},{"version":"0a437ae178f999b46b6153d79095b60c42c996bc0458c04955f1c996dc68b971","impliedFormat":1},{"version":"74b2a5e5197bd0f2e0077a1ea7c07455bbea67b87b0869d9786d55104006784f","impliedFormat":1},{"version":"4a7baeb6325920044f66c0f8e5e6f1f52e06e6d87588d837bdf44feb6f35c664","impliedFormat":1},{"version":"87cc05fe13108f02e12da7e3efd8e360fef78d96a0c9e11408ea1b1b9fb3e03d","impliedFormat":1},{"version":"1abbf67c218d23c2ce76887caac2df6c7dab3d97ba2b65348432b876f510002a","impliedFormat":1},{"version":"1a82deef4c1d39f6882f28d275cad4c01f907b9b39be9cbc472fcf2cf051e05b","impliedFormat":1},{"version":"4b20fcf10a5413680e39f5666464859fc56b1003e7dfe2405ced82371ebd49b6","impliedFormat":1},{"version":"c06ef3b2569b1c1ad99fcd7fe5fba8d466e2619da5375dfa940a94e0feea899b","impliedFormat":1},{"version":"f7d628893c9fa52ba3ab01bcb5e79191636c4331ee5667ecc6373cbccff8ae12","impliedFormat":1},{"version":"1d879125d1ec570bf04bc1f362fdbe0cb538315c7ac4bcfcdf0c1e9670846aa6","impliedFormat":1},{"version":"8bd496cf710d4873d15e4891a5dbf945673e3321ca74cf75187e347fd5ed295e","impliedFormat":1},{"version":"a6dba407fc287f1e25454e75028c91bbc00675f2d1c4e8b3edcc36c08611a486","impliedFormat":1},{"version":"d663134457d8d669ae0df34eabd57028bddc04fc444c4bc04bc5215afc91e1f4","impliedFormat":1},{"version":"e91f7b1344577a02f051b9b471f33044fef8334a76dc9e1de003d17595a5219b","impliedFormat":1},{"version":"c0723195c85e19656d6b5b9fdb81d3f3403c1ae4679e722c6ea058c516b38d12","impliedFormat":1},{"version":"186eea74805194f04e41038fc5eca653788b9dedbab7c2d7d17e10139622dd92","impliedFormat":1},{"version":"71d9eb4c4e99456b78ae182fb20a5dfc20eb1667f091dbb9335b3c017dd1c783","impliedFormat":1},{"version":"cfa846a7b7847a1d973605fbb8c91f47f3a0f0643c18ac05c47077ebc72e71c7","impliedFormat":1},{"version":"1594da19968752a22b2ac48c2d0e60575700e745c577a8a4a676b841238ad5bb","impliedFormat":1},{"version":"e0cee12109e0a10a4c3d6769fcc7644b7c1ea7f52365bea51728f5af29f8a137","impliedFormat":1},{"version":"7d4254b4c6c67a29d5e7f65e67d72540480ac2cfb041ca484847f5ae70480b62","impliedFormat":1},{"version":"3536968defef8a75514f547ead5e2e9c1e984820290ec9b00c5fdfb6ef786535","impliedFormat":1},{"version":"d83773870080c30a230e322ce13a9c6f3398e8dacea4ea8a83e26370f3bac23e","impliedFormat":1},{"version":"dcfeaf98d66314fec29a9076c4290e45d0b196a65827becc19138e9c7b855f37","impliedFormat":1},{"version":"6849fe9210fe4946d5f085bfed36758f33dc6ae15a751338d178dd4daa017c46","impliedFormat":1},{"version":"888cda0fa66d7f74e985a3f7b1af1f64b8ff03eb3d5e80d051c3cbdeb7f32ab7","impliedFormat":1},{"version":"60681e13f3545be5e9477acb752b741eae6eaf4cc01658a25ec05bff8b82a2ef","impliedFormat":1},{"version":"ffae4e1e06aa848a1e4bcef162cd1c48e5909b26223515981310af9c036bdfc7","impliedFormat":1},{"version":"a57b1802794433adec9ff3fed12aa79d671faed86c49b09e02e1ac41b4f1d33a","impliedFormat":1},{"version":"34e16eb7c31768a11a08aebcfb3d70d7b8f0b016197e98d8419e566ceae6d6c8","impliedFormat":1},{"version":"f94ec1f7e4b709d26960306c9082a7a1b728a6e13089346aa48ba57c74cbf47e","impliedFormat":1},{"version":"9a11cb4033405e96c247cd5aa29790212aaffdd127869e8a5219103f0b389fd5","impliedFormat":1},{"version":"01479d9d5a5dda16d529b91811375187f61a06e74be294a35ecce77e0b9e8d6c","impliedFormat":1},{"version":"aff5213585cb72e94054dfe17250ff315f3569b3919d1ef1ad235f37c4ee894e","impliedFormat":1},{"version":"fb2ea35e1be6388d722d7725e2b49c697d34d9c890c3b96758faaeb86d35cef8","impliedFormat":1},{"version":"ce0df82a9ae6f914ba08409d4d883983cc08e6d59eb2df02d8e4d68309e7848b","impliedFormat":1},{"version":"1a4dc28334a926d90ba6a2d811ba0ff6c22775fcc13679521f034c124269fd40","impliedFormat":1},{"version":"f05315ff85714f0b87cc0b54bcd3dde2716e5a6b99aedcc19cad02bf2403e08c","impliedFormat":1},{"version":"5fad3b31fc17a5bc58095118a8b160f5260964787c52e7eb51e3d4fcf5d4a6f0","impliedFormat":1},{"version":"72105519d0390262cf0abe84cf41c926ade0ff475d35eb21307b2f94de985778","impliedFormat":1},{"version":"456006a6975b26c0a1785feddae165f6d307e2d601ffde27e21fc4a790e448a4","impliedFormat":1},{"version":"c857e0aae3f5f444abd791ec81206020fbcc1223e187316677e026d1c1d6fe08","impliedFormat":1},{"version":"ccf6dd45b708fb74ba9ed0f2478d4eb9195c9dfef0ff83a6092fa3cf2ff53b4f","impliedFormat":1},{"version":"1fe0d18b111e1145a7e7601855bccd4ca20f24e3b9a5aba6bb1fa9d1a7059170","impliedFormat":1},{"version":"5632c3c26d420c063eebe64c45b1248b9492a67bf44f1d0c57e9dc8f6cf449bb","impliedFormat":1},{"version":"0df5aa619ab12993a39ea6dae062ee46eadbb4d738916460e636ada52bced75b","impliedFormat":1},{"version":"8fca3039857709484e5893c05c1f9126ab7451fa6c29e19bb8c2411a2e937345","impliedFormat":1},{"version":"35069c2c417bd7443ae7c7cafd1de02f665bf015479fec998985ffbbf500628c","impliedFormat":1},{"version":"10ab7be91f87ebe8916b62cf28af2e45b5601fc7b0e311adf838f912c6b31dd8","impliedFormat":1},{"version":"bc636fbc08e0979ceb7eb0731a33000283d77a33b62e1f71ee65be50394e40ba","impliedFormat":1},{"version":"7e0b7f91c5ab6e33f511efc640d36e6f933510b11be24f98836a20a2dc914c2d","impliedFormat":1},{"version":"045b752f44bf9bbdcaffd882424ab0e15cb8d11fa94e1448942e338c8ef19fba","impliedFormat":1},{"version":"2894c56cad581928bb37607810af011764a2f511f575d28c9f4af0f2ef02d1ab","impliedFormat":1},{"version":"0a72186f94215d020cb386f7dca81d7495ab6c17066eb07d0f44a5bf33c1b21a","impliedFormat":1},{"version":"75bbd3be047d539988a0ff0b56384ef7a6a25f3b676ad96bee547d44c31622a7","impliedFormat":1},{"version":"42960001a776b089ade681ab5cfddc936e0afb0615133ec1841f3dee89d3e1bf","impliedFormat":1},{"version":"0aedb02516baf3e66b2c1db9fef50666d6ed257edac0f866ea32f1aa05aa474f","impliedFormat":1},{"version":"da47712b394d944328245482603bc6f416d3949b67c9392279caab595076b510","affectsGlobalScope":true,"impliedFormat":1},{"version":"37d0071d8f0a06dc55c2c5e0ec3391affd4fd107c53410bf358196ec0bf3923f","impliedFormat":1},{"version":"b213dad76ca37fd552274c9499056e1c0d9c1bd38a55bb7f68b22ba6b84c3ad7","impliedFormat":1},{"version":"56ccb49443bfb72e5952f7012f0de1a8679f9f75fc93a5c1ac0bafb28725fc5f","impliedFormat":1},{"version":"20fa37b636fdcc1746ea0738f733d0aed17890d1cd7cb1b2f37010222c23f13e","impliedFormat":1},{"version":"d90b9f1520366d713a73bd30c5a9eb0040d0fb6076aff370796bc776fd705943","impliedFormat":1},{"version":"bc03c3c352f689e38c0ddd50c39b1e65d59273991bfc8858a9e3c0ebb79c023b","impliedFormat":1},{"version":"19df3488557c2fc9b4d8f0bac0fd20fb59aa19dec67c81f93813951a81a867f8","affectsGlobalScope":true,"impliedFormat":1},{"version":"b25350193e103ae90423c5418ddb0ad1168dc9c393c9295ef34980b990030617","affectsGlobalScope":true,"impliedFormat":1},{"version":"bef86adb77316505c6b471da1d9b8c9e428867c2566270e8894d4d773a1c4dc2","impliedFormat":1},{"version":"5a49adaef698b7ad7e6127949fa1b0bbd3d46b7cbd11c54e392a4dcdd51f5190","impliedFormat":1},{"version":"96171c03c2e7f314d66d38acd581f9667439845865b7f85da8df598ff9617476","impliedFormat":1},{"version":"27be6622e2922a1b412eb057faa854831b95db9db5035c3f6d4b677b902ab3b7","impliedFormat":1},{"version":"5c634644d45a1b6bc7b05e71e05e52ec04f3d73d9ac85d5927f647a5f965181a","impliedFormat":1},{"version":"2489bf04d77dc025ba67f49f1a56eb24b9db477d5ff88123d887e163ed1776aa","impliedFormat":1},{"version":"63a7595a5015e65262557f883463f934904959da563b4f788306f699411e9bac","impliedFormat":1},{"version":"4ba137d6553965703b6b55fd2000b4e07ba365f8caeb0359162ad7247f9707a6","impliedFormat":1},{"version":"0b77b819b5417775fccb20c678293cf614c054a5b1a65421a5b933a9124ba998","impliedFormat":1},{"version":"e1f6076688a95bd82deaac740fccbe3cdea0d8a22057cccc9c5bce4398bdd33b","impliedFormat":1},{"version":"9252d498a77517aab5d8d4b5eb9d71e4b225bbc7123df9713e08181de63180f6","impliedFormat":1},{"version":"b1f1d57fde8247599731b24a733395c880a6561ec0c882efaaf20d7df968c5af","impliedFormat":1},{"version":"d7c1bbcddb06dcc8c9184013ace33c0dc71af715ab5987ccb42b903d2ec91193","impliedFormat":1},{"version":"35e6379c3f7cb27b111ad4c1aa69538fd8e788ab737b8ff7596a1b40e96f4f90","impliedFormat":1},{"version":"1fffe726740f9787f15b532e1dc870af3cd964dbe29e191e76121aa3dd8693f2","impliedFormat":1},{"version":"5a3ea721d03a361ccbdd7390ccd75f6e84cbca3a3f01f4b331ecc9af31890c49","impliedFormat":1},{"version":"e7dfaee4af38d45b1cab8a1ee0b3bc1f85ddcf64545ed391d675d78ae6526274","affectsGlobalScope":true,"impliedFormat":1},{"version":"98e2b197bf7fe7800f89c87825e2556d66474869845e97ad9c2b36f347c43539","impliedFormat":1},{"version":"af48e58339188d5737b608d41411a9c054685413d8ae88b8c1d0d9bfabdf6e7e","impliedFormat":1},{"version":"616775f16134fa9d01fc677ad3f76e68c051a056c22ab552c64cc281a9686790","impliedFormat":1},{"version":"65c24a8baa2cca1de069a0ba9fba82a173690f52d7e2d0f1f7542d59d5eb4db0","impliedFormat":1},{"version":"f9fe6af238339a0e5f7563acee3178f51db37f32a2e7c09f85273098cee7ec49","impliedFormat":1},{"version":"1de8c302fd35220d8f29dea378a4ae45199dc8ff83ca9923aca1400f2b28848a","impliedFormat":1},{"version":"77e71242e71ebf8528c5802993697878f0533db8f2299b4d36aa015bae08a79c","impliedFormat":1},{"version":"98a787be42bd92f8c2a37d7df5f13e5992da0d967fab794adbb7ee18370f9849","impliedFormat":1},{"version":"332248ee37cca52903572e66c11bef755ccc6e235835e63d3c3e60ddda3e9b93","impliedFormat":1},{"version":"94e8cc88ae2ef3d920bb3bdc369f48436db123aa2dc07f683309ad8c9968a1e1","impliedFormat":1},{"version":"4545c1a1ceca170d5d83452dd7c4994644c35cf676a671412601689d9a62da35","impliedFormat":1},{"version":"320f4091e33548b554d2214ce5fc31c96631b513dffa806e2e3a60766c8c49d9","impliedFormat":1},{"version":"a2d648d333cf67b9aeac5d81a1a379d563a8ffa91ddd61c6179f68de724260ff","impliedFormat":1},{"version":"d90d5f524de38889d1e1dbc2aeef00060d779f8688c02766ddb9ca195e4a713d","impliedFormat":1},{"version":"07ed3ddab975995eea41b22f3010506fb9f5fb301d04820b07d7a1aee5477d7c","impliedFormat":1},{"version":"969d8b0965849f4bae7cab0ba90bd1e1220e95999c2c6f01117fa7500901c017","impliedFormat":1},{"version":"6ec840ee5e2bc103f557fe38b1d585ee250540468713d7634ee066de372bf332","impliedFormat":1},{"version":"b0309e1eda99a9e76f87c18992d9c3689b0938266242835dd4611f2b69efe456","impliedFormat":1},{"version":"47699512e6d8bebf7be488182427189f999affe3addc1c87c882d36b7f2d0b0e","impliedFormat":1},{"version":"6ceb10ca57943be87ff9debe978f4ab73593c0c85ee802c051a93fc96aaf7a20","impliedFormat":1},{"version":"1de3ffe0cc28a9fe2ac761ece075826836b5a02f340b412510a59ba1d41a505a","impliedFormat":1},{"version":"e46d6cc08d243d8d0d83986f609d830991f00450fb234f5b2f861648c42dc0d8","impliedFormat":1},{"version":"1c0a98de1323051010ce5b958ad47bc1c007f7921973123c999300e2b7b0ecc0","impliedFormat":1},{"version":"ff863d17c6c659440f7c5c536e4db7762d8c2565547b2608f36b798a743606ca","impliedFormat":1},{"version":"5412ad0043cd60d1f1406fc12cb4fb987e9a734decbdd4db6f6acf71791e36fe","impliedFormat":1},{"version":"ad036a85efcd9e5b4f7dd5c1a7362c8478f9a3b6c3554654ca24a29aa850a9c5","impliedFormat":1},{"version":"fedebeae32c5cdd1a85b4e0504a01996e4a8adf3dfa72876920d3dd6e42978e7","impliedFormat":1},{"version":"e297c0a524edee7677939122f90027bfbe5f2698939d9a85728e5044b39c7124","impliedFormat":1},{"version":"cdf21eee8007e339b1b9945abf4a7b44930b1d695cc528459e68a3adc39a622e","impliedFormat":1},{"version":"bc9ee0192f056b3d5527bcd78dc3f9e527a9ba2bdc0a2c296fbc9027147df4b2","impliedFormat":1},{"version":"b62381cae176db34f003cc6172ee8f3e0122014889d66391aa73698105cf4934","impliedFormat":1},{"version":"1d9c0a9a6df4e8f29dc84c25c5aa0bb1da5456ebede7a03e03df08bb8b27bae6","impliedFormat":1},{"version":"84380af21da938a567c65ef95aefb5354f676368ee1a1cbb4cae81604a4c7d17","impliedFormat":1},{"version":"1af3e1f2a5d1332e136f8b0b95c0e6c0a02aaabd5092b36b64f3042a03debf28","impliedFormat":1},{"version":"30d8da250766efa99490fc02801047c2c6d72dd0da1bba6581c7e80d1d8842a4","impliedFormat":1},{"version":"03566202f5553bd2d9de22dfab0c61aa163cabb64f0223c08431fb3fc8f70280","impliedFormat":1},{"version":"41eb514d9ce0a6e87957f08a4b7af70d93f87637f37dee706e2d92a6601c25a9","impliedFormat":1},{"version":"e7765aa8bcb74a38b3230d212b4547686eb9796621ffb4367a104451c3f9614f","impliedFormat":1},{"version":"1de80059b8078ea5749941c9f863aa970b4735bdbb003be4925c853a8b6b4450","impliedFormat":1},{"version":"1d079c37fa53e3c21ed3fa214a27507bda9991f2a41458705b19ed8c2b61173d","impliedFormat":1},{"version":"5bf5c7a44e779790d1eb54c234b668b15e34affa95e78eada73e5757f61ed76a","impliedFormat":1},{"version":"5835a6e0d7cd2738e56b671af0e561e7c1b4fb77751383672f4b009f4e161d70","impliedFormat":1},{"version":"4b7f74b772140395e7af67c4841be1ab867c11b3b82a51b1aeb692822b76c872","impliedFormat":1},{"version":"7bd01f0f28cd3aeb2046274d85208e245965f6f2948edf4f7b2057bcf9f22ccc","impliedFormat":99},{"version":"d2f2cf2b8cc92bea913cda4a076e0f790b23a21e84f989d12f0116a7fe3906e0","impliedFormat":99},{"version":"6de125ea94866c736c6d58d68eb15272cf7d1020a5b459fea1c660027eca9a90","affectsGlobalScope":true,"impliedFormat":1},{"version":"f5b20bc288ee49989c95b20847fc93b96bf61cc0845598897a6a53a967dd7d07","affectsGlobalScope":true,"impliedFormat":1},{"version":"064ac1c2ac4b2867c2ceaa74bbdce0cb6a4c16e7c31a6497097159c18f74aa7c","impliedFormat":1},{"version":"3dc14e1ab45e497e5d5e4295271d54ff689aeae00b4277979fdd10fa563540ae","impliedFormat":1},{"version":"d3b315763d91265d6b0e7e7fa93cfdb8a80ce7cdd2d9f55ba0f37a22db00bdb8","impliedFormat":1},{"version":"b789bf89eb19c777ed1e956dbad0925ca795701552d22e68fd130a032008b9f9","impliedFormat":1},{"version":"947c36c271436c7c95d8fb93512809a6a9da09529f9f6ab53d096ba2c3138773","affectsGlobalScope":true},"7b550dda9686c16f36a17bf9051d5dbf31e98555b30d114ac49fc49a1e712651",{"version":"c73200a98245d9af19dd183d20d280f4c1316ee1d64d848c017c852fc487a03e","signature":"435a1e418e8338be3f39614b96b81a9aa2700bc8c27bc6b98f064ff9ce17c363"},{"version":"0e2371bedf44ad329fb72bd04f61eae22c25c1aee4b11d9609ac273db1a743d1","signature":"10c0e38fa65ae484b17b72b34674dc4ab72c9c605a99f214a421f064f3883e9d"},{"version":"e83a7d31a22409faadb10b4b5d1498ffdcdd269353dd4c529d9c8ab71c04e106","signature":"4447890475137793b8a0014186f2f7999ca24262bc52e5942382018e748685da"},{"version":"96904a667fd08995f381d939716efc0b463eb06801082c45a212b0f7f1354347","signature":"2b426a2cce37f94344577cb5ac0076b3b264fd4f909cc5715855cb11d517cafd"},{"version":"f734b58ea162765ff4d4a36f671ee06da898921e985a2064510f4925ec1ed062","affectsGlobalScope":true,"impliedFormat":1},{"version":"9b643d11b5bca11af760795e56096beae0ed29e9027fec409481f2ee1cb54bbc","impliedFormat":1},{"version":"55c0569d0b70dbc0bb9a811469a1e2a7b8e2bab2d70c013f2e40dfb2d2803d05","impliedFormat":1},{"version":"37f96daaddc2dd96712b2e86f3901f477ac01a5c2539b1bc07fd609d62039ee1","impliedFormat":1},{"version":"9c5c84c449a3d74e417343410ba9f1bd8bfeb32abd16945a1b3d0592ded31bc8","impliedFormat":1},{"version":"a7f09d2aaf994dbfd872eda4f2411d619217b04dbe0916202304e7a3d4b0f5f8","impliedFormat":1},{"version":"a66ebe9a1302d167b34d302dd6719a83697897f3104d255fe02ff65c47c5814e","impliedFormat":99},{"version":"faf770b3935c2ba6558b2bb65af5d5de58945d81f496dc1a5938c41a1abb358b","impliedFormat":99},{"version":"04d516ea781ae5712f84453b5d93a28dbd1aea2f592f09a218e4573d6a45dde3","signature":"ed07f82a62266283074240a9c4554d7ae7c6fdbc07fe0da7664b3b2f662cc786"},{"version":"a43c022e94a6b3186bef5503b526cbffaa6a7f5bd54c5e0efc5c8c7b7450f636","signature":"9a067f074a7f03da7f461c164b0783efff7b8495a2660d5e516f55903ae5229b"},{"version":"168f5f465976626d7bdc0545b75747dc8a4bd0c2e90be982984c4bdebdcd7cf6","signature":"66dddff2da3e4f4a4314b37d39b0df4f39f0e06acdee9447db72b8cf374a1ab0"},{"version":"828468eff0a6b91508f306b1465fa92ded860ff57eaef72e116af404abf1c852","signature":"fcef3307b3cd7280dbb9cc9b779a71e5155941283755f1d250188805b76951e9"},{"version":"047a205de787565f14994d6fad569a362a206e394442467846a7a780d7746473","signature":"b303f233f8ecfa45ff81f79475f02336f2976157344c8cea13d5157ea391d6ff"},{"version":"bd759af437e926d7fadc4c44e854859ee5a6031584d908e0e0c011f3e5494b24","signature":"bf792b43b5d8e717bbd0c9583aad0acd8571cb720878b9f28f57bf2626b0ee31"},{"version":"8028d380d1183acbabe06c57ca137e161c2cae0ea49d332cddc5c0de0859984d","signature":"be5dc128ab59e4d214328cde0e6cbbe19cd8c88b02c65a2975ed424aff3dccde"},{"version":"db8344d2ff556d61e22a92e5649af6a6f248829b5610d706af3389d3cf8ba4c5","signature":"b0e1075000bd306dc219c38d5f8b9dc93130ad25450334c319d91abfa2f4dd46"},{"version":"0b0f281284711f9d5f570738e8dac648b77e7cde0b324e1285640dbebb6ea789","signature":"2533b08a0a15588b3fb04000a28c9452c6c5e80b0cbf5d2c18a58dd0f323bc27"},{"version":"a80539b0989174510f61316d01b9c178c85c4b7e6fb4c3e3c23f5682ce63dc5c","signature":"e947aa47a3b9e624dabd7f4ac611b3d0a4f4365106896455b3ec7f8e483be1f7"},{"version":"51edfd6c0025695636412e18ba816083219ec9178c7bd9e89bd359c5337e6616","signature":"9cf13c46707729cbef4c305895330d81a81302cb6d1a4842e6e2e75ebe737c75"},{"version":"250b0d7e089b19e6efcda749df4794a02b95103ca6f886a2920e1bfebe263d74","signature":"32ded199e40052ebed3345e587166e528db606108f7302f4411aa6caeacc7c77"},{"version":"288d5a790f91d71fb72d5b933daea758c7600e94127d76d7035a11a7f97b1e2b","signature":"b7ccd4f874513b2696ab3157dd2972231d562469ae86ed14911eef81e80b4be1"},{"version":"5ac0b6a9397fb1062d289a30a0413d1bcdf07a1dc7cf5e42536f147490dd7f5b","signature":"d90fedf8cebefdb033b5b0e1989d56892378763e11097cc522b29ff5e0824ff8"},{"version":"b1d09cea0d424ede3ee65f96452707fa7219e7b43e66c304bdeb26951d9a2264","signature":"0103e03e63ce3d0d2aa73c619c7b5024ff91bfac300947ba3f5733ced8d060b0"},{"version":"8f5cf7cf45e1d18f48d882df69144497d3a06690218a5f2b41e3da00efffa9bd","signature":"9bafcae90b180744e31a7bd87f3f1d7be7c74503808c3bd8d91832dc2f7fc466"},{"version":"9fd0006748fabfbf2f6f7eddca514e5b8eeba7bbc167a8f84685d141c8ae0a12","signature":"4094e9c0de91739b688476a577a5430b0f439df63116315753c57382c80b1992"},{"version":"fe93c474ab38ac02e30e3af073412b4f92b740152cf3a751fdaee8cbea982341","impliedFormat":1},{"version":"3255b97f3f24af29c79cc1aa88004efb13b6285ebdde0a567bf32e19bb65250d","impliedFormat":1},{"version":"1e00b8bf9e3766c958218cd6144ffe08418286f89ff44ba5a2cc830c03dd22c7","impliedFormat":1},{"version":"23874b6d249b9780eb941f5abb1b4c578219dcaaaad8783be2e731f922bdf291","impliedFormat":1},{"version":"0e182ffd8d90aeb959e63e5025f8c8981a76779810e1281ddcd9d63bfac6adad","signature":"edc69c73c60dea4de32ba11589ad31e4ddf075a547d1970de55440bb1b417e6d"},{"version":"6423fb735fcb28626d5874e3b16c76ae4f31f1d5c7504c8b0cedc69de5d6fb05","signature":"7237060c590b200df3597909a9a0d2bacbb1ad68dc62cd4338c9357a08826967"},{"version":"1f578274f4347614098392d0c8a1483ad635f7a04f719bfea426be389a8448b2","signature":"facafe94889bb4d57526b381f949700715dddc31f28cb39ce38ece2e46c556b1"},{"version":"37c7961117708394f64361ade31a41f96cef7f2a6606300821c72438dd4abda3","impliedFormat":1},{"version":"f5a0ca672513d5a3e303b36801e4573bb17ae002da225c28c1723eeee0f97145","affectsGlobalScope":true,"impliedFormat":1},{"version":"3d9189f26f01d4e36d3fb380810ef5999992235282e3c293da77d1d8aed09d9f","impliedFormat":1},{"version":"d9bf522aa42728ab077c4675515f5c2d1b739cb37a07d2903f3a0227219fd58f","impliedFormat":1},{"version":"cd0781a74bb53df55fb32bb2c1d72220d55ef31b8faa7b56336fe1ad013e83bb","signature":"94ebdee4b8642e7a875b57cad30b42a2679489e75a790def0a48b01799257502"},{"version":"cd47990eb1b2ce5505f41ac71377eba2286bfe872a732477b9c440a1850f7c2c","signature":"1b8b30e8edd4cc7c6825d584fe25d74bf6f8e7a8ed2b732d9efb1ff73c0abd9d"},{"version":"c652e3653150b8ee84ffc9034860d9183e6b4c34be28e3ba41b34b1417941982","impliedFormat":99},{"version":"e1f2b02372cd5acf5bebee18d578e0bd41151097a8afa0a1c536355c361628b8","impliedFormat":1},{"version":"b5df9747bcce48ab8c5904fb905ca429f835e0e22f955f22b231b621038d9e39","signature":"346f0f7d15266ccd4a8d82c39e49c328ee838e8a5ecc4300603b612fa6d8fe09"},{"version":"e516240bc1e5e9faef055432b900bc0d3c9ca7edce177fdabbc6c53d728cced8","impliedFormat":99},{"version":"5402765feacf44e052068ccb4535a346716fa1318713e3dae1af46e1e85f29a9","impliedFormat":99},{"version":"e16ec5d4796e7a765810efee80373675cedc4aa4814cf7272025a88addf5f0be","impliedFormat":99},{"version":"1f57157fcd45f9300c6efcfc53e2071fbe43396b0a7ed2701fbd1efb5599f07f","impliedFormat":99},{"version":"9f1886f3efddfac35babcada2d454acd4e23164345d11c979966c594af63468b","impliedFormat":99},{"version":"a3541c308f223863526df064933e408eba640c0208c7345769d7dc330ad90407","impliedFormat":99},{"version":"59af208befeb7b3c9ab0cb6c511e4fec54ede11922f2ffb7b497351deaf8aa2e","impliedFormat":99},{"version":"928b16f344f6cddaba565da8238f4cf2ddf12fe03eb426ab46a7560e9b3078fa","impliedFormat":99},{"version":"120bdf62bccef4ea96562a3d30dd60c9d55481662f5cf31c19725f56c0056b34","impliedFormat":99},{"version":"39e0da933908de42ba76ea1a92e4657305ae195804cfaa8760664e80baac2d6a","impliedFormat":99},{"version":"55ce6ca8df9d774d60cef58dd5d716807d5cc8410b8b065c06d3edac13f2e726","impliedFormat":99},{"version":"788a0faf3f28d43ce3793b4147b7539418a887b4a15a00ffb037214ed8f0b7f6","impliedFormat":99},{"version":"a3e66e7b8ccdab967cd4ada0f178151f1c42746eabb589a06958482fd4ed354e","impliedFormat":99},{"version":"bf45a2964a872c9966d06b971d0823daecbd707f97e927f2368ba54bb1b13a90","impliedFormat":99},{"version":"39973a12c57e06face646fb79462aabe8002e5523eec4e86e399228eb34b32c9","impliedFormat":99},{"version":"f01091e9b5028acfb38208113ae051fad8a0b4b8ec1f7137a2a5cf903c47eefc","impliedFormat":99},{"version":"b3e87824c9e7e3a3be7f76246e45c8d603ce83d116733047200b3aa95875445b","impliedFormat":99},{"version":"7e1f7f9ae14e362d41167dc861be6a8d76eca30dde3a9893c42946dc5a5fc686","impliedFormat":99},{"version":"9308ef3b9433063ac753a55c3f36d6d89fa38a8e6c51e05d9d8329c7f1174f24","impliedFormat":99},{"version":"cd3bb1aa24726a0abd67558fde5759fe968c3c6aa3ec7bad272e718851502894","impliedFormat":99},{"version":"1ae0f22c3b8420b5c2fec118f07b7ebd5ae9716339ab3477f63c603fe7a151c8","impliedFormat":99},{"version":"919ff537fff349930acc8ad8b875fd985a17582fb1beb43e2f558c541fd6ecd9","impliedFormat":99},{"version":"4e67811e45bae6c44bd6f13a160e4188d72fd643665f40c2ac3e8a27552d3fd9","impliedFormat":99},{"version":"3d1450fd1576c1073f6f4db9ebae5104e52e2c4599afb68d7d6c3d283bdbaf4f","impliedFormat":99},{"version":"c072af873c33ff11af126c56a846dfada32461b393983a72b6da7bff373e0002","impliedFormat":99},{"version":"de66e997ea5376d4aeb16d77b86f01c7b7d6d72fbb738241966459d42a4089e0","impliedFormat":99},{"version":"d77ea3b91e4bc44d710b7c9487c2c6158e8e5a3439d25fc578befeb27b03efd7","impliedFormat":99},{"version":"a3d5c695c3d1ebc9b0bd55804afaf2ac7c97328667cbeedf2c0861b933c45d3e","impliedFormat":99},{"version":"270724545d446036f42ddea422ee4d06963db1563ccc5e18b01c76f6e67968ae","impliedFormat":99},{"version":"85441c4f6883f7cfd1c5a211c26e702d33695acbabec8044e7fa6831ed501b45","impliedFormat":99},{"version":"0f268017a6b1891fdeea69c2a11d576646d7fd9cdfc8aac74d003cd7e87e9c5a","impliedFormat":99},{"version":"9ece188c336c80358742a5a0279f2f550175f5a07264349d8e0ce64db9701c0b","impliedFormat":99},{"version":"cf41b0fc7d57643d1a8d21af07b0247db2f2d7e2391c2e55929e9c00fbe6ab9a","impliedFormat":99},{"version":"11e7ddddd9eddaac56a6f23d8699ae7a94c2a55ae8c986fdabc719d3c3e875a1","impliedFormat":99},{"version":"dd129c2d348be7dbf9f15d34661defdfc11ee00628ca6f7161bead46095c6bc3","impliedFormat":99},{"version":"c38d8e7cfc64bbfc14a63346388249c1cfa2cc02166c5f37e5a57da4790ce27f","impliedFormat":99},{"version":"36e3eb67df2d2ff3187b4b40391f14d70e47f4818599b050e86faee36e318052","impliedFormat":99},{"version":"5c44b3eec57983546666ba931b822bd9002e9af72e68af8d93549e2cc308473e","impliedFormat":99},{"version":"a1e91dce7758dc0c3ce7739cb33fcabca89022dc9dbc73306759ae064e6e135f","impliedFormat":99},{"version":"c66ff8dd0860f2193f41a2793b813a92fdda421a96b63c06d85a63cc1be5c323","signature":"7b87720aae5dbfb749d597c437531239e4019502dc0e78633561735db617b6f3"},{"version":"f9d9485f3794f9488ca10430ab7e9210b54a46a729c2fa68ae794e55383d6c4f","signature":"3f2cef8e84b1552df60bc9b5ceb253f9daedd2f9cb2255075ae28b1cccd3812e"},{"version":"adaf00eb3d0365ac62cea66723983d8c6a14d23139300e45c008329385012344","signature":"c1c0fdbb129948e18a8b11c893490ee3ce0055631ad8de1eee247343d8359ce6"},{"version":"bf83ae8b72f9ab9ccbc506710f0d16d28fd2dcdb815013e9a9c1bb6a8853917b","signature":"0837cd0625e7b32e97e5c11e3d01ea77db26dcb21c617e6961075173100e4d55"},{"version":"f78285344bc1a7c271a0f4d83ea3d5f31fa3082fc1f3d1bb22a07d6dbdf146ca","signature":"9fa5e308f91ef5eb998c178b080a716db9a3f38d4f0431172f76b4cc14475f24"},{"version":"d8b632b9e5a22dbbc4d1aeadf2839577ce1007dd47d64f2e0a0e684db9621259","signature":"176a02ed76811ecd46987cd39bbe17dff1618359d07f0eb6133018521116ed11"},{"version":"f309dd3ba4f0ac6b6e8da18667e3cc000100543005dbaac8381732c7155f0b2e","signature":"cb35f32ada4c9518afd80bd03570d27e50a966ddf376683c9fe282db1b577ed3"},{"version":"cbc938b4c09829c4945386c0e887a459a91d365e0a98b86c96b02e8876b44a3a","signature":"c528b30eab7013aab3a95470fb9bce1c0e0e399e022655b4be09a7a36380319f"},{"version":"48648af05e33be9e1240538a6158551c8662511d0574766f2ca90dd87d93f785","signature":"a635de126078ac9905e4213235a1081db3ac127078dcd4e42b20005ba2e73bd4"},{"version":"a5ea1d394fe2bd081eb10a3727a6670fd0473d050dbece8ff5c98f1f03031e9a","signature":"157b0dda6e8050731b3bbfc5d029d1dcc05dbaa467bc1d9781f320bb69642e86"},{"version":"6ce55335012d76737df504baabc950805760acf3be988142d1985aa4893f919e","impliedFormat":1},{"version":"88efe27bebddb62da9655a9f093e0c27719647e96747f16650489dc9671075d6","impliedFormat":1},{"version":"e348f128032c4807ad9359a1fff29fcbc5f551c81be807bfa86db5a45649b7ba","impliedFormat":1},{"version":"8ee6b07974528da39b7835556e12dd3198c0a13e4a9de321217cd2044f3de22e","impliedFormat":1},{"version":"deefd8c43b40f9797c3921d78d3f9243959621a17b817be7f5d95c149f23a9dd","impliedFormat":1},{"version":"5f12132800d430adbe59b49c2c0354d85a71ada7d756e34250a655baa8ad4ae5","impliedFormat":1},{"version":"1996d1cd7d585a8359a35878f67abdd73cc35b1f675c9c6b147b202fdd8dfc3f","impliedFormat":1},{"version":"b16e757e4c35434065120a2b3bf13a518fc9e621dc9c2ed668f91635a9dc4e75","impliedFormat":1},{"version":"d22cd2e880dc30d21cf20b26b6341e0478f3505ea645d1504c7e9c14cdff1198","impliedFormat":1},{"version":"d02ced7accb512e6198b796b8d284e7979abde0f089b0a77969747a5f27bfb23","impliedFormat":1},{"version":"4374cefdde5c6e9bad52b0436e887b8325b8f407c12035194ad02c28f1553a3a","impliedFormat":1},{"version":"5f1ba0898eb0a54a644cb9c95c2240beaa961d87fd080cbb90807a6cc03daeb3","impliedFormat":1},{"version":"8e92ee8710ba85b158c5d91b0bbc9d0d033f5e062b6e70178063f01b20f63a14","impliedFormat":1},{"version":"ee933420aacba1f60aa70fb8ba47c5e69001b005073b71973114587089a13c7f","impliedFormat":1},{"version":"0a0714999d0a5bdfacd15c7b34cffbcc6f263f6cb0ccb42076cdc541c6987797","impliedFormat":1},{"version":"56584bfc655f9df64afc0f22f7d1122c29e5b74b342c203b891e19de9fa37de8","impliedFormat":1},{"version":"40ec58f0fadd0b3981b3d383e1c12fa0680115ae9f018387fc2cfc0bbcf23204","impliedFormat":1},{"version":"849b9e7283b7309a4556c9b90bb8e2dfc27751f157798065bbc513dcddb09a8c","impliedFormat":1},{"version":"76bba0c97594248c1be19af32d5799f7eff51cec2926d8e4dd59267d7636a0b4","impliedFormat":1},{"version":"10e109212c7be8a9f66e988e5d6c2a8900c9d14bf6beadf5fa70d32ada3425cf","impliedFormat":1},{"version":"2b821aeb31e690092f8eae671dd961a9d0fd598ff4883ce0a600c90e9e8fa716","impliedFormat":1},{"version":"26602933b613e4df3868a6c82e14fffa2393a08531cb333ed27b151923462981","impliedFormat":1},{"version":"f57a588d8f6b3ce5c8b494f2dc759a8885eaee18e80a4952df47de45403fedbe","impliedFormat":1},{"version":"34735727b3fe7a0ed0651a0f88d06449163d1989a2b2de7f047473adc7c1c383","impliedFormat":1},{"version":"a5b13abc88ab3186e713c445e59e2f6eee20c6167943517bc2f56985d89b8c55","impliedFormat":1},{"version":"c8a206a6ba4e32710ebb4a389187772423de0f4f6180b95a7ef1a5a1934c1be6","impliedFormat":1},{"version":"7ae65fe95b18205e241e6695cb2c61c0828d660aca7d08f68781b439a800e6b8","impliedFormat":1},{"version":"c2c8c166199d3a7bd093152437d1f6399d05e458a9ca9364456feecba920cda4","impliedFormat":1},{"version":"369b7270eeeb37982203b2cb18c7302947b89bf5818c1d3d2e95a0418f02b74e","impliedFormat":1},{"version":"94f95d223e2783b0aef4d15d7f6990a6a550fe17d099c501395f690337f7105e","impliedFormat":1},{"version":"039bd8d1e0d151570b66e75ee152877fb0e2f42eca43718632ac195e6884be34","impliedFormat":1},{"version":"d565d66b38d54de037c9d46dede1f12630010d9b45fd9c6b432c7a40b2e30502","impliedFormat":1},{"version":"d7386a1ebe9a3eae227a5561c898c10cacb61a49f941c5a18cdf593f979c693c","impliedFormat":1},{"version":"d3cfde44f8089768ebb08098c96d01ca260b88bccf238d55eee93f1c620ff5a5","impliedFormat":1},{"version":"293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec","impliedFormat":1},{"version":"36eb5babc665b890786550d4a8cb20ef7105673a6d5551fbdd7012877bb26942","impliedFormat":1},{"version":"fec412ded391a7239ef58f455278154b62939370309c1fed322293d98c8796a6","impliedFormat":1},{"version":"e3498cf5e428e6c6b9e97bd88736f26d6cf147dedbfa5a8ad3ed8e05e059af8a","impliedFormat":1},{"version":"dba3f34531fd9b1b6e072928b6f885aa4d28dd6789cbd0e93563d43f4b62da53","impliedFormat":1},{"version":"f672c876c1a04a223cf2023b3d91e8a52bb1544c576b81bf64a8fec82be9969c","impliedFormat":1},{"version":"e4b03ddcf8563b1c0aee782a185286ed85a255ce8a30df8453aade2188bbc904","impliedFormat":1},{"version":"2329d90062487e1eaca87b5e06abcbbeeecf80a82f65f949fd332cfcf824b87b","impliedFormat":1},{"version":"25b3f581e12ede11e5739f57a86e8668fbc0124f6649506def306cad2c59d262","impliedFormat":1},{"version":"93c3e73824ad57f98fd23b39335dbdae2db0bd98199b0dc0b9ccc60bf3c5134a","impliedFormat":1},{"version":"a9ebb67d6bbead6044b43714b50dcb77b8f7541ffe803046fdec1714c1eba206","impliedFormat":1},{"version":"833e92c058d033cde3f29a6c7603f517001d1ddd8020bc94d2067a3bc69b2a8e","impliedFormat":1},{"version":"c1a2e05eb6d7ca8d7e4a7f4c93ccf0c2857e842a64c98eaee4d85841ee9855e6","impliedFormat":1},{"version":"835fb2909ce458740fb4a49fc61709896c6864f5ce3db7f0a88f06c720d74d02","impliedFormat":1},{"version":"6e5857f38aa297a859cab4ec891408659218a5a2610cd317b6dcbef9979459cc","impliedFormat":1},{"version":"ead8e39c2e11891f286b06ae2aa71f208b1802661fcdb2425cffa4f494a68854","impliedFormat":1},{"version":"82919acbb38870fcf5786ec1292f0f5afe490f9b3060123e48675831bd947192","impliedFormat":1},{"version":"e222701788ec77bd57c28facbbd142eadf5c749a74d586bc2f317db7e33544b1","impliedFormat":1},{"version":"09154713fae0ed7befacdad783e5bd1970c06fc41a5f866f7f933b96312ce764","impliedFormat":1},{"version":"8d67b13da77316a8a2fabc21d340866ddf8a4b99e76a6c951cc45189142df652","impliedFormat":1},{"version":"a91c8d28d10fee7fe717ddf3743f287b68770c813c98f796b6e38d5d164bd459","impliedFormat":1},{"version":"68add36d9632bc096d7245d24d6b0b8ad5f125183016102a3dad4c9c2438ccb0","impliedFormat":1},{"version":"3a819c2928ee06bbcc84e2797fd3558ae2ebb7e0ed8d87f71732fb2e2acc87b4","impliedFormat":1},{"version":"f6f827cd43e92685f194002d6b52a9408309cda1cec46fb7ca8489a95cbd2fd4","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"e0bfe601a9fdf6defe94ed62dc60ac71597566001a1f86e705c95e431a9c816d","impliedFormat":1},{"version":"a270a1a893d1aee5a3c1c8c276cd2778aa970a2741ee2ccf29cc3210d7da80f5","impliedFormat":1},{"version":"add0ce7b77ba5b308492fa68f77f24d1ed1d9148534bdf05ac17c30763fc1a79","impliedFormat":1},{"version":"8926594ee895917e90701d8cbb5fdf77fc238b266ac540f929c7253f8ad6233d","impliedFormat":1},{"version":"2f67911e4bf4e0717dc2ded248ce2d5e4398d945ee13889a6852c1233ea41508","impliedFormat":1},{"version":"d8430c275b0f59417ea8e173cfb888a4477b430ec35b595bf734f3ec7a7d729f","impliedFormat":1},{"version":"69364df1c776372d7df1fb46a6cb3a6bf7f55e700f533a104e3f9d70a32bec18","impliedFormat":1},{"version":"8e6427dd1a4321b0857499739c641b98657ea6dc7cc9a02c9b2c25a845c3c8e6","impliedFormat":1},{"version":"58da08d1fe876c79c47dcf88be37c5c3fab55d97b34c8c09a666599a2191208d","impliedFormat":1},{"version":"6042774c61ece4ba77b3bf375f15942eb054675b7957882a00c22c0e4fe5865c","impliedFormat":1},{"version":"5a3bd57ed7a9d9afef74c75f77fce79ba3c786401af9810cdf45907c4e93f30e","impliedFormat":1},{"version":"ed8763205f02fb65e84eff7432155258df7f93b7d938f01785cb447d043d53f3","impliedFormat":1},{"version":"30db853bb2e60170ba11e39ab48bacecb32d06d4def89eedf17e58ebab762a65","impliedFormat":1},{"version":"e27451b24234dfed45f6cf22112a04955183a99c42a2691fb4936d63cfe42761","impliedFormat":1},{"version":"2316301dd223d31962d917999acf8e543e0119c5d24ec984c9f22cb23247160c","impliedFormat":1},{"version":"58d65a2803c3b6629b0e18c8bf1bc883a686fcf0333230dd0151ab6e85b74307","impliedFormat":1},{"version":"e818471014c77c103330aee11f00a7a00b37b35500b53ea6f337aefacd6174c9","impliedFormat":1},{"version":"d4a5b1d2ff02c37643e18db302488cd64c342b00e2786e65caac4e12bda9219b","impliedFormat":1},{"version":"29f823cbe0166e10e7176a94afe609a24b9e5af3858628c541ff8ce1727023cd","impliedFormat":1},{"version":"f317cab60803426a36ddf639c3ca8656a77680874a6974b1208568910b00223f","signature":"06cdd9cf15ef8789a710d509f3ce8d521e19994dc81797ca814ec7b03921f9ad"},{"version":"39a7e1a4969c971b1edd7bf4c27d9698a74c2b9be2fd9ffcde8308720d454776","signature":"cae9d5f6d11c27f4968ec545519f445d9eca7c9f249919f1de9474471bfcf33a"},{"version":"ef199d5fdc234ac6e74d97830709a176aca59ef15416d353e98052d487c6f4a1","signature":"cb8fa67ea7cfc47a622b1fdc6ba487b3c2999c1cd648bb526ca4af548e0b5858"},{"version":"114b426af1d29db97181f9034777d6e4ad95eb1b8a6be884bdad7906535b89e8","signature":"443acdfdc9f37f247608939c852474831188558a193fc61d1989a085e4fbae61"},{"version":"7246f2eacd085588c633c43bc2e497fcb9916ff60797edf27b38f57e1323181a","signature":"9448e97f406c4fd65081438a9be4b09d79b391ce9188a822fcedbde7df2626bf"},{"version":"ca88e94ee6376344f7f7274c5f70ddf3c6b00bcf87fa7307e76d33fd49922d81","signature":"1377b4c1c1ac4ed44de0b27631c69124ed233a0d8ef63f5577960a51c2daac61"},{"version":"cbc44acfea4fb7424f3dc47ce9492ae09b0a16c390e9400787c9a2514ac76a57","signature":"5122472190637b8046aaf26db6d065f76c1610bd27ed69dcf2e47ab1e51dbda2"},{"version":"64c63593e47c42a7a8429d5ba6ba16fc57c485e9a21fdf23746cc3ad643e6aed","signature":"392f2e06ee257cac742ecd07f3983b3f6af1a5244b510c8cf0afe42868762561"},{"version":"bcafc6bc4c0378f671cfbedacd4417e0fb6cf49b7c712781282a3db368f82021","signature":"afbc9a19bda4825bdcca0124fdda6dd71d1b880b7c166beed38fdf6c63df6c29"},{"version":"8dfac2cd45cafa32633904c42d40e8271115ea7db6296f1995f6e3fd9b6d92d1","signature":"d6e5efdc5200862d8f3dbc8ea162fcc7eaf8732a26e666898ac0e0f7fe8af558"},{"version":"9f84dbabf2dd99ecb2222c2236974aa03bee53f0eb8df54f8425736b7e759926","signature":"31fc6caa7c71b180347b884b9bf133b8e252765bf9cbe47f90eca52e353284d7"},{"version":"cded87606639c0b3d0dff41725bff3f0a186471aad549a56dc34f76a3eb707bc","signature":"e09c1ff308f2fc75fa5bd0e97840859f9a89d7e9f9c8f8e7dd1df01f1f19d1a1"},{"version":"e58e722b9d7e6fd0b2539a11d9caeecffdd975466368640f6036b082b5ea2dc5","signature":"960489f5509b57f29a880b8a4d789d3df50d8a79bc5702a2785ca98ef62c0022"},{"version":"f7d43baa820d6057f4bfb5830e084406c332bc3cc679fa5ccd9ab8561d89bc7a","signature":"d1970d78871edd843a289ca4e25c0e2311e631bef5ae21545a47bd139261bea0"},{"version":"64dfdc8c5331f3cfb836c914669710917f95481ea8c4b0ebc1c257f687d40d15","signature":"3c1a36b69fc09964cf08b8554f8fe125ff03cfd69ddf86a5f4815a5af5e1f78f"},{"version":"e987c773365c259e61cd81f4902482df36cf2bf693590969e913fcb40d4bf966","signature":"8648e45571a83c67e32c1a8094b4dad16ff165269fd21845b4749d9e9a463519"},{"version":"caaedbb8fe193083fe7ce3d465a8ea15d8d32f7b1fa61ca11facac66c6becf85","signature":"d0e18ffc38571437d276ff272bfa584eb70045e322bde58cb1b11253f6dc3aa1"},{"version":"284d54948a15039b2b48e01844e3a7304eb30822ae2a72148ea9a8432969b871","signature":"eaf5a8f822efdb971aa7913b25d6b453f03691f9d1067a6e8a27b08796626a37"},{"version":"57793b36261f3357336168442e596d2daa568cf49d275f458b6a681d97e291b8","signature":"f9f620292b7843af8d20725583d08eb59309a7588aa148acf39743bdba39be40"},{"version":"1523c7142a141ab100f76dde6b112da703b88573df97de757cf0f6f2bba5b35a","signature":"c5cc7e67296da32b9464c4f6e95e3c18ea53e05c4f93ace3c20720bf49190816","affectsGlobalScope":true},{"version":"522547d2dd396f57c04d0ed76a0153b7272aff785d2b46c41f8a9335d8d25d5a","signature":"b7f38df2ae00a792b5793cbdfce2d18660e04795981569bd71c2f1f88aac4d1e"},{"version":"c688540c4b76649777f8413f6a8e5512d4c35585d24b510d07d7253ce111fa03","signature":"08dc8f9a3b50f186914d0fc136d6f91a0fb2d6817d4a4a29809bec075da7d47f"},{"version":"81537139c943d8256e7f5328b899146868c6eb90a8868db8df74dd74e0ed15ef","signature":"7f79273537c1b71635ffb6b2fb4d129e2e500e277fe00386c1101387b41151a4"},{"version":"7d5f5894b116f9e7444bdfad0c7210302b2c2c7b06ffab2020d6dcab0e6cd34f","signature":"4aa2df4251b076a98b47766d846e6e4dff29fd77a08345021bd8e7b38be8916a"},"d1986184a09a52db8228cb2bb2a61a8c05c9354e5b93cec8e2628d8579c892d7",{"version":"9d5367e3176a5968f66bdaaba12907b10f45ba920ce3bb795fbd8f608e547716","signature":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"},"d1986184a09a52db8228cb2bb2a61a8c05c9354e5b93cec8e2628d8579c892d7",{"version":"947c36c271436c7c95d8fb93512809a6a9da09529f9f6ab53d096ba2c3138773","affectsGlobalScope":true},{"version":"0e2abb55892acb5d73c70ff9173d649dccb5858058a91ecf44a3e2727b108677","signature":"8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"},{"version":"151ff381ef9ff8da2da9b9663ebf657eac35c4c9a19183420c05728f31a6761d","impliedFormat":1},{"version":"f3d8c757e148ad968f0d98697987db363070abada5f503da3c06aefd9d4248c1","impliedFormat":1},{"version":"96d14f21b7652903852eef49379d04dbda28c16ed36468f8c9fa08f7c14c9538","impliedFormat":1},{"version":"7fa8d75d229eeaee235a801758d9c694e94405013fe77d5d1dd8e3201fc414f1","impliedFormat":1}],"root":[[530,535],[544,560],[565,567],572,573,576,[616,625],[751,779]],"options":{"allowJs":true,"esModuleInterop":true,"jsx":4,"module":99,"skipLibCheck":true,"strict":true,"target":4},"referencedMap":[[777,1],[778,2],[779,3],[775,4],[530,2],[776,5],[531,6],[532,7],[740,8],[739,9],[374,2],[542,10],[541,11],[780,2],[781,2],[782,2],[140,12],[141,12],[142,13],[97,14],[143,15],[144,16],[145,17],[92,2],[95,18],[93,2],[94,2],[146,19],[147,20],[148,21],[149,22],[150,23],[151,24],[152,24],[153,25],[154,26],[155,27],[156,28],[98,2],[96,2],[157,29],[158,30],[159,31],[191,32],[160,33],[161,34],[162,35],[163,36],[164,37],[165,38],[166,39],[167,40],[168,41],[169,42],[170,42],[171,43],[172,2],[173,44],[175,45],[174,46],[176,47],[177,48],[178,49],[179,50],[180,51],[181,52],[182,53],[183,54],[184,55],[185,56],[186,57],[187,58],[188,59],[99,2],[100,2],[101,2],[139,60],[189,61],[190,62],[195,63],[459,64],[196,65],[194,66],[461,67],[460,68],[192,69],[457,2],[193,70],[83,2],[85,71],[456,64],[226,64],[783,2],[543,2],[84,2],[614,72],[613,73],[615,74],[611,73],[612,75],[577,2],[585,76],[579,77],[586,2],[608,78],[583,79],[607,80],[604,81],[587,82],[588,2],[581,2],[578,2],[609,83],[605,84],[589,2],[606,85],[590,86],[592,87],[593,88],[582,89],[594,90],[595,89],[597,90],[598,91],[599,92],[601,93],[596,94],[602,95],[603,96],[580,97],[600,98],[584,99],[591,2],[610,100],[570,101],[571,102],[574,103],[538,2],[564,64],[569,104],[568,2],[482,105],[487,106],[494,107],[477,108],[230,2],[238,109],[378,110],[381,111],[353,2],[366,112],[373,113],[255,2],[355,2],[236,2],[352,114],[398,115],[237,2],[228,116],[380,117],[382,118],[383,119],[454,120],[347,121],[300,122],[360,123],[361,124],[359,125],[358,2],[354,126],[379,127],[239,128],[424,2],[425,129],[266,130],[240,131],[267,130],[303,130],[206,130],[376,132],[375,2],[365,133],[472,2],[215,2],[493,134],[432,135],[433,136],[429,137],[511,2],[330,2],[434,138],[430,139],[516,140],[515,141],[510,2],[281,2],[333,142],[332,2],[509,143],[431,64],[286,144],[293,145],[295,146],[285,2],[290,147],[292,148],[294,149],[289,150],[287,2],[291,151],[512,2],[508,2],[514,152],[513,2],[284,153],[503,154],[506,155],[274,156],[273,157],[272,158],[519,64],[271,159],[260,2],[521,2],[562,160],[561,2],[522,64],[523,161],[198,2],[362,162],[363,163],[364,164],[202,2],[367,2],[222,165],[197,2],[446,64],[204,166],[445,167],[444,168],[435,2],[436,2],[443,2],[438,2],[441,169],[437,2],[439,170],[442,171],[440,170],[235,2],[232,2],[233,130],[387,2],[392,172],[393,173],[391,174],[389,175],[390,176],[385,2],[452,138],[227,138],[481,177],[488,178],[492,179],[321,180],[320,2],[315,2],[468,181],[476,182],[348,183],[349,184],[427,185],[337,2],[450,186],[325,64],[342,187],[453,188],[338,2],[341,189],[339,2],[451,190],[448,191],[447,2],[449,2],[345,2],[423,192],[210,193],[323,194],[327,195],[343,196],[346,197],[335,198],[328,199],[475,200],[401,201],[319,202],[207,203],[474,204],[203,205],[394,206],[386,2],[395,207],[412,208],[384,2],[411,209],[91,2],[406,210],[231,2],[426,211],[402,2],[216,2],[218,2],[357,2],[410,212],[234,2],[258,213],[344,214],[264,215],[324,2],[409,2],[388,2],[414,216],[415,217],[356,2],[417,218],[419,219],[418,220],[368,2],[408,203],[421,221],[318,222],[407,223],[413,224],[243,2],[247,2],[246,2],[245,2],[250,2],[244,2],[253,2],[252,2],[249,2],[248,2],[251,2],[254,225],[242,2],[310,226],[309,2],[314,227],[311,228],[313,229],[316,227],[312,228],[223,230],[302,231],[471,232],[469,2],[498,233],[500,234],[464,235],[499,236],[211,237],[208,237],[241,2],[225,238],[224,239],[220,240],[221,241],[229,242],[257,242],[268,242],[304,243],[269,243],[213,244],[212,2],[308,245],[307,246],[306,247],[305,248],[214,249],[455,250],[256,251],[463,252],[428,253],[458,254],[462,255],[351,256],[350,257],[331,258],[317,259],[299,260],[301,261],[298,262],[420,263],[322,2],[486,2],[219,264],[422,265],[470,266],[329,2],[259,267],[336,268],[334,269],[261,270],[396,271],[465,2],[262,272],[397,272],[484,2],[483,2],[485,2],[467,2],[466,2],[399,273],[326,2],[296,274],[217,275],[275,2],[201,276],[263,2],[490,64],[200,2],[502,277],[283,64],[496,138],[282,278],[479,279],[280,277],[205,2],[504,280],[278,64],[279,64],[270,2],[199,2],[277,281],[276,282],[265,283],[340,41],[400,41],[416,2],[404,284],[403,2],[288,153],[209,2],[297,64],[473,165],[480,285],[86,64],[89,286],[90,287],[87,64],[88,2],[377,288],[372,289],[371,2],[370,290],[369,2],[478,291],[489,292],[491,293],[495,294],[563,295],[497,296],[501,297],[529,298],[505,298],[528,299],[507,300],[517,301],[518,302],[520,303],[524,304],[527,165],[526,2],[525,305],[626,2],[642,306],[643,306],[644,306],[658,307],[645,308],[646,308],[647,309],[639,310],[637,311],[628,2],[632,312],[636,313],[634,314],[641,315],[629,316],[630,317],[631,318],[633,319],[635,320],[638,321],[640,322],[648,308],[649,308],[650,308],[651,306],[652,308],[653,308],[627,308],[654,2],[656,323],[655,308],[657,306],[575,324],[537,325],[540,326],[536,2],[539,2],[405,327],[81,2],[82,2],[13,2],[14,2],[16,2],[15,2],[2,2],[17,2],[18,2],[19,2],[20,2],[21,2],[22,2],[23,2],[24,2],[3,2],[25,2],[26,2],[4,2],[27,2],[31,2],[28,2],[29,2],[30,2],[32,2],[33,2],[34,2],[5,2],[35,2],[36,2],[37,2],[38,2],[6,2],[42,2],[39,2],[40,2],[41,2],[43,2],[7,2],[44,2],[49,2],[50,2],[45,2],[46,2],[47,2],[48,2],[8,2],[54,2],[51,2],[52,2],[53,2],[55,2],[9,2],[56,2],[57,2],[58,2],[60,2],[59,2],[61,2],[62,2],[10,2],[63,2],[64,2],[65,2],[11,2],[66,2],[67,2],[68,2],[69,2],[70,2],[1,2],[71,2],[72,2],[12,2],[76,2],[74,2],[79,2],[78,2],[73,2],[77,2],[75,2],[80,2],[117,328],[127,329],[116,328],[137,330],[108,331],[107,332],[136,305],[130,333],[135,334],[110,335],[124,336],[109,337],[133,338],[105,339],[104,305],[134,340],[106,341],[111,342],[112,2],[115,342],[102,2],[138,343],[128,344],[119,345],[120,346],[122,347],[118,348],[121,349],[131,305],[113,350],[114,351],[123,352],[103,353],[126,344],[125,342],[129,2],[132,354],[750,355],[663,356],[670,357],[665,2],[666,2],[664,358],[667,359],[659,2],[660,2],[671,360],[662,361],[668,2],[669,362],[661,363],[744,364],[748,365],[745,365],[741,364],[749,366],[746,367],[747,365],[742,368],[743,369],[735,370],[679,371],[681,372],[734,2],[680,373],[738,374],[737,375],[736,376],[672,2],[682,371],[683,2],[674,377],[678,378],[673,2],[675,379],[676,380],[677,2],[684,381],[685,381],[686,381],[687,381],[688,381],[689,381],[690,381],[691,381],[692,381],[693,381],[694,381],[695,381],[696,381],[698,381],[697,381],[699,381],[700,381],[701,381],[702,381],[733,382],[703,381],[704,381],[705,381],[706,381],[707,381],[708,381],[709,381],[710,381],[711,381],[712,381],[713,381],[714,381],[715,381],[717,381],[716,381],[718,381],[719,381],[720,381],[721,381],[722,381],[723,381],[724,381],[725,381],[726,381],[727,381],[728,381],[729,381],[732,381],[730,381],[731,381],[621,383],[620,384],[618,385],[622,386],[752,387],[754,388],[755,389],[624,390],[756,391],[757,392],[759,393],[758,394],[625,395],[761,396],[762,397],[763,398],[765,399],[766,400],[767,401],[576,402],[768,403],[769,404],[616,405],[770,406],[771,407],[623,408],[753,409],[760,410],[567,11],[619,411],[617,411],[572,412],[566,413],[772,414],[565,415],[764,416],[573,417],[773,418],[751,409],[774,419],[533,11],[534,11],[535,11],[556,420],[555,417],[545,421],[553,421],[550,421],[552,421],[548,421],[551,421],[547,421],[546,421],[549,421],[554,422],[544,423],[557,11],[558,11],[559,11],[560,11]],"affectedFilesPendingEmit":[779,776,532,621,620,618,622,752,754,755,624,756,757,759,758,625,761,762,763,765,766,767,576,768,769,616,770,771,623,753,760,567,619,617,572,566,772,565,764,573,773,751,774,533,534,535,556,555,545,553,550,552,548,551,547,546,549,554,544,557,558,559,560],"version":"5.9.3"}
 ```
 

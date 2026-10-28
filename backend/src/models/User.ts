@@ -14,6 +14,7 @@ export interface IUser extends Document {
         city: string;
         state: string;
         zip: string;
+        country?: string;
         isDefault: boolean;
     }[];
     matchPassword: (enteredPassword: string) => Promise<boolean>;
@@ -32,6 +33,7 @@ const UserSchema: Schema = new Schema({
         city: { type: String },
         state: { type: String },
         zip: { type: String },
+        country: { type: String, default: 'India' },
         isDefault: { type: Boolean, default: false }
     }]
 }, {

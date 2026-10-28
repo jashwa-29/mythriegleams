@@ -12,6 +12,7 @@ export interface CartItem {
     selectedVariant?: string;
     selectedColor?: string;
     customerImage?: string;
+    selectedPricedOption?: string;
 }
 
 interface CartState {
@@ -48,7 +49,7 @@ export const fetchCart = createAsyncThunk('cart/fetch', async (_, thunkAPI) => {
 
 export const addItemToCart = createAsyncThunk(
     'cart/add',
-    async (payload: { productId: string; name: string; image: string; price: number; weight?: number; quantity?: number; selectedVariant?: string; selectedColor?: string; customerImage?: string }, thunkAPI) => {
+    async (payload: { productId: string; name: string; image: string; price: number; weight?: number; quantity?: number; selectedVariant?: string; selectedColor?: string; customerImage?: string; selectedPricedOption?: string }, thunkAPI) => {
         try {
             const { data } = await api.post('/cart', payload);
             return data.data as CartItem[];
@@ -106,6 +107,7 @@ const cartSlice = createSlice({
                 i => i.product === action.payload.product
                     && i.selectedVariant === action.payload.selectedVariant
                     && i.selectedColor === action.payload.selectedColor
+                    && (i.selectedPricedOption || "") === (action.payload.selectedPricedOption || "")
             );
             if (existing) {
                 existing.quantity += action.payload.quantity;

@@ -99,30 +99,6 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
   const savings = p?.mrp ? p.mrp - p.price : 0;
   const savePct = p?.mrp ? Math.round((savings / p.mrp) * 100) : 0;
 
-  const isNavaratriGolu = useMemo(() => {
-    if (!p) return false;
-    const targets = [
-      p.name,
-      p.category,
-      p.subcategory,
-      ...(p.categories || []),
-      ...(p.subcategories || []),
-      p.occasion,
-      p.occasionSub,
-      ...(p.occasions || []),
-      ...(p.occasionSubs || []),
-    ].filter((s): s is string => Boolean(s)).map((s) => s.toLowerCase());
-
-    return targets.some((text) =>
-      text.includes("navaratri") ||
-      text.includes("navarathri") ||
-      text.includes("golu") ||
-      text.includes("kolu") ||
-      text.includes("thamboolam") ||
-      text.includes("manjal") ||
-      text.includes("kumkum")
-    );
-  }, [p]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -338,23 +314,6 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
             )}
           </div>
 
-          {/* Foreign Orders Notice for Navaratri & Golu */}
-          {isNavaratriGolu && (
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3 text-amber-900">
-              <Globe size={18} className="text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-[12px] leading-relaxed">
-                <p className="font-semibold text-amber-950 flex items-center gap-1.5">
-                  <span>Foreign Orders Notice:</span>
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
-                    Paused
-                  </span>
-                </p>
-                <p className="text-amber-900/90 mt-0.5">
-                  International shipping for this Navaratri &amp; Golu collection is temporarily paused due to festive slot limits. Orders within India are processing and shipping normally.
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Collection Paused Notice */}
           {(p as any).isEffectivelyPaused && (
@@ -550,14 +509,8 @@ export default function ProductStoryPage({ params }: { params: Promise<{ slug: s
                   <motion.div key="shipping" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }} className="space-y-3">
                     <div className="flex gap-4">
                       <Truck size={18} strokeWidth={1.5} className="text-[var(--accent)] shrink-0 mt-0.5" />
-                      <p>Delivered with care across India. Orders above ₹4,999 qualify for free shipping within India. Please allow 10–14 days for this handcrafted piece to reach your home.</p>
+                      <p>Delivered with care across India and worldwide. ✨ Crafting time is approximately 10 days for all pieces.</p>
                     </div>
-                    {isNavaratriGolu && (
-                      <div className="flex gap-4 text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200/70 text-[13px]">
-                        <Globe size={18} className="text-amber-600 shrink-0 mt-0.5" />
-                        <p><strong>Note on Foreign / International Shipping:</strong> International bookings for Navaratri &amp; Golu creations are temporarily paused. If you require overseas shipment after the festive season, please reach out via WhatsApp.</p>
-                      </div>
-                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

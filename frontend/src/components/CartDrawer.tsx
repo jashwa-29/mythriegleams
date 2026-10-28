@@ -1,17 +1,27 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/hooks/useCart";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { fetchShippingSettings } from "@/redux/slices/shippingSettingsSlice";
 import { X, Minus, Plus, ShoppingBag, ArrowRight, Trash2, Globe } from "lucide-react";
 import { CartItem } from "@/redux/slices/cartSlice";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { formatWeight } from '@/utils/formatWeight';
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE, calculateShipping } from '@/utils/shipping';
+import { calculateShipping } from '@/utils/shipping';
 
 export default function CartDrawer() {
   const { items, isOpen, close, setQty, remove, totalPrice, totalWeight, totalItems, loading } = useCart();
+  const dispatch = useAppDispatch();
+  const shippingSettings = useAppSelector((s) => s.shippingSettings.settings);
+
+  useEffect(() => {
+    dispatch(fetchShippingSettings());
+  }, [dispatch]);
+
+  const shippingCharge = calculateShipping(totalPrice, { totalWeight }, shippingSettings);
 
   const hasNavaratriItems = items.some((item) => {
     const name = (item.name || "").toLowerCase();
@@ -113,9 +123,9 @@ export default function CartDrawer() {
                   {/* Info */}
                   <div className="flex-grow flex flex-col gap-1">
                     <h4 className="text-[var(--text)] text-[15px] font-bold leading-tight">{item.name}</h4>
-                    {(item.selectedVariant || item.selectedColor) && (
+                    {(item.selectedVariant || item.selectedColor || item.selectedPricedOption) && (
                       <span className="text-[10px] text-[var(--text-faint)] font-bold uppercase tracking-[0.15em]">
-                        {[item.selectedVariant, item.selectedColor].filter(Boolean).join(" · ")}
+                        {[item.selectedVariant, item.selectedColor, item.selectedPricedOption].filter(Boolean).join(" · ")}
                       </span>
                     )}
                     {item.customerImage && (
@@ -173,29 +183,9 @@ export default function CartDrawer() {
                     <span className="font-semibold text-[var(--text-muted)]">{formatWeight(totalWeight)}</span>
                   </div>
                 )}
-                {totalPrice >= FREE_SHIPPING_THRESHOLD ? (
-                  <div className="flex items-center gap-1.5 text-[11px] text-[#2e7d32] font-semibold bg-[#2e7d32]/10 px-3 py-2 rounded-xl">
-                    <span>✨</span> You have unlocked Free Shipping within India!
-                  </div>
-                ) : (
-                  <div className="space-y-1.5 bg-[var(--bg-subtle)]/70 p-2.5 rounded-xl border border-[var(--border)]/60">
-                    <div className="flex justify-between text-[11px] text-[var(--text-muted)] font-medium">
-                      <span>Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more for <strong className="text-[var(--text)]">Free Shipping within India</strong></span>
-                      <span className="font-semibold">{Math.min(100, Math.round((totalPrice / FREE_SHIPPING_THRESHOLD) * 100))}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[var(--accent)] transition-all duration-300 rounded-full"
-                        style={{ width: `${Math.min(100, Math.round((totalPrice / FREE_SHIPPING_THRESHOLD) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
                 <div className="flex justify-between text-[11px] text-[var(--text-faint)]">
                   <span>Shipping</span>
-                  <span className="font-semibold text-[var(--text-muted)]">
-                    {calculateShipping(totalPrice) === 0 ? <span className="text-[#2e7d32]">Free</span> : `₹${SHIPPING_FEE.toLocaleString()}`}
-                  </span>
+                  <span className="font-semibold text-[var(--text-muted)]">₹{shippingCharge.toLocaleString()}</span>
                 </div>
                 {hasNavaratriItems && (
                   <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2 text-amber-900 text-[11px] leading-snug">
@@ -212,7 +202,7 @@ export default function CartDrawer() {
                   Proceed to Checkout <ArrowRight size={15} strokeWidth={1.5} />
                 </Link>
                 <a
-                  href={`https://wa.me/918300034451?text=${encodeURIComponent(`Hi! I'd like to order: ${items.map(c => `${c.name}${[c.selectedVariant, c.selectedColor].filter(Boolean).length ? ` (${[c.selectedVariant, c.selectedColor].filter(Boolean).join(", ")})` : ""} x${c.quantity}${c.customerImage ? " [photo attached]" : ""}`).join(", ")}`)}`}
+                  href={`https://wa.me/918300034451?text=${encodeURIComponent(`Hi! I'd like to order: ${items.map(c => `${c.name}${[c.selectedVariant, c.selectedColor, c.selectedPricedOption].filter(Boolean).length ? ` (${[c.selectedVariant, c.selectedColor, c.selectedPricedOption].filter(Boolean).join(", ")})` : ""} x${c.quantity}${c.customerImage ? " [photo attached]" : ""}`).join(", ")}`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full h-12 bg-[#25D366] text-white rounded-xl text-[12px] font-medium flex items-center justify-center gap-2 hover:opacity-90 transition-all"

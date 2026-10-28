@@ -5,7 +5,7 @@ import User from '../models/User';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
 import { markOrderPaid, shortOrderCode } from '../services/paymentService';
-import { calculateShipping } from '../utils/shipping';
+import { calculateShipping, getShippingSettings } from '../utils/shipping';
 import { getPausedIndex, findPauseMatch, describePause } from '../services/productVisibilityService';
 
 /** Trim + cap anything a client can send, so a long paste can never bloat a document. */
@@ -46,6 +46,7 @@ export const createAdminOfflineOrder = asyncHandler(async (req: Request, res: Re
         customerCity,
         customerState,
         customerZip,
+        customerCountry,
         items,
         customItem,
         paymentReceived = false,
@@ -158,7 +159,14 @@ export const createAdminOfflineOrder = asyncHandler(async (req: Request, res: Re
 
     const itemsPrice = Math.round(orderItems.reduce((sum, line) => sum + line.price * line.qty, 0) * 100) / 100;
     if (itemsPrice <= 0) return next(new ErrorResponse('The order total must be greater than zero.', 400));
-    const shippingPrice = calculateShipping(itemsPrice);
+    const totalWeight = orderItems.reduce((sum, line) => sum + (Number(line.weight) || 0) * line.qty, 0);
+    const cleanCountry = str(customerCountry, 60) || 'India';
+    const shippingSettings = await getShippingSettings();
+    const shippingPrice = calculateShipping(
+        itemsPrice,
+        { totalWeight, country: cleanCountry, state: str(customerState, 100) },
+        shippingSettings
+    );
 
     const order = new Order({
         user: linkedUser ? linkedUser._id : undefined,
@@ -172,6 +180,7 @@ export const createAdminOfflineOrder = asyncHandler(async (req: Request, res: Re
             state: str(customerState, 100),
             zip: str(customerZip, 20),
             phone,
+            country: cleanCountry,
         },
         itemsPrice,
         shippingPrice,

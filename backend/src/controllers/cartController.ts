@@ -65,7 +65,7 @@ export const addToCart = asyncHandler(async (req: Request, res: Response, next: 
     if (!req.user?._id) {
         return res.status(401).json({ success: false, error: 'User session not found or expired. Please sign in.' });
     }
-    const { productId, name, image, price, weight = 0, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '' } = req.body;
+    const { productId, name, image, price, weight = 0, quantity = 1, selectedVariant = '', selectedColor = '', customerImage = '', selectedPricedOption = '' } = req.body;
 
     // A paused product must never enter a cart: the storefront hides it, and the money path
     // refuses it too, so a stale page or a crafted request cannot buy a paused design.
@@ -88,14 +88,15 @@ export const addToCart = asyncHandler(async (req: Request, res: Response, next: 
         (item) =>
             (typeof item.product === 'object' && (item.product as any)?._id ? (item.product as any)._id.toString() : item.product?.toString()) === productId &&
             item.selectedVariant === selectedVariant &&
-            item.selectedColor === selectedColor
+            item.selectedColor === selectedColor &&
+            item.selectedPricedOption === selectedPricedOption
     );
 
     if (existingIndex > -1) {
         cart.items[existingIndex].quantity += quantity;
         if (customerImage) cart.items[existingIndex].customerImage = customerImage;
     } else {
-        cart.items.push({ product: productId, name, image, price, weight, quantity, selectedVariant, selectedColor, customerImage });
+        cart.items.push({ product: productId, name, image, price, weight, quantity, selectedVariant, selectedColor, customerImage, selectedPricedOption });
     }
 
     await cart.save();

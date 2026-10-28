@@ -193,12 +193,16 @@ const PayOrderContent = () => {
                 return;
             }
 
+            // FIX: Razorpay limits the description field to 255 characters. Truncate the title.
+            const rawTitle = order?.title || 'Custom Order';
+            const safeDescription = rawTitle.substring(0, 255);
+
             const rzp = new window.Razorpay({
                 key,
                 amount,
                 currency,
                 name: 'Mythris Gleams',
-                description: order?.title || 'Custom Order',
+                description: safeDescription,
                 order_id: rzpOrderId,
                 prefill: {
                     name: order?.customerName || undefined,

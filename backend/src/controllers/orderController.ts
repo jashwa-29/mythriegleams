@@ -4,7 +4,7 @@ import Product from '../models/Product';
 import sendEmail, { storeNotificationEmail } from '../utils/sendEmail';
 import asyncHandler from '../middlewares/asyncHandler';
 import ErrorResponse from '../utils/errorResponse';
-import { calculateShipping } from '../utils/shipping';
+import { calculateShipping, getShippingSettings } from '../utils/shipping';
 import { shortOrderCode, markOrderPaid } from '../services/paymentService';
 import { getPausedIndex, findPauseMatch, describePause } from '../services/productVisibilityService';
 
@@ -48,10 +48,17 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
         throw new ErrorResponse(`Some items in your bag cannot be ordered: ${details}.`, 409);
     }
 
-    // Authoritative totals: derive items price from line items, shipping from the free-shipping rule,
-    // and grand total as their sum. Client-supplied values are ignored to prevent tampering.
+    // Authoritative totals: derive items price from line items, shipping from the configured
+    // weight/country rule, and grand total as their sum. Client-supplied values are ignored to
+    // prevent tampering.
     const itemsPrice = orderItems.reduce((sum: number, item: any) => sum + (Number(item.price) || 0) * (Number(item.qty) || 0), 0);
-    const shippingPrice = calculateShipping(itemsPrice);
+    const totalWeight = orderItems.reduce((sum: number, item: any) => sum + (Number(item.weight) || 0) * (Number(item.qty) || 0), 0);
+    const shippingSettings = await getShippingSettings();
+    const shippingPrice = calculateShipping(
+        itemsPrice,
+        { totalWeight, country: shippingAddress.country, state: shippingAddress.state },
+        shippingSettings
+    );
     const totalPrice = itemsPrice + shippingPrice;
 
     const order = new Order({
@@ -84,7 +91,7 @@ export const addOrderItems = asyncHandler(async (req: Request, res: Response) =>
                         <p style="font-size: 14px;"><strong>${address?.name || '—'}</strong></p>
                         <p style="font-size: 14px;">${address?.phone || '—'}</p>
                         <p style="font-size: 14px;">${address?.email || 'no email'}</p>
-                        <p style="font-size: 14px;">${[address?.street, address?.city, address?.state, address?.zip].filter(Boolean).join(', ') || '—'}</p>
+                        <p style="font-size: 14px;">${[address?.street, address?.city, address?.state, address?.zip, address?.country].filter(Boolean).join(', ') || '—'}</p>
                     </div>
                     <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
                         <p style="font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 2px;">Items (${createdOrder.orderItems.length})</p>

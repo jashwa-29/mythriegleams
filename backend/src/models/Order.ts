@@ -12,6 +12,7 @@ export interface IOrder extends Document {
         selectedVariant?: string;
         selectedColor?: string;
         customerImage?: string;
+        selectedPricedOption?: string;
         description?: string;
     }[];
     shippingAddress: {
@@ -23,6 +24,8 @@ export interface IOrder extends Document {
         state: string;
         zip: string;
         phone: string;
+        /** ISO/natural country name. Defaults to India for legacy orders. */
+        country?: string;
     };
     itemsPrice: number;
     shippingPrice: number;
@@ -64,6 +67,7 @@ const OrderSchema: Schema = new Schema({
         selectedVariant: { type: String, default: '' },
         selectedColor: { type: String, default: '' },
         customerImage: { type: String, default: '' },
+        selectedPricedOption: { type: String, default: '' },
         /** Free-text instructions for the workshop — used by admin-entered (bespoke) orders. */
         description: { type: String, default: '' }
     }],
@@ -75,7 +79,8 @@ const OrderSchema: Schema = new Schema({
         city: { type: String, default: '' },
         state: { type: String, default: '' },
         zip: { type: String, default: '' },
-        phone: { type: String, required: true }
+        phone: { type: String, required: true },
+        country: { type: String, default: 'India' }
     },
     itemsPrice: { type: Number, required: true, default: 0.0 },
     shippingPrice: { type: Number, required: true, default: 0.0 },

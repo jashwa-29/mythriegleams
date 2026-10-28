@@ -22,6 +22,11 @@ export interface IProduct extends Document {
         type: string;
         options: string[];
     }[];
+    pricedOptions?: {
+        enabled: boolean;
+        title?: string;
+        options: { label: string; price: number }[];
+    };
     stockStatus: string;
     requiresImage: boolean;
     isBestseller: boolean;
@@ -50,6 +55,14 @@ const ProductSchema: Schema = new Schema({
         type: { type: String, default: 'Size' },
         options: [{ type: String }]
     }],
+    pricedOptions: {
+        enabled: { type: Boolean, default: false },
+        title: { type: String, default: 'Options' },
+        options: [{
+            label: { type: String },
+            price: { type: Number, default: 0 }
+        }]
+    },
     stockStatus: { 
         type: String, 
         enum: ['in-stock', 'out-of-stock', 'made-to-order'], 

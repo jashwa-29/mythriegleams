@@ -7,6 +7,7 @@ import userReducer from './slices/userSlice';
 import collectionReducer from './slices/collectionSlice';
 import occasionReducer from './slices/occasionSlice';
 import homepageSettingsReducer from './slices/homepageSettingsSlice';
+import shippingSettingsReducer from './slices/shippingSettingsSlice';
 import cartReducer from './slices/cartSlice';
 
 export const store = configureStore({
@@ -19,6 +20,7 @@ export const store = configureStore({
         collections: collectionReducer,
         occasions: occasionReducer,
         homepageSettings: homepageSettingsReducer,
+        shippingSettings: shippingSettingsReducer,
         cart: cartReducer,
     }
 });

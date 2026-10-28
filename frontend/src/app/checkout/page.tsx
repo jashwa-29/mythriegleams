@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
@@ -9,12 +9,12 @@ import api from "@/utils/api";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { createOrder, resetOrderSuccess, setCurrentOrder } from "@/redux/slices/orderSlice";
 import { clearCartThunk, clearGuest } from "@/redux/slices/cartSlice";
-import { fetchProducts } from "@/redux/slices/productSlice";
 import { useCart } from "@/hooks/useCart";
 import BreadcrumbHero from "@/components/BreadcrumbHero";
 import { getImageUrl } from '@/utils/getImageUrl';
 import { formatWeight } from '@/utils/formatWeight';
-import { FREE_SHIPPING_THRESHOLD, calculateShipping } from '@/utils/shipping';
+import { calculateShipping, isIndia } from '@/utils/shipping';
+import { fetchShippingSettings } from '@/redux/slices/shippingSettingsSlice';
 import {
   MapPin, User, Mail, Phone, Home, Package,
   CheckCircle2, ShoppingBag, ArrowLeft, AlertCircle, Loader2, Globe
@@ -24,19 +24,29 @@ import toast from "react-hot-toast";
 interface ShippingForm {
   label: string;
   name: string; email: string; phone: string;
-  street: string; city: string; state: string; zip: string;
+  street: string; city: string; state: string; zip: string; country: string;
 }
 type FormErrors = Partial<Record<keyof ShippingForm, string>>;
 
-function validate(f: ShippingForm): FormErrors {
+function validate(f: ShippingForm, foreign: boolean): FormErrors {
   const e: FormErrors = {};
   if (!f.name.trim())   e.name   = "Full name is required.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) e.email = "Valid email required.";
-  if (!/^\d{10}$/.test(f.phone.replace(/\s/g, ""))) e.phone = "Enter a valid 10-digit phone.";
+  if (foreign) {
+    // International numbers vary wildly; require a plausible run of digits/symbols.
+    if (!/^[+()\d][\d\s\-().]{5,}$/.test(f.phone.trim())) e.phone = "Enter a valid phone number.";
+  } else if (!/^\d{10}$/.test(f.phone.replace(/\s/g, ""))) {
+    e.phone = "Enter a valid 10-digit phone.";
+  }
+  if (foreign && !f.country.trim()) e.country = "Country is required.";
   if (!f.street.trim()) e.street = "Street address is required.";
   if (!f.city.trim())   e.city   = "City is required.";
-  if (!f.state.trim())  e.state  = "State is required.";
-  if (!/^\d{6}$/.test(f.zip)) e.zip = "Enter a valid 6-digit PIN code.";
+  if (!f.state.trim())  e.state  = foreign ? "State / Province is required." : "State is required.";
+  if (foreign) {
+    if (!f.zip.trim()) e.zip = "Postal / ZIP code is required.";
+  } else if (!/^\d{6}$/.test(f.zip)) {
+    e.zip = "Enter a valid 6-digit PIN code.";
+  }
   return e;
 }
 
@@ -72,6 +82,15 @@ const INDIAN_STATES = [
   "Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Delhi","Puducherry","Other"
 ];
 
+// A convenience list for the country field — customers can still type any country.
+const COUNTRIES = [
+  "India","United States","United Kingdom","Canada","Australia","United Arab Emirates","Singapore",
+  "Malaysia","Germany","France","Italy","Spain","Netherlands","Switzerland","Sweden","Norway",
+  "Denmark","Ireland","New Zealand","Japan","South Korea","China","Hong Kong","Saudi Arabia",
+  "Qatar","Kuwait","Oman","Bahrain","Sri Lanka","Nepal","Bangladesh","Pakistan","South Africa",
+  "Kenya","Nigeria","Egypt","Brazil","Mexico","Argentina","Russia","Poland","Portugal","Greece"
+];
+
 const STATUS_STEPS = ["Pending","Handcrafting","Quality Check","Dispatched","Delivered"];
 
 export default function CheckoutPage() {
@@ -81,64 +100,20 @@ export default function CheckoutPage() {
   const { items, totalPrice, totalWeight, isAuth, clear } = useCart();
   const userInfo = useAppSelector(s => s.auth.userInfo);
   const { loading, error, success, currentOrder } = useAppSelector(s => s.orders);
+  const shippingSettings = useAppSelector(s => s.shippingSettings.settings);
 
   const [form, setForm] = useState<ShippingForm>({
     label: "Home",
     name: userInfo?.name || "", email: userInfo?.email || "",
-    phone: "", street: "", city: "", state: "Tamil Nadu", zip: "",
+    phone: "", street: "", city: "", state: "Tamil Nadu", zip: "", country: "India",
   });
 
+  const [region, setRegion] = useState<"india" | "international">("india");
   const [userAddresses, setUserAddresses] = useState<any[]>([]);
 
-  const catalogProducts = useAppSelector(s => s.products?.products || []);
-
   useEffect(() => {
-    if (catalogProducts.length === 0) {
-      dispatch(fetchProducts({}));
-    }
-  }, [dispatch, catalogProducts.length]);
-
-  const hasNavaratriItems = useMemo(() => {
-    return items.some((item) => {
-      const name = (item.name || "").toLowerCase();
-      // Match on item name
-      const nameMatch =
-        name.includes("navaratri") ||
-        name.includes("navarathri") ||
-        name.includes("golu") ||
-        name.includes("kolu") ||
-        name.includes("thamboolam") ||
-        name.includes("manjal") ||
-        name.includes("kumkum");
-
-      if (nameMatch) return true;
-
-      // Match on catalog product category/occasion
-      const prodId = String(item.product || item._id);
-      const catProd = catalogProducts.find((cp: any) => String(cp._id) === prodId || cp.slug === prodId);
-      if (catProd) {
-        const textFields = [
-          catProd.category,
-          catProd.subcategory,
-          ...(catProd.categories || []),
-          ...(catProd.subcategories || []),
-          catProd.occasion,
-          catProd.occasionSub,
-          ...(catProd.occasions || []),
-          ...(catProd.occasionSubs || []),
-        ].filter((s): s is string => Boolean(s)).map((s) => s.toLowerCase());
-
-        return textFields.some((t) =>
-          t.includes("navaratri") ||
-          t.includes("navarathri") ||
-          t.includes("golu") ||
-          t.includes("kolu") ||
-          t.includes("thamboolam")
-        );
-      }
-      return false;
-    });
-  }, [items, catalogProducts]);
+    dispatch(fetchShippingSettings());
+  }, [dispatch]);
 
   useEffect(() => {
     if (isAuth) {
@@ -159,7 +134,9 @@ export default function CheckoutPage() {
               city: defAddr?.city || "",
               state: defAddr?.state || "Tamil Nadu",
               zip: defAddr?.zip || "",
+              country: defAddr?.country || "India",
             });
+            setRegion(isIndia(defAddr?.country || "India") ? "india" : "international");
           }
         } catch (err) {
           console.error("Failed to auto-fill checkout details", err);
@@ -170,14 +147,17 @@ export default function CheckoutPage() {
   }, [isAuth]);
 
   const selectAddress = (addr: any) => {
+    const country = addr.country || "India";
     setForm(prev => ({
       ...prev,
       label: addr.label,
       street: addr.street,
       city: addr.city,
       state: addr.state,
-      zip: addr.zip
+      zip: addr.zip,
+      country
     }));
+    setRegion(isIndia(country) ? "india" : "international");
   };
 
   const [touched, setTouched] = useState<Partial<Record<keyof ShippingForm, boolean>>>({});
@@ -231,21 +211,49 @@ export default function CheckoutPage() {
 
   const touch = (k: keyof ShippingForm) => setTouched(p => ({ ...p, [k]: true }));
 
-  const shippingPrice = calculateShipping(totalPrice);
+  const isForeign = region === "international";
+
+  const switchRegion = (next: "india" | "international") => {
+    if (next === region) return;
+    setRegion(next);
+    setTouched({});
+    setErrors({});
+    setForm(prev =>
+      next === "india"
+        ? {
+            ...prev,
+            country: "India",
+            state: INDIAN_STATES.includes(prev.state) ? prev.state : "Tamil Nadu",
+            zip: "",
+          }
+        : {
+            ...prev,
+            country: "",
+            state: "",
+            zip: "",
+          }
+    );
+  };
+
+  const shippingPrice = calculateShipping(
+    totalPrice,
+    { totalWeight, country: form.country, state: form.state },
+    shippingSettings
+  );
   const grandTotal = totalPrice + shippingPrice;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     const updated = { ...form, [name]: value };
     setForm(updated);
-    if (touched[name as keyof ShippingForm]) setErrors(validate(updated));
+    if (touched[name as keyof ShippingForm]) setErrors(validate(updated, isForeign));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const allTouched = Object.fromEntries(Object.keys(form).map(k => [k, true]));
     setTouched(allTouched as any);
-    const errs = validate(form);
+    const errs = validate(form, isForeign);
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
@@ -256,6 +264,7 @@ export default function CheckoutPage() {
         selectedVariant: i.selectedVariant,
         selectedColor: i.selectedColor,
         customerImage: i.customerImage,
+        selectedPricedOption: i.selectedPricedOption,
       })),
       shippingAddress: form,
       itemsPrice: totalPrice,
@@ -494,15 +503,27 @@ export default function CheckoutPage() {
                 <h3 className="text-base sm:text-lg text-[var(--text)]">Delivery Address</h3>
               </div>
 
-              {hasNavaratriItems && (
-                <div className="p-3.5 sm:p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3 text-amber-900 text-[12px] leading-relaxed">
-                  <Globe size={18} className="text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-semibold text-amber-950">Foreign Orders Paused for Navaratri &amp; Golu Items: </span>
-                    <span>Your order contains items from the festive collection. We are currently delivering exclusively to Indian addresses to ensure delivery prior to Navaratri. Please provide an Indian delivery address.</span>
-                  </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Delivery Region</label>
+                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => switchRegion("india")}
+                    aria-pressed={!isForeign}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-[11px] sm:text-[12px] font-medium transition-all ${!isForeign ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
+                  >
+                    <MapPin size={14} /> India
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchRegion("international")}
+                    aria-pressed={isForeign}
+                    className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-[11px] sm:text-[12px] font-medium transition-all ${isForeign ? 'bg-[var(--text)] text-white border-[var(--text)]' : 'bg-white text-[var(--text-muted)] border-[var(--border)] hover:bg-[var(--bg-subtle)]'}`}
+                  >
+                    <Globe size={14} /> Other Countries
+                  </button>
                 </div>
-              )}
+              </div>
 
               <div className="flex flex-col gap-2 mb-1 sm:mb-2">
                 <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Destination Type</label>
@@ -538,6 +559,28 @@ export default function CheckoutPage() {
                 </div>
               )}
 
+              {isForeign && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Country</label>
+                  <input
+                    name="country"
+                    value={form.country}
+                    onChange={handleChange}
+                    onBlur={() => touch("country")}
+                    list="checkout-country-list"
+                    placeholder="Start typing your country"
+                    className={inputClass("country")}
+                  />
+                  <datalist id="checkout-country-list">
+                    {COUNTRIES.map(c => <option key={c} value={c} />)}
+                  </datalist>
+                  <FieldError field="country" />
+                  <p className="text-[11px] text-[var(--text-faint)] flex items-center gap-1.5">
+                    <Globe size={11} /> International delivery — charges are calculated by destination and weight.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col gap-2">
                 <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">Street / House No. / Building</label>
                 <input name="street" value={form.street} onChange={handleChange} onBlur={() => touch("street")} placeholder="123, Rose Garden Apartments, MG Road" className={inputClass("street")} />
@@ -551,19 +594,39 @@ export default function CheckoutPage() {
                   <FieldError field="city" />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">State</label>
-                  <div className="relative">
-                    <select name="state" value={form.state} onChange={handleChange} className={`${inputClass("state")} appearance-none pr-10`}>
-                      {INDIAN_STATES.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                    <svg className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--accent)]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
-                  </div>
+                  <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">{isForeign ? "State / Province / Region" : "State"}</label>
+                  {isForeign ? (
+                    <input
+                      name="state"
+                      value={form.state}
+                      onChange={handleChange}
+                      onBlur={() => touch("state")}
+                      placeholder="State / Province / Region"
+                      className={inputClass("state")}
+                    />
+                  ) : (
+                    <div className="relative">
+                      <select name="state" value={form.state} onChange={handleChange} className={`${inputClass("state")} appearance-none pr-10`}>
+                        {INDIAN_STATES.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                      <svg className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--accent)]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                  )}
+                  <FieldError field="state" />
                 </div>
               </div>
 
               <div className="flex flex-col gap-2 sm:w-1/2">
-                <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">PIN Code</label>
-                <input name="zip" value={form.zip} onChange={handleChange} onBlur={() => touch("zip")} placeholder="6-digit PIN" maxLength={6} className={inputClass("zip")} />
+                <label className="text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--text-muted)]">{isForeign ? "Postal / ZIP Code" : "PIN Code"}</label>
+                <input
+                  name="zip"
+                  value={form.zip}
+                  onChange={handleChange}
+                  onBlur={() => touch("zip")}
+                  placeholder={isForeign ? "Postal / ZIP code" : "6-digit PIN"}
+                  maxLength={isForeign ? 20 : 6}
+                  className={inputClass("zip")}
+                />
                 <FieldError field="zip" />
               </div>
             </div>
@@ -608,7 +671,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex-grow">
                     <p className=" text-[14px] text-[var(--text)] leading-tight">{item.name}</p>
-                    {[item.selectedVariant, item.selectedColor].filter(Boolean).length > 0 && <p className="text-[10px] text-[var(--accent)] uppercase tracking-wide mt-0.5">{[item.selectedVariant, item.selectedColor].filter(Boolean).join(" · ")}</p>}
+                    {[item.selectedVariant, item.selectedColor, item.selectedPricedOption].filter(Boolean).length > 0 && <p className="text-[10px] text-[var(--accent)] uppercase tracking-wide mt-0.5">{[item.selectedVariant, item.selectedColor, item.selectedPricedOption].filter(Boolean).join(" · ")}</p>}
                     {item.customerImage && (
                       <div className="flex items-center gap-1.5 mt-1">
                         <img src={item.customerImage} alt="Your photo" className="w-6 h-6 rounded-md object-cover border border-[var(--border)]" />
@@ -628,17 +691,8 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
                 <span>Shipping</span>
-                {shippingPrice === 0 ? (
-                  <span className="text-[#849b87] font-medium">Free</span>
-                ) : (
-                  <span className="text-[var(--text)] font-medium">₹{shippingPrice.toLocaleString()}</span>
-                )}
+                <span className="text-[var(--text)] font-medium">₹{shippingPrice.toLocaleString()}</span>
               </div>
-              {shippingPrice > 0 && (
-                <div className="text-[11px] text-[var(--text-faint)] bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl px-3 py-2">
-                  Add ₹{(FREE_SHIPPING_THRESHOLD - totalPrice).toLocaleString()} more to unlock free shipping within India (₹0).
-                </div>
-              )}
               {totalWeight > 0 && (
                 <div className="flex justify-between text-[13px] text-[var(--text-muted)]">
                   <span>Total Weight</span>

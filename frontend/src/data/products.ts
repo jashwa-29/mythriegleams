@@ -30,6 +30,11 @@ export interface Product {
   images?: string[]; // Dynamic image array
   sizes: string[];
   variants?: any[]; // Dynamic variations
+  pricedOptions?: {
+    enabled?: boolean;
+    title?: string;
+    options?: { label: string; price: number }[];
+  }; // Priced options per product (generic)
   colors: string[];
   specs: Record<string, string>;
   thumb_emojis: string[];

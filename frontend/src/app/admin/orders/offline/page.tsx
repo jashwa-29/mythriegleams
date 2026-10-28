@@ -26,6 +26,7 @@ import {
     Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Modal from '@/components/ui/Modal';
 
 const PAYMENT_METHODS = [
     'Bank Transfer',
@@ -48,6 +49,7 @@ const EMPTY_FORM = {
     customerCity: '',
     customerState: '',
     customerZip: '',
+    customerCountry: '',
     method: PAYMENT_METHODS[0],
     reference: '',
     note: '',
@@ -109,6 +111,10 @@ const OfflineOrderPage = () => {
     const [settling, setSettling] = useState<string | null>(null);
     const [settleForm, setSettleForm] = useState({ method: PAYMENT_METHODS[0], reference: '', note: '' });
     const [saving, setSaving] = useState(false);
+    // Submit outcome shown as a modal instead of a fleeting toast.
+    const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(
+        null
+    );
 
     // --- product search ---
     const [query, setQuery] = useState('');
@@ -232,6 +238,7 @@ const OfflineOrderPage = () => {
                     customerCity: form.customerCity.trim(),
                     customerState: form.customerState.trim(),
                     customerZip: form.customerZip.trim(),
+                    customerCountry: form.customerCountry.trim(),
                     items: lines.map((l) => ({
                         product: l.product,
                         qty: l.qty,
@@ -254,8 +261,14 @@ const OfflineOrderPage = () => {
                 })
             ).unwrap();
 
-            toast.success(res.message);
-            (res.warnings || []).forEach((w: string) => toast(w, { icon: '⚠️', duration: 7000 }));
+            const warnings: string[] = res.warnings || [];
+            setFeedback({
+                type: 'success',
+                title: 'Order Recorded',
+                message: [res.message, warnings.length ? `Please note: ${warnings.join(' ')}` : '']
+                    .filter(Boolean)
+                    .join(' '),
+            });
             setForm({ ...EMPTY_FORM });
             setLines([]);
             setQuery('');
@@ -263,7 +276,11 @@ const OfflineOrderPage = () => {
             setBespoke({ name: '', amount: '', qty: '1', weight: '', description: '' });
             dispatch(fetchOfflineOrders());
         } catch (err: unknown) {
-            toast.error(typeof err === 'string' ? err : 'Failed to record this order.');
+            setFeedback({
+                type: 'error',
+                title: 'Order Not Recorded',
+                message: typeof err === 'string' ? err : 'Failed to record this order. Please try again.',
+            });
         }
     };
 
@@ -283,11 +300,19 @@ const OfflineOrderPage = () => {
                         note: settleForm.note.trim() || undefined,
                     })
                 ).unwrap();
-                toast.success(res.message || 'Payment recorded');
+                setFeedback({
+                    type: 'success',
+                    title: 'Payment Recorded',
+                    message: res.message || 'The payment has been recorded against this order.',
+                });
                 setSettling(null);
                 setSettleForm({ method: PAYMENT_METHODS[0], reference: '', note: '' });
             } catch (err: unknown) {
-                toast.error(typeof err === 'string' ? err : 'Could not record this payment.');
+                setFeedback({
+                    type: 'error',
+                    title: 'Payment Not Recorded',
+                    message: typeof err === 'string' ? err : 'Could not record this payment. Please try again.',
+                });
                 // The backend refuses a double confirmation — resync so the row stops offering it.
                 dispatch(fetchOfflineOrders());
                 setSettling(null);
@@ -567,7 +592,7 @@ const OfflineOrderPage = () => {
                         <span className="text-lg font-bold text-zinc-900 tabular-nums">{rupee(grandTotal)}</span>
                     </div>
                     <p className="text-[10px] text-zinc-400 -mt-4">
-                        Shipping is added by the server on save, using the same free-shipping rule as checkout.
+                        Shipping is added by the server on save, using the same shipping rules as checkout.
                     </p>
                 </section>
 
@@ -618,9 +643,16 @@ const OfflineOrderPage = () => {
                     />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <input name="customerCity" value={form.customerCity} onChange={onChange} placeholder="City" className={inputClass} />
-                        <input name="customerState" value={form.customerState} onChange={onChange} placeholder="State" className={inputClass} />
-                        <input name="customerZip" value={form.customerZip} onChange={onChange} placeholder="PIN code" className={inputClass} />
+                        <input name="customerState" value={form.customerState} onChange={onChange} placeholder="State / Province" className={inputClass} />
+                        <input name="customerZip" value={form.customerZip} onChange={onChange} placeholder="PIN / Postal code" className={inputClass} />
                     </div>
+                    <input
+                        name="customerCountry"
+                        value={form.customerCountry}
+                        onChange={onChange}
+                        placeholder="Country (default: India)"
+                        className={inputClass}
+                    />
                 </section>
 
                 <section className="space-y-4">
@@ -806,6 +838,14 @@ const OfflineOrderPage = () => {
                     </Link>
                 </p>
             </section>
+
+            <Modal
+                isOpen={feedback !== null}
+                onClose={() => setFeedback(null)}
+                type={feedback?.type ?? 'info'}
+                title={feedback?.title ?? ''}
+                message={feedback?.message ?? ''}
+            />
         </div>
     );
 };

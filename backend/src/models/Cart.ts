@@ -11,6 +11,7 @@ export interface ICartItem {
     selectedVariant?: string;
     selectedColor?: string;
     customerImage?: string;
+    selectedPricedOption?: string;
 }
 
 export interface ICart extends Document {
@@ -26,9 +27,10 @@ const CartItemSchema = new Schema({
     price:           { type: Number, required: true },
     weight:          { type: Number, default: 0 },
     quantity:        { type: Number, required: true, min: 1, default: 1 },
-    selectedVariant: { type: String, default: '' },
-    selectedColor:   { type: String, default: '' },
-    customerImage:   { type: String, default: '' },
+selectedVariant: { type: String, default: '' },
+    selectedColor: { type: String, default: '' },
+    customerImage: { type: String, default: '' },
+    selectedPricedOption: { type: String, default: '' },
 });
 
 const CartSchema: Schema = new Schema({

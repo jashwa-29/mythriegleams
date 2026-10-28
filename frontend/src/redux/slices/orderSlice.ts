@@ -142,6 +142,7 @@ export interface AdminOfflineOrderPayload {
     customerCity?: string;
     customerState?: string;
     customerZip?: string;
+    customerCountry?: string;
     items: OfflineLineItem[];
     /** One-off piece that is not in the catalogue (bespoke sets, repairs). */
     customItem?: OfflineCustomItem;

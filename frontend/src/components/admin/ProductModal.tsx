@@ -17,7 +17,16 @@ import {
     Palette,
     Camera,
     Weight,
-    TrendingUp
+    TrendingUp,
+    Users,
+    Tag,
+    Eye,
+    Copy,
+    ArrowUp,
+    ArrowDown,
+    Wand2,
+    Gift,
+    Check
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -77,6 +86,11 @@ interface ProductModalProps {
         isBestseller?: boolean;
         images?: string[];
         variants?: { type: string; options: string[] }[];
+        pricedOptions?: {
+            enabled?: boolean;
+            title?: string;
+            options?: { label: string; price: number }[];
+        };
     }>; // Data for editing
 }
 
@@ -89,6 +103,14 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
     const [colors, setColors] = useState<string[]>([]);
     const [requiresImage, setRequiresImage] = useState(false);
     const [isBestseller, setIsBestseller] = useState(false);
+
+    // Priced Options (generic: admin can add named options with their own price)
+    const [pricedOptionsEnabled, setPricedOptionsEnabled] = useState(false);
+    const [pricedOptionsTitle, setPricedOptionsTitle] = useState('Options');
+    const [pricedOptionItems, setPricedOptionItems] = useState<{ label: string; price: number }[]>([]);
+    const [pricedOptionLabelDraft, setPricedOptionLabelDraft] = useState('');
+    const [pricedOptionPriceDraft, setPricedOptionPriceDraft] = useState('');
+    const [previewSelectedOption, setPreviewSelectedOption] = useState<string>('');
 
     // Multi-selection state
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -218,6 +240,16 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                 setColors(Array.isArray(colorVariants) ? colorVariants : []);
                 setRequiresImage(!!initialData.requiresImage);
                 setIsBestseller(!!initialData.isBestseller);
+                const initPriced = initialData.pricedOptions;
+                setPricedOptionsEnabled(!!initPriced?.enabled);
+                setPricedOptionsTitle(initPriced?.title || 'Options');
+                setPricedOptionItems(
+                    Array.isArray(initPriced?.options)
+                        ? initPriced.options.map((o) => ({ label: o.label || '', price: Number(o.price) || 0 }))
+                        : []
+                );
+                setPricedOptionLabelDraft('');
+                setPricedOptionPriceDraft('');
             } else {
                 reset({ stockStatus: 'made-to-order', name: '', slug: '', category: '', subcategory: '', occasion: '', occasionSub: '', price: 0, mrp: 0, weight: 0, story: '', details: '', metaDescription: '' });
                 setSelectedCategories([]);
@@ -229,6 +261,11 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                 setColors([]);
                 setRequiresImage(false);
                 setIsBestseller(false);
+                setPricedOptionsEnabled(false);
+                setPricedOptionsTitle('Options');
+                setPricedOptionItems([]);
+                setPricedOptionLabelDraft('');
+                setPricedOptionPriceDraft('');
             }
         }
     }, [isOpen, initialData, reset, dispatch]);
@@ -264,6 +301,90 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         setMediaItems(prev => prev.filter((_, idx) => idx !== index));
     };
 
+    const baseProductPrice = Number(watch('price')) || 0;
+
+    const addPricedOption = () => {
+        const label = pricedOptionLabelDraft.trim();
+        if (!label) {
+            toast.error("Please enter a name for the option (e.g. '2 Figures')");
+            return;
+        }
+        const enteredPrice = pricedOptionPriceDraft.trim() === ''
+            ? baseProductPrice
+            : Number(pricedOptionPriceDraft);
+
+        if (isNaN(enteredPrice) || enteredPrice < 0) {
+            toast.error("Enter a valid price for the option");
+            return;
+        }
+        setPricedOptionItems(prev => [...prev, { label, price: enteredPrice }]);
+        setPricedOptionLabelDraft('');
+        setPricedOptionPriceDraft('');
+        toast.success(`Added "${label}" (₹${enteredPrice.toLocaleString()})`);
+    };
+
+    const updatePricedOption = (index: number, patch: Partial<{ label: string; price: number }>) => {
+        setPricedOptionItems(prev => prev.map((opt, i) => (i === index ? { ...opt, ...patch } : opt)));
+    };
+
+    const removePricedOption = (index: number) => {
+        setPricedOptionItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const movePricedOption = (index: number, direction: 'up' | 'down') => {
+        setPricedOptionItems(prev => {
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+            const updated = [...prev];
+            const [moved] = updated.splice(index, 1);
+            updated.splice(targetIndex, 0, moved);
+            return updated;
+        });
+    };
+
+    const duplicatePricedOption = (index: number) => {
+        setPricedOptionItems(prev => {
+            const item = prev[index];
+            if (!item) return prev;
+            const updated = [...prev];
+            updated.splice(index + 1, 0, {
+                label: `${item.label} (Copy)`,
+                price: item.price
+            });
+            return updated;
+        });
+        toast.success("Option duplicated");
+    };
+
+    const applyPricedOptionsTemplate = (type: 'figures' | 'gift' | 'sizes') => {
+        const base = baseProductPrice > 0 ? baseProductPrice : 599;
+        if (type === 'figures') {
+            setPricedOptionsTitle('Number of Dolls');
+            setPricedOptionItems([
+                { label: '1 Customer Doll', price: base },
+                { label: '2 Customer Dolls', price: Math.round(base * 1.75) },
+                { label: '3 Customer Dolls', price: Math.round(base * 2.5) },
+            ]);
+            toast.success("Loaded 'Dolls / Figures' preset");
+        } else if (type === 'gift') {
+            setPricedOptionsTitle('Packaging & Gift Wrap');
+            setPricedOptionItems([
+                { label: 'Standard Box', price: base },
+                { label: 'Gift Wrap + Greeting Card', price: base + 100 },
+                { label: 'Luxury Velvet Keepsake Box', price: base + 250 },
+            ]);
+            toast.success("Loaded 'Gift Wrap' preset");
+        } else if (type === 'sizes') {
+            setPricedOptionsTitle('Size / Quantity');
+            setPricedOptionItems([
+                { label: 'Single Piece', price: base },
+                { label: 'Couple Set (Pair)', price: Math.round(base * 1.85) },
+                { label: 'Family Set (4 Pcs)', price: Math.round(base * 3.4) },
+            ]);
+            toast.success("Loaded 'Size / Sets' preset");
+        }
+    };
+
     const handleFormSubmit = (data: ArtisanalFormData) => {
         const formData = new FormData();
         Object.keys(data).forEach(key => {
@@ -297,6 +418,12 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
         formData.append('variants', JSON.stringify(variantPayload));
         formData.append('requiresImage', String(requiresImage));
         formData.append('isBestseller', String(isBestseller));
+        formData.append('customerDollOption', String('')); // backward compatibility not needed; use pricedOptions
+        formData.append('pricedOptions', JSON.stringify({
+            enabled: pricedOptionsEnabled,
+            title: pricedOptionsTitle.trim() || 'Options',
+            options: pricedOptionsEnabled ? pricedOptionItems : []
+        }));
 
         // Add kept existing images
         const existingImagesToKeep = mediaItems
@@ -589,6 +716,355 @@ const ArtisanalProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, o
                                                     ))}
                                                 </AnimatePresence>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Priced Options */}
+                                    <div className="space-y-6 pt-6">
+                                        <div className={`p-5 sm:p-6 rounded-[2rem] border transition-all duration-300 overflow-hidden ${pricedOptionsEnabled ? 'bg-gradient-to-b from-amber-50/50 via-white to-amber-50/30 border-amber-300/80 shadow-md shadow-amber-900/5' : 'bg-zinc-50/80 border-zinc-200/80'}`}>
+                                            
+                                            {/* Card Header & Toggle */}
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all ${pricedOptionsEnabled ? 'bg-amber-100 text-amber-800 border-amber-300/80 shadow-xs' : 'bg-zinc-100 text-zinc-400 border-zinc-200'}`}>
+                                                        <Layers size={18} className={pricedOptionsEnabled ? 'text-amber-800' : 'text-zinc-400'} />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-1.5">
+                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-800">Priced Options</label>
+                                                            {pricedOptionsEnabled ? (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                                    Active
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-zinc-200/70 text-zinc-500">
+                                                                    Off
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                                                            Let buyers pick custom options (e.g. <span className="font-semibold text-zinc-700">"1 Figure", "2 Figures"</span>) with custom pricing.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    aria-checked={pricedOptionsEnabled}
+                                                    aria-label="Enable Priced Options"
+                                                    onClick={() => setPricedOptionsEnabled(prev => !prev)}
+                                                    className={`w-13 h-7 rounded-full transition-all flex items-center px-1 shrink-0 cursor-pointer ${pricedOptionsEnabled ? 'bg-amber-600 justify-end shadow-inner' : 'bg-zinc-300 justify-start'}`}
+                                                >
+                                                    <motion.span 
+                                                        layout
+                                                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                                        className="w-5 h-5 rounded-full bg-white shadow-md block" 
+                                                    />
+                                                </button>
+                                            </div>
+
+                                            {pricedOptionsEnabled && (
+                                                <motion.div 
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="pt-5 mt-5 border-t border-amber-200/60 space-y-5"
+                                                >
+                                                    {/* Option Group Title Section */}
+                                                    <div className="p-4 bg-white rounded-2xl border border-amber-200/60 shadow-xs space-y-2.5">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-700 flex items-center gap-1.5">
+                                                                <Tag size={12} className="text-amber-600" />
+                                                                Option Group Title
+                                                            </label>
+                                                            <span className="text-[9px] text-zinc-400 font-medium italic">Heading for buyer</span>
+                                                        </div>
+
+                                                        <div className="relative">
+                                                            <input
+                                                                value={pricedOptionsTitle}
+                                                                onChange={(e) => setPricedOptionsTitle(e.target.value)}
+                                                                placeholder="e.g. Number of Dolls, Choose Variant"
+                                                                className="w-full bg-amber-50/20 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl px-3.5 py-2 text-xs font-bold text-zinc-800 outline-none transition-all focus:ring-2 focus:ring-amber-500/10 placeholder:text-zinc-300"
+                                                            />
+                                                        </div>
+
+                                                        {/* Quick Title Chips */}
+                                                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Presets:</span>
+                                                            {['Number of Dolls', 'Figure Count', 'Choose Size', 'Packaging', 'Add-ons'].map(t => (
+                                                                <button
+                                                                    key={t}
+                                                                    type="button"
+                                                                    onClick={() => setPricedOptionsTitle(t)}
+                                                                    className={`text-[9px] font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer ${pricedOptionsTitle === t ? 'bg-amber-600 text-white shadow-xs' : 'bg-zinc-100 hover:bg-amber-50 text-zinc-600 hover:text-amber-700'}`}
+                                                                >
+                                                                    {t}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Quick Presets / Starter Templates */}
+                                                    <div className="p-3.5 bg-amber-50/50 rounded-2xl border border-amber-200/60 space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <Wand2 size={13} className="text-amber-700 shrink-0" />
+                                                            <div>
+                                                                <p className="text-[10px] font-black text-amber-900 uppercase tracking-wide">Quick 1-Click Templates</p>
+                                                                <p className="text-[9px] text-amber-700/80">Scales tiers from base price (₹{baseProductPrice.toLocaleString()})</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-wrap items-center gap-1.5 w-full pt-0.5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => applyPricedOptionsTemplate('figures')}
+                                                                className="flex-1 min-w-[90px] text-center px-2 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-900 hover:bg-amber-600 hover:text-white hover:border-amber-600 text-[10px] font-bold transition-all shadow-xs cursor-pointer"
+                                                            >
+                                                                🎭 Figures
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => applyPricedOptionsTemplate('gift')}
+                                                                className="flex-1 min-w-[90px] text-center px-2 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-900 hover:bg-amber-600 hover:text-white hover:border-amber-600 text-[10px] font-bold transition-all shadow-xs cursor-pointer"
+                                                            >
+                                                                🎁 Gift Wrap
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => applyPricedOptionsTemplate('sizes')}
+                                                                className="flex-1 min-w-[90px] text-center px-2 py-1.5 rounded-lg bg-white border border-amber-200 text-amber-900 hover:bg-amber-600 hover:text-white hover:border-amber-600 text-[10px] font-bold transition-all shadow-xs cursor-pointer"
+                                                            >
+                                                                📦 Size Sets
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Configured Options List */}
+                                                    <div className="space-y-2.5">
+                                                        <div className="flex items-center justify-between px-1">
+                                                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600">
+                                                                Configured Options ({pricedOptionItems.length})
+                                                            </label>
+                                                            {pricedOptionItems.length > 0 && (
+                                                                <span className="text-[9px] text-zinc-400 font-medium">Use arrows to reorder</span>
+                                                            )}
+                                                        </div>
+
+                                                        {pricedOptionItems.length === 0 ? (
+                                                            <div className="p-6 bg-white rounded-2xl border border-dashed border-zinc-200 text-center space-y-1.5">
+                                                                <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center mx-auto text-zinc-400">
+                                                                    <Layers size={16} />
+                                                                </div>
+                                                                <p className="text-xs font-bold text-zinc-600">No options added yet</p>
+                                                                <p className="text-[10px] text-zinc-400 max-w-xs mx-auto">
+                                                                    Add an option below or pick a preset above to get started.
+                                                                </p>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-2">
+                                                                <AnimatePresence initial={false}>
+                                                                    {pricedOptionItems.map((opt, idx) => {
+                                                                        const diff = opt.price - baseProductPrice;
+                                                                        return (
+                                                                            <motion.div
+                                                                                key={idx}
+                                                                                initial={{ opacity: 0, y: 6 }}
+                                                                                animate={{ opacity: 1, y: 0 }}
+                                                                                exit={{ opacity: 0, scale: 0.95 }}
+                                                                                className="p-3 bg-white rounded-2xl border border-zinc-200 hover:border-amber-300 shadow-xs space-y-2 transition-all group"
+                                                                            >
+                                                                                {/* Line 1: Badge + Option Name + Actions */}
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="w-5 h-5 rounded-md bg-zinc-100 flex items-center justify-center text-[10px] font-black text-zinc-600 shrink-0">
+                                                                                        {idx + 1}
+                                                                                    </span>
+                                                                                    <input
+                                                                                        value={opt.label}
+                                                                                        onChange={(e) => updatePricedOption(idx, { label: e.target.value })}
+                                                                                        placeholder="e.g. 1 Customer Doll"
+                                                                                        className="flex-1 min-w-0 bg-zinc-50/70 hover:bg-white focus:bg-white border border-zinc-200 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-zinc-800 outline-none transition-all"
+                                                                                    />
+                                                                                    <div className="flex items-center gap-0.5 shrink-0">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => movePricedOption(idx, 'up')}
+                                                                                            disabled={idx === 0}
+                                                                                            title="Move Up"
+                                                                                            className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-20 cursor-pointer"
+                                                                                        >
+                                                                                            <ArrowUp size={13} />
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => movePricedOption(idx, 'down')}
+                                                                                            disabled={idx === pricedOptionItems.length - 1}
+                                                                                            title="Move Down"
+                                                                                            className="p-1 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-20 cursor-pointer"
+                                                                                        >
+                                                                                            <ArrowDown size={13} />
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => duplicatePricedOption(idx)}
+                                                                                            title="Duplicate"
+                                                                                            className="p-1 rounded hover:bg-amber-50 text-zinc-400 hover:text-amber-700 cursor-pointer"
+                                                                                        >
+                                                                                            <Copy size={13} />
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => removePricedOption(idx)}
+                                                                                            title="Remove"
+                                                                                            className="p-1 rounded hover:bg-rose-50 text-zinc-400 hover:text-rose-600 cursor-pointer"
+                                                                                        >
+                                                                                            <Trash2 size={13} />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Line 2: Price Input + Diff Badge */}
+                                                                                <div className="flex items-center justify-between gap-2 pl-7">
+                                                                                    <div className="relative flex-1 max-w-[150px]">
+                                                                                        <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" size={12} />
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            min={0}
+                                                                                            value={opt.price}
+                                                                                            onChange={(e) => updatePricedOption(idx, { price: Number(e.target.value) || 0 })}
+                                                                                            placeholder="0"
+                                                                                            className="w-full bg-zinc-50/70 hover:bg-white focus:bg-white border border-zinc-200 focus:border-amber-500 rounded-lg py-1.5 pl-7 pr-2 text-xs font-black text-zinc-900 outline-none transition-all"
+                                                                                        />
+                                                                                    </div>
+                                                                                    {baseProductPrice > 0 && (
+                                                                                        <span 
+                                                                                            className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight shrink-0 ${diff === 0 ? 'bg-zinc-100 text-zinc-500' : diff > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
+                                                                                            title={`Base price is ₹${baseProductPrice}`}
+                                                                                        >
+                                                                                            {diff === 0 ? 'Base' : diff > 0 ? `+₹${diff.toLocaleString()}` : `-₹${Math.abs(diff).toLocaleString()}`}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        );
+                                                                    })}
+                                                                </AnimatePresence>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Add New Option Composer */}
+                                                    <div className="p-3.5 bg-gradient-to-br from-amber-500/5 via-white to-amber-500/10 rounded-2xl border-2 border-dashed border-amber-300/80 space-y-2.5">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-900 flex items-center gap-1.5">
+                                                                <Plus size={13} className="text-amber-600" />
+                                                                Add New Option
+                                                            </span>
+                                                            {baseProductPrice > 0 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPricedOptionPriceDraft(String(baseProductPrice))}
+                                                                    className="text-[9px] font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 cursor-pointer"
+                                                                >
+                                                                    Match Base (₹{baseProductPrice.toLocaleString()})
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Option Label input on full width */}
+                                                        <div>
+                                                            <input
+                                                                value={pricedOptionLabelDraft}
+                                                                onChange={(e) => setPricedOptionLabelDraft(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        addPricedOption();
+                                                                    }
+                                                                }}
+                                                                placeholder="e.g. 2 Customer Dolls / Gift Wrap / Extra Set"
+                                                                className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded-xl px-3 py-2 text-xs font-bold text-zinc-800 outline-none transition-all placeholder:text-zinc-300"
+                                                            />
+                                                        </div>
+
+                                                        {/* Price input + Add Button side-by-side */}
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="relative flex-1">
+                                                                <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-600" size={13} />
+                                                                <input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    value={pricedOptionPriceDraft}
+                                                                    onChange={(e) => setPricedOptionPriceDraft(e.target.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') {
+                                                                            e.preventDefault();
+                                                                            addPricedOption();
+                                                                        }
+                                                                    }}
+                                                                    placeholder={baseProductPrice ? String(baseProductPrice) : '0'}
+                                                                    className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded-xl py-2 pl-7 pr-3 text-xs font-black text-zinc-900 outline-none transition-all placeholder:text-zinc-300"
+                                                                />
+                                                            </div>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={addPricedOption}
+                                                                className="bg-zinc-900 hover:bg-amber-600 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-xs shrink-0 cursor-pointer"
+                                                            >
+                                                                <Plus size={14} />
+                                                                <span>Add Option</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Interactive Storefront Live Preview */}
+                                                    {pricedOptionItems.length > 0 && (
+                                                        <div className="p-4 bg-zinc-900 text-white rounded-2xl border border-zinc-800 shadow-md space-y-2.5 overflow-hidden">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Eye size={12} className="text-amber-400" />
+                                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">Buyer View Preview</span>
+                                                                </div>
+                                                                <span className="text-[8px] font-bold text-amber-400 uppercase tracking-widest bg-amber-400/10 px-1.5 py-0.5 rounded-md border border-amber-400/20">
+                                                                    Interactive
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="pt-0.5 space-y-2">
+                                                                <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-300 flex items-center gap-1.5">
+                                                                    <Users size={11} className="text-amber-400" />
+                                                                    {pricedOptionsTitle || 'Options'}
+                                                                </div>
+
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {pricedOptionItems.map((opt, i) => {
+                                                                        const isSelected = (previewSelectedOption || pricedOptionItems[0]?.label) === opt.label;
+                                                                        return (
+                                                                            <button
+                                                                                key={i}
+                                                                                type="button"
+                                                                                onClick={() => setPreviewSelectedOption(opt.label)}
+                                                                                className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${isSelected ? 'bg-amber-500 text-zinc-950 font-black shadow-md shadow-amber-500/20' : 'bg-zinc-800/80 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/60'}`}
+                                                                            >
+                                                                                {opt.label} <span className="opacity-80">· ₹{Number(opt.price || 0).toLocaleString()}</span>
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                                <div className="pt-2 border-t border-zinc-800 flex items-center justify-between text-[10px]">
+                                                                    <span className="text-zinc-400">Simulated Price:</span>
+                                                                    <span className="font-serif font-bold text-amber-400 text-sm">
+                                                                        ₹{Number((pricedOptionItems.find(o => o.label === (previewSelectedOption || pricedOptionItems[0]?.label)) || pricedOptionItems[0])?.price || baseProductPrice).toLocaleString()}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </motion.div>
+                                            )}
                                         </div>
                                     </div>
 

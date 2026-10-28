@@ -125,7 +125,7 @@ export const getProductBySlug = asyncHandler(async (req: Request, res: Response,
     }
 
     const pauseMatch = findPauseMatch(product, await getPausedIndex());
-    const productData = product.toObject();
+    const productData: any = product.toObject();
     if (pauseMatch) {
         productData.isEffectivelyPaused = true;
         productData.pauseReason = describePause(pauseMatch);
@@ -157,7 +157,8 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         stockStatus,
         requiresImage,
         isBestseller,
-        variants // JSON string because it's FormData
+        variants, // JSON string because it's FormData
+        pricedOptions // JSON string because it's FormData
     } = req.body;
 
     const parsedCategories = parseArrayField(categories);
@@ -212,6 +213,15 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
         productData.variants = [{ type: 'Size', options: ['Small (6 inch)', 'Medium (8 inch)', 'Large (10 inch)'] }];
     }
 
+    // Parse the priced option group if provided (options each carry their own price)
+    if (pricedOptions) {
+        try {
+            productData.pricedOptions = JSON.parse(pricedOptions);
+        } catch (e) {
+            productData.pricedOptions = { enabled: false, title: 'Options', options: [] };
+        }
+    }
+
     // Handle images if uploaded via Multer
     if (req.files && (req.files as any[]).length > 0) {
         productData.images = (req.files as any[]).map(file => `/uploads/${file.filename}`);
@@ -261,6 +271,7 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
         requiresImage, 
         isBestseller,
         variants, 
+        pricedOptions,
         existingImages 
     } = req.body;
     
@@ -319,6 +330,14 @@ export const updateProduct = asyncHandler(async (req: Request, res: Response, ne
             product.variants = JSON.parse(variants);
         } catch (e) {
             console.error("Variants parse error", e);
+        }
+    }
+
+    if (pricedOptions !== undefined) {
+        try {
+            product.pricedOptions = JSON.parse(pricedOptions);
+        } catch (e) {
+            console.error("Priced options parse error", e);
         }
     }
 
